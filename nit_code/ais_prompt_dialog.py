@@ -37,6 +37,29 @@ _EINSTIEGSFRAGE = (
     "Python-Code um."
 )
 
+_IBD_HINWEIS = (
+    "Ab Klasse 10 kannst du dem NiT_Coder zusätzlich einen IBD mitgeben. Das ist "
+    "das Informations-Blockdiagramm (Menü „IBD-Editor“): Es zeigt, WAS WOHIN "
+    "FLIESST – welche Bauteile es gibt, welche eigenen Funktionen (def …), "
+    "welche Variablen in welcher Funktion liegen und was als Übergabewert hinein "
+    "und als Rückgabewert (return) heraus geht. Der PAP zeigt dagegen, WANN etwas "
+    "passiert.\n"
+    "Der IBD ersetzt nur den Teil VARIABLEN der Spezifikation (Name, Datentyp, "
+    "Bedeutung). EINGABE, ABLAUF und AUSGABE bleiben nötig, und der IBD ist nie "
+    "Pflicht: Die klassische Variablenliste geht weiterhin.\n"
+    "So lieferst du ihn mit:\n"
+    "• ais.chat: IBD im IBD-Editor zeichnen, „Bild speichern“, die Bilddatei an "
+    "die Nachricht anhängen und unter VARIABLEN schreiben: „siehe IBD im Bild“.\n"
+    "• Ollama (lokal, liest meist keine Bilder): IBD als Text unter VARIABLEN "
+    "schreiben, z. B.\n"
+    "  def main(): Variablen reaktionszeiten [ ] (Sammler), zeit (Aktueller Wert)\n"
+    "  def reaktionszeit_messen(): liest taster, schaltet led, Rückgabe zeit in ms → main()\n"
+    "  def median(werte): Übergabe reaktionszeiten [ ], Rückgabe Median in ms → print()\n"
+    "Der NiT_Coder setzt den IBD genau so um (Funktionen, Parameter, Rückgabewerte, "
+    "lokale Variablen). Fällt ihm ein Widerspruch auf, etwa ein Rückgabewert ohne "
+    "Ziel, verbessert er ihn nicht, sondern fragt nach."
+)
+
 _HINTERGRUNDWISSEN = (
     "Dateien sind nicht nötig – die Bibliotheks-Referenz steht bereits in den "
     "Instruktionen. Optional kann als Webseite das Bibliotheks-Repository "
@@ -86,11 +109,18 @@ class AisChatPromptDialog(QDialog):
         self._add_field(layout, "Name des Dialogpartners", _NAME, single_line=True)
         self._add_field(layout, "Kurzbeschreibung", _KURZBESCHREIBUNG, height=64)
         self._add_hint(layout, "Sprachmodell", _SPRACHMODELL)
+        self._ibd_widgets = []
+        n0 = layout.count()
+        self._add_hint(layout, "IBD mitliefern (optional, ab Klasse 10)", _IBD_HINWEIS)
+        for i in range(n0, layout.count()):
+            it = layout.itemAt(i)
+            self._ibd_widgets.append(it.widget() or it.layout())
         self._instr_edit = self._add_field(layout, "Instruktionen", coder_system_prompt(self._level), height=260)
         self._add_field(layout, "Einstiegsfrage", _EINSTIEGSFRAGE, height=56)
         self._add_hint(layout, "Hintergrundwissen", _HINTERGRUNDWISSEN)
 
         layout.addStretch(1)
+        self._update_ibd_visibility()
         scroll.setWidget(inner)
         outer.addWidget(scroll, stretch=1)
 
@@ -117,9 +147,21 @@ class AisChatPromptDialog(QDialog):
         layout.addWidget(field)
         return field
 
+    def _update_ibd_visibility(self):
+        show = self._level == LEVEL_KL10
+        for item in self._ibd_widgets:
+            if hasattr(item, "setVisible"):
+                item.setVisible(show)
+            else:                                   # Layout (Überschriftenzeile)
+                for i in range(item.count()):
+                    w = item.itemAt(i).widget()
+                    if w is not None:
+                        w.setVisible(show)
+
     def _on_level_changed(self):
         self._level = self._level_combo.currentData()
         self._instr_edit.setPlainText(coder_system_prompt(self._level))
+        self._update_ibd_visibility()
 
     def _add_hint(self, layout, title: str, text: str):
         """Überschrift + Hinweistext (Feld, das man nicht 1:1 kopiert)."""

@@ -605,6 +605,50 @@ _FEHLERSUCHE_DIFFERENZ = (
 )
 
 
+# IBD (Informations-Blockdiagramm, ab Klasse 10): optionaler Ersatz für den Teil VARIABLEN.
+_IBD_BLOCK = (
+    '\nIBD ALS ALTERNATIVE ZU "VARIABLEN" (ab Klasse 10) – Statt Name | Datentyp | '
+    'Bedeutung dürfen die Lernenden einen IBD (Informations-Blockdiagramm) '
+    'mitliefern, als Bild oder als Text. Er zeigt, WAS WOHIN FLIESST (der PAP zeigt, '
+    'WANN etwas passiert). Ein IBD ersetzt NUR den Teil VARIABLEN; EINGABE, ABLAUF '
+    'und AUSGABE bleiben nötig. Mit IBD gilt der Teil VARIABLEN als vollständig '
+    'geklärt; frage nicht zusätzlich danach. Bauteile im IBD ergänzen EINGABE und '
+    'AUSGABE.\n'
+    'So liest du ihn:\n'
+    '- Orange Kasten = Bauteil (Taster, Sensor, LED, Display, Konsole): globales '
+    'Bauteil-Objekt im Code.\n'
+    '- Grauer Kasten = fertige Verarbeitung (z. B. adc.read(), print(), ein '
+    'Vergleich): ein Aufruf bzw. eine Operation, kein eigener def.\n'
+    '- Blauer Kasten mit "def name()" = EIGENE FUNKTION mit genau diesem Namen. '
+    'Variablen, die IN dem Kasten stehen, sind LOKALE Variablen dieser Funktion '
+    '(der Kasten ist ihr Gültigkeitsbereich). Der Kasten "main()" ist das '
+    'Hauptprogramm.\n'
+    '- Doppelt gerahmter Kasten = Variable. Name = Variablenname; steht eine Rolle '
+    'dabei, gilt: Festwert = Konstante in GROSSBUCHSTABEN in der globalen Zone, '
+    'Zähler = Schleifen- oder Zählvariable, Sammler = wächst oder summiert sich '
+    '(Startwert VOR der Schleife), Merker = hält einen Zustand für später fest, '
+    'Aktueller Wert = jedes Mal neu gemessen oder berechnet. "[ ]" hinter dem '
+    'Namen = Liste.\n'
+    '- Pfeile: dunkel und schmal = Übergabewert (Parameter der Funktion, auf die '
+    'er zeigt). Blau und breit mit Punkt am Anfang = Rückgabewert ("return"), er '
+    'landet in der Variablen oder Verarbeitung am Pfeilende. Orange = '
+    'Bauteilsignal (die Funktion liest das Bauteil oder schaltet es). Blau mit '
+    'zwei Spitzen = die Funktion VERÄNDERT die übergebene Liste, auch ohne '
+    'return. Gestrichelt = globaler Zugriff, nur auf Festwerte und Bauteile.\n'
+    '- Die Beschriftung am Pfeil ist die Bedeutung samt Einheit (z. B. '
+    '"Reaktionszeit in ms"); nutze sie für sprechende Namen.\n'
+    'Setze den IBD GENAU so um: jede eigene Funktion mit ihren Parametern und '
+    'Rückgabewerten, jede Variable in der Funktion, in deren Kasten sie steht, '
+    'keine zusätzlichen globalen Variablen. Ist ein Rückgabewert ohne Ziel, ein '
+    'Pfeil ohne Quelle oder widerspricht der IBD dem ABLAUF, verbesserst du das '
+    'NICHT stillschweigend, sondern setzt es um und weist danach mit einer Frage '
+    'darauf hin ("Mir ist aufgefallen, dass im IBD … Was soll dort passieren?"). '
+    'Liegt der IBD nur als Text vor (z. B. als Liste "Funktion: Parameter, '
+    'Rückgabe, Variablen" oder "Quelle → Ziel: Bedeutung"), gelten dieselben Regeln. '
+    'Ist ein Teil des Bildes unleserlich, frage gezielt nach genau diesem Teil.'
+)
+
+
 def _fehlersuche_block(level: str) -> str:
     if level == LEVEL_KL10:
         return (_FEHLERSUCHE_BASIS.replace("{FAELLE}", _FEHLERSUCHE_FAELLE_KL10)
@@ -616,7 +660,8 @@ def _fehlersuche_block(level: str) -> str:
 def coder_system_prompt(level: str = LEVEL_KL89) -> str:
     """System-Prompt des Code-Generators für „kl89“ (Standard) oder „kl10“."""
     rule = _MAIN_RULE_KL10 if level == LEVEL_KL10 else _MAIN_RULE_KL89
-    return _CODER_PROMPT_TEMPLATE.replace("@@MAIN_RULE@@", rule) + "\n" + _fehlersuche_block(level)
+    ibd = _IBD_BLOCK if level == LEVEL_KL10 else ""
+    return _CODER_PROMPT_TEMPLATE.replace("@@MAIN_RULE@@", rule) + "\n" + ibd + "\n" + _fehlersuche_block(level)
 
 
 CODER_SYSTEM_PROMPT = coder_system_prompt(LEVEL_KL89)
@@ -640,7 +685,8 @@ _RULE_REMINDER_KL10 = (
     "Das Hauptprogramm steht in 'main()'; am Ende steht nur 'main()' (kein "
     "'if __name__'). Global NUR Festwerte (GROSSBUCHSTABEN) und Bauteile, alle "
     "anderen Variablen lokal. Funktionen mit Parametern und return, kein "
-    "'global', Sensor je Messung nur einmal lesen. "
+    "'global', Sensor je Messung nur einmal lesen. Ein mitgelieferter IBD "
+    "ersetzt den Teil VARIABLEN und wird genau so umgesetzt. "
 )
 _RULE_REMINDER_TAIL = "Antworte auf Deutsch.]"
 
@@ -700,6 +746,15 @@ z. B.:
 position  | int | aktuelle LED-Position (0–7)
 farbindex | int | aktueller Farbindex (0 = Rot, 1 = Grün, 2 = Blau)\
 """
+
+# Ab Klasse 10: der IBD kann den Teil VARIABLEN ersetzen (als Text, da lokale Modelle meist
+# keine Bilder lesen).
+_SPEC_TEMPLATE_KL10 = _SPEC_TEMPLATE.replace(
+    "(Name | Datentyp | Bedeutung)\n",
+    "(Name | Datentyp | Bedeutung – ODER dein IBD als Text, z. B.:\n"
+    "def main(): Variablen reaktionszeiten [ ] (Sammler), zeit (Aktueller Wert)\n"
+    "def reaktionszeit_messen(): liest taster, schaltet led, Rückgabe zeit in ms → main()\n"
+    "def median(werte): Übergabe reaktionszeiten [ ], Rückgabe Median in ms → print())\n", 1)
 
 # Ablauf-Vorlage: Freitext mit Signalwörtern
 _ABLAUF_FREITEXT_PLACEHOLDER = """\
@@ -1549,6 +1604,9 @@ class CoderPanel(QWidget):
         if level == self._level:
             return
         self._level = level
+        if hasattr(self, "_spec_edit"):
+            self._spec_edit.setPlaceholderText(
+                _SPEC_TEMPLATE_KL10 if level == LEVEL_KL10 else _SPEC_TEMPLATE)
         # Neuer System-Prompt gilt sofort; der bisherige Verlauf bleibt erhalten.
         if self._history and self._history[0].get("role") == "system":
             self._history[0] = {"role": "system", "content": coder_system_prompt(level)}
