@@ -473,7 +473,7 @@ class DebugLogPanel(QWidget):
         self._f_eingr.setPlaceholderText(
             "Was hast du gefunden? z. B. K3 und K2 kommen gleichzeitig; nach K3 fehlt „1 s warten“ aus dem PAP"
             if level == LEVEL_KL89 else
-            "Was hast du gefunden? z. B. IBD P1; i2c.scan() → [119] = 0x77")
+            "Was hast du gefunden? z. B. IBD P1: Pin im Code = Kabel; i2c.scan() → [119] = 0x77")
         self._loading = False
         self._on_select(self._list.currentRow())
         self._schedule_save()

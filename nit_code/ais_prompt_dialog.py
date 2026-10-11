@@ -9,12 +9,12 @@ mit dem System-Prompt des eingebauten Code-Generators (coder_panel.py),
 damit sich beide Varianten gleich verhalten.
 """
 from PyQt6.QtWidgets import (
-    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QComboBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QWidget,
 )
 
 from .config import AIS_CHAT_URL, THEME
-from .coder_panel import CODER_SYSTEM_PROMPT
+from .coder_panel import LEVEL_KL10, LEVEL_KL89, coder_system_prompt
 
 _NAME = "NiT_Coder"
 
@@ -48,10 +48,11 @@ _HINTERGRUNDWISSEN = (
 class AisChatPromptDialog(QDialog):
     """Zeigt die ais.chat-Dialogpartner-Vorlage mit Kopier-Knöpfen."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, level: str = LEVEL_KL10):
         super().__init__(parent)
         self.setWindowTitle("NiT_Coder als Dialogpartner auf ais.chat")
         self.setMinimumSize(640, 640)
+        self._level = LEVEL_KL10 if level == LEVEL_KL10 else LEVEL_KL89
         self._setup_ui()
 
     def _setup_ui(self):
@@ -65,6 +66,17 @@ class AisChatPromptDialog(QDialog):
         intro.setWordWrap(True)
         outer.addWidget(intro)
 
+        level_row = QHBoxLayout()
+        level_row.addWidget(QLabel("Stufe der Instruktionen:"))
+        self._level_combo = QComboBox()
+        self._level_combo.addItem("Klasse 8/9 (ohne main())", LEVEL_KL89)
+        self._level_combo.addItem("Klasse 10/KS (mit main(), nach IBD gegliedert)", LEVEL_KL10)
+        self._level_combo.setCurrentIndex(self._level_combo.findData(self._level))
+        self._level_combo.currentIndexChanged.connect(self._on_level_changed)
+        level_row.addWidget(self._level_combo)
+        level_row.addStretch(1)
+        outer.addLayout(level_row)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         inner = QWidget()
@@ -74,7 +86,7 @@ class AisChatPromptDialog(QDialog):
         self._add_field(layout, "Name des Dialogpartners", _NAME, single_line=True)
         self._add_field(layout, "Kurzbeschreibung", _KURZBESCHREIBUNG, height=64)
         self._add_hint(layout, "Sprachmodell", _SPRACHMODELL)
-        self._add_field(layout, "Instruktionen", CODER_SYSTEM_PROMPT, height=260)
+        self._instr_edit = self._add_field(layout, "Instruktionen", coder_system_prompt(self._level), height=260)
         self._add_field(layout, "Einstiegsfrage", _EINSTIEGSFRAGE, height=56)
         self._add_hint(layout, "Hintergrundwissen", _HINTERGRUNDWISSEN)
 
@@ -92,7 +104,9 @@ class AisChatPromptDialog(QDialog):
     def _add_field(self, layout, title: str, text: str,
                    height: int = 80, single_line: bool = False):
         """Überschrift + (nur lesbares) Textfeld + Kopieren-Knopf."""
-        layout.addLayout(self._header_row(title, text))
+        field = None
+        row = self._header_row(title, text, lambda: field.toPlainText() if hasattr(field, "toPlainText") else text)
+        layout.addLayout(row)
         if single_line:
             field = QLineEdit(text)
             field.setReadOnly(True)
@@ -101,6 +115,11 @@ class AisChatPromptDialog(QDialog):
             field.setReadOnly(True)
             field.setFixedHeight(height)
         layout.addWidget(field)
+        return field
+
+    def _on_level_changed(self):
+        self._level = self._level_combo.currentData()
+        self._instr_edit.setPlainText(coder_system_prompt(self._level))
 
     def _add_hint(self, layout, title: str, text: str):
         """Überschrift + Hinweistext (Feld, das man nicht 1:1 kopiert)."""
@@ -110,14 +129,14 @@ class AisChatPromptDialog(QDialog):
         hint.setStyleSheet(f"color:{THEME['text_dim']};")
         layout.addWidget(hint)
 
-    def _header_row(self, title: str, text: str) -> QHBoxLayout:
+    def _header_row(self, title: str, text: str, getter=None) -> QHBoxLayout:
         row = QHBoxLayout()
         lbl = QLabel(f"<b>{title}</b>")
         row.addWidget(lbl)
         row.addStretch(1)
         btn = QPushButton("Kopieren")
         btn.setFixedWidth(90)
-        btn.clicked.connect(lambda _, t=text, b=btn: self._copy(t, b))
+        btn.clicked.connect(lambda _, b=btn: self._copy(getter() if getter else text, b))
         row.addWidget(btn)
         return row
 

@@ -1332,6 +1332,7 @@ class MainWindow(QMainWindow):
         from .debug_log_panel import DebugLogPanel
         self._debug_log_panel = DebugLogPanel()
         self._debug_log_panel.set_level(self._settings_debug_level)
+        self._coder_panel.set_level(self._settings_debug_level)
         self._ai_stack.addWidget(self._debug_log_panel)        # Index 5 → Fehlerprotokoll
         self._debug_log_panel.close_requested.connect(self._close_debug_log)
         self._debug_log_panel.restore_requested.connect(self._restore_last_good)
@@ -4002,7 +4003,7 @@ class MainWindow(QMainWindow):
     def _show_ais_prompt(self):
         """Zeigt die Vorlage, um den NiT_Coder als Dialogpartner auf ais.chat anzulegen."""
         from .ais_prompt_dialog import AisChatPromptDialog
-        AisChatPromptDialog(parent=self).exec()
+        AisChatPromptDialog(parent=self, level=self._settings_debug_level).exec()
 
     def _show_quickstart(self):
         """Kurzanleitung (mitgelieferte .md) in einem eigenen Fenster anzeigen."""
@@ -4062,6 +4063,7 @@ class MainWindow(QMainWindow):
             self._settings_debug_stepped = dlg.debug_stepped
             self._settings_debug_change_hint = dlg.debug_change_hint
             self._debug_log_panel.set_level(self._settings_debug_level)
+            self._coder_panel.set_level(self._settings_debug_level)
             if getattr(self, "_debug_map_dlg", None) is not None:
                 self._debug_map_dlg.set_level(self._settings_debug_level)
             ui_font_changed = dlg.ui_font_pt != self._settings_ui_font_pt

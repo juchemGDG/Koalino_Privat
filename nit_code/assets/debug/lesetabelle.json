@@ -188,6 +188,28 @@
       "belegt": false
     },
     {
+      "id": "pwm_wertebereich",
+      "typ": "ValueError",
+      "meldung": [
+        "duty",
+        "freq"
+      ],
+      "fall": "code",
+      "lesart": "Der Wert für das PWM-Signal liegt außerhalb des erlaubten Bereichs: duty() nimmt ganze Zahlen von 0 bis 1023, die Frequenz muss im zulässigen Bereich der Hardware liegen.",
+      "verdaechtige": [
+        "Tastgrad in Prozent statt als duty-Wert (0–1023) übergeben, oder falsch umgerechnet",
+        "Berechneter Wert ist größer als 1023 oder negativ (Steigerung in der Schleife ohne Obergrenze?)",
+        "Wert ist eine Kommazahl statt einer ganzen Zahl",
+        "Frequenz außerhalb des zulässigen Bereichs"
+      ],
+      "verdaechtige_kl89": [
+        "① Wert für duty() muss zwischen 0 und 1023 liegen.",
+        "② Prozent oder duty-Wert verwechselt?"
+      ],
+      "erster_test": "Direkt vor der Zeile mit duty() ein print() des Werts setzen und mit dem Bereich 0–1023 vergleichen.",
+      "belegt": false
+    },
+    {
       "id": "oserror_allgemein",
       "typ": "OSError",
       "meldung": [],

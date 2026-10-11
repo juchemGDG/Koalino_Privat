@@ -119,7 +119,7 @@ class _FlowWidget(QWidget):
         return self._flow.heightForWidth(width)
 
 # ── System-Prompt: Auftragnehmer-Modus ───────────────────────────────────────
-CODER_SYSTEM_PROMPT = """\
+_CODER_PROMPT_TEMPLATE = """\
 Du bist ein Code-Generator für den Informatikunterricht. Du setzt \
 Spezifikationen von Schülerinnen und Schülern in Python-Code um – \
 aber NUR, wenn die Spezifikation vollständig ist.
@@ -163,10 +163,7 @@ Prüfe das."
 - Kein Kommentar im generierten Code. Kommentieren ist ausschließlich \
 Aufgabe der Schülerinnen und Schüler (Verifikation).
 - Importe immer als "from ... import ..." schreiben, niemals "import modul".
-- Verzichte VOLLSTÄNDIG auf eine "main()"-Funktion und auf die Konstruktion \
-"if __name__ == \"__main__\":". Das Programm beginnt nach Importen und \
-Initialisierung DIREKT mit dem ersten Befehl bzw. der (Haupt-)Schleife auf \
-oberster Ebene. Das ist für Schülerinnen und Schüler leichter zu verstehen.
+@@MAIN_RULE@@
 - Warten: ausschließlich "from time import sleep" oder \
 "from time import sleep_ms" verwenden.
 - Analoge Eingänge (ADC): immer 10-Bit-Auflösung \
@@ -483,11 +480,149 @@ Temperatur + Feuchte DHT22 (direkt MicroPython):
   sensor = DHT22(Pin(DATA_PIN))
   sensor.measure()
   temperatur = sensor.temperature()   # float Grad Celsius
-  feuchte    = sensor.humidity()      # float Prozent\
+  feuchte    = sensor.humidity()      # float Prozent
+
+DC-Motor mit Motortreiber DRV8833 (eine H-Brücke; es gibt KEINE nitbw-Bibliothek, \
+immer machine.PWM direkt verwenden). Standardbelegung, falls die Spezifikation nichts \
+anderes sagt: IN1 an GPIO 25, IN2 an GPIO 26, EEP (nSLEEP) an GPIO 27, Motor an \
+OUT1/OUT2, Motorversorgung VM aus dem Netzgerät, gemeinsame Masse mit dem ESP32:
+  from machine import Pin, PWM
+  in1 = PWM(Pin(25), freq=1000, duty=0)
+  in2 = PWM(Pin(26), freq=1000, duty=0)
+  eep = Pin(27, Pin.OUT)
+  eep.on()                           # ohne EEP = 1 bleibt der Treiber im Schlaf
+  PWM-Wertebereich: duty() nimmt ganze Zahlen von 0 bis 1023 (10 Bit, wie beim ADC).
+  Prozent in duty umrechnen: duty = prozent * 1023 // 100. Werte außerhalb 0–1023
+  NIE an duty() übergeben. Ist unklar, ob die Spezifikation Prozent oder duty-Werte
+  meint, frage genau einmal nach.
+  vorwärts:  in1.duty(wert); in2.duty(0)
+  rückwärts: in1.duty(0);    in2.duty(wert)
+  bremsen:   in1.duty(1023); in2.duty(1023)
+  auslaufen: in1.duty(0);    in2.duty(0)
+  Taster (Standard): Pin(32, Pin.IN, Pin.PULL_UP), gedrückt = 0.
+  Potentiometer (Standard): ADC(Pin(34)) mit 10 Bit und ATTN_11DB.
+  Sicherheit: Den Motor NIE direkt an einen ESP32-Pin oder an 3V3/5V des ESP32
+  anschließen. Motorspannung im Unterricht 5 V, Strombegrenzung am Netzgerät 1,5 A.
+  Plant die Spezifikation ein langes Blockieren des Motors, weise kurz auf die
+  Überhitzung hin.\
 """
 
+# Struktur-Regel je Stufe. Klasse 8/9: flach, ohne main(). Klasse 10/KS: Programme
+# sind nach dem IBD (Informationsfluss) gegliedert und haben immer eine main().
+_MAIN_RULE_KL89 = (
+    '- Verzichte VOLLSTÄNDIG auf eine "main()"-Funktion und auf die Konstruktion '
+    '"if __name__ == \\"__main__\\":". Das Programm beginnt nach Importen und '
+    'Initialisierung DIREKT mit dem ersten Befehl bzw. der (Haupt-)Schleife auf '
+    'oberster Ebene. Das ist für Schülerinnen und Schüler leichter zu verstehen.'
+)
+_MAIN_RULE_KL10 = (
+    '- PROGRAMMAUFBAU (ab Klasse 10, Konzept Informationsfluss): Das Hauptprogramm '
+    'steht IMMER in einer Funktion "main()". Das Programm endet mit dem einfachen '
+    'Aufruf "main()" – OHNE "if __name__ == \\"__main__\\":". Reihenfolge: '
+    'Importe, Festwerte, Bauteile, eigene Funktionen, main(), Aufruf main().\n'
+    '- GLOBALE ZONE: Auf Modulebene stehen NUR Festwerte (Namen in GROSSBUCHSTABEN, '
+    'z. B. ANZAHL_RUNDEN, Schwellwerte, Adressen) und Bauteile (Pin-, I2C-, '
+    'Sensor-, Display-Objekte). ALLE anderen Variablen sind lokal in main() oder '
+    'in der jeweiligen Funktion. Keine Schleife und keine Berechnung auf '
+    'Modulebene.\n'
+    '- BAUTEILE sind keine Variablen: Funktionen greifen direkt auf die globalen '
+    'Bauteile zu (z. B. led.on()) und bekommen sie NICHT als Parameter. Parameter '
+    'dürfen nie denselben Namen wie ein globaler Name tragen.\n'
+    '- INFORMATIONSFLUSS: Funktionen benutzen nur das, was sie als Parameter '
+    'bekommen (Übergabewert), und geben Ergebnisse mit "return" zurück '
+    '(Rückgabewert). Kein "global", kein stilles Lesen globaler Variablen '
+    '(Festwerte und Bauteile sind erlaubt). Jeder Rückgabewert wird in einer '
+    'Variablen abgelegt oder direkt weiterverarbeitet – nie verworfen.\n'
+    '- EIN MESSWERT, EIN AUFRUF: Einen Sensor liest du je Messung genau EINMAL '
+    'aus, legst den Wert in einer Variablen ab und verwendest diese Variable '
+    'für Ausgabe und Vergleich (nicht zweimal read() aufrufen).\n'
+    '- GLIEDERUNG: Für jeden Verarbeitungsschritt der Spezifikation bzw. jedes '
+    'Unterprogramm-Symbol im PAP gibt es eine eigene Funktion mit sprechendem '
+    'Namen (z. B. reaktionszeit_messen(), median(werte)). Jede Funktion tut '
+    'genau eine Sache. Variablen- und Funktionsnamen stammen aus dem Teil '
+    'VARIABLEN der Spezifikation.\n'
+    '- LISTEN: Eine Funktion verändert eine übergebene Liste nur, wenn die '
+    'Spezifikation das verlangt. Zum Auswerten wird eine Kopie verwendet '
+    '(z. B. sorted(werte) statt werte.sort()); Kopien mit list(...) oder '
+    '.copy(), nie mit "kopie = liste". Eine Liste, die per append() wächst, '
+    'wird VOR der Schleife angelegt.\n'
+    '- Baue KEINE Kontrollpunkte oder Diagnose-print() ein; die setzen die '
+    'Schülerinnen und Schüler selbst beim Fehlersuchen. Nur print() für '
+    'Ausgaben, die in der Spezifikation stehen.'
+)
+
+LEVEL_KL89 = "kl89"
+LEVEL_KL10 = "kl10"
+
+# Fehlersuche-Modus: Der Coder wird auf Zuruf zum Fehler-Tutor (Cheatsheet „Fehler finden:
+# Schritt für Schritt“). Allgemeingültig – gilt für jedes Bauteil, nicht nur für eines.
+_FEHLERSUCHE_BASIS = (
+    '\nFEHLERSUCHE-MODUS – Beginnt eine Nachricht mit "Fehlersuche:", bist du '
+    'Fehler-Tutor nach dem Cheatsheet "Fehler finden: Schritt für Schritt" (Schritte 0 '
+    'bis 6). Dann gelten die Regeln zur Spezifikation und zum Code-Erzeugen NICHT. '
+    'Du schreibst KEINEN korrigierten Code und nennst keine fertige Lösung.\n'
+    '- Schritt 0 hat Vorrang: Nennt die Nachricht Wärme, Geruch, eine erloschene '
+    'Betriebs-LED, "Brownout" oder ungewollte Neustarts, antwortest du NUR: USB '
+    'trennen, Netzgerät aus, nichts anfassen, Lehrkraft rufen. Keine weitere Analyse.\n'
+    '- Schritt 1: Reagiert die Konsole nicht oder meldet "busy", läuft ein altes '
+    'main.py: Stopp-Knopf oder Strg+C, sonst Reset-Taster und sofort Strg+C.\n'
+    '- Schritt 3: Nenne den FALL ({FAELLE}), wo gesucht wird, höchstens DREI '
+    'Verdächtige und genau EINEN Test, der sie unterscheidet. Gesucht wird im CODE; '
+    'der PAP liefert den Maßstab (Was soll bis wohin passiert sein? Kontrollpunkte '
+    'mit print() im Code, Erwartung vorher notieren). Der Test ist zuerst ein print() '
+    'im Code (z. B. print(eep.value())); Messen mit dem Multimeter nur spannungsfrei '
+    'und nur, wenn die Lehrkraft es vorsieht, nie am laufenden Aufbau. {IBD}'
+    'Eine Meldung oder ein Symptom nennt Verdächtige, keinen Schuldigen: dasselbe '
+    'Symptom kann mehrere Ursachen haben. Das gilt für jedes Bauteil gleich.\n'
+    '- Schritt 4: Die Vermutung ("Ich vermute …, weil …") formuliert die Schülerin '
+    'oder der Schüler selbst. Fehlt sie, bitte zuerst darum, bevor du weitere Tipps '
+    'gibst.\n'
+    '- Schritt 5 und 6: Genau EINE Änderung pro Test; hilft sie nicht, rückgängig '
+    'machen. Eine Zeile oder ein Glied der Kette nennst du erst auf Nachfrage.\n'
+    '- Schließe mit genau EINER Frage, die zum nächsten Schritt führt.'
+)
+_FEHLERSUCHE_FAELLE_KL89 = (
+    'Meldung | Keine Meldung, Ergebnis falsch | Nichts reagiert'
+)
+_FEHLERSUCHE_FAELLE_KL10 = (
+    'Meldung zum Code | Meldung zur Hardware | Wert falsch | Nichts reagiert'
+)
+_FEHLERSUCHE_IBD = (
+    'Meldungen zu Pin, Bus oder Gerät (OSError, ValueError: invalid pin) gehören zu '
+    '"Meldung zur Hardware", Syntax-, Namens-, Einrückungs- und Typfehler zu "Meldung '
+    'zum Code". '
+    'Bei Hardware-Meldungen und bei "Nichts reagiert" prüft man die Informationskette '
+    'des IBD Glied für Glied von P1 an (Wo stimmt die Erwartung zum ersten Mal nicht?); '
+    'bei I2C-Geräten hilft i2c.scan(), bei anderen Bauteilen Pin, Richtung, '
+    'Versorgung, GND und Wackler. '
+)
+_FEHLERSUCHE_DIFFERENZ = (
+    '\n- Differenz Code ↔ IBD (nur Klasse 10): Meldet jemand eine Abweichung zwischen '
+    'dem Soll-IBD (vor dem Code gezeichnet) und dem Code, verlangst du ZUERST die '
+    'eigene Vermutung. Danach nennst du die drei möglichen Ursachen (IBD war falsch '
+    'oder unvollständig | Code weicht ab | Prompt war unklar) und einen Test am Code. '
+    'Die Schülerin oder der Schüler prüft deine Antwort selbst am Code.'
+)
+
+
+def _fehlersuche_block(level: str) -> str:
+    if level == LEVEL_KL10:
+        return (_FEHLERSUCHE_BASIS.replace("{FAELLE}", _FEHLERSUCHE_FAELLE_KL10)
+                .replace("{IBD}", _FEHLERSUCHE_IBD) + _FEHLERSUCHE_DIFFERENZ)
+    return (_FEHLERSUCHE_BASIS.replace("{FAELLE}", _FEHLERSUCHE_FAELLE_KL89)
+            .replace("{IBD}", ""))
+
+
+def coder_system_prompt(level: str = LEVEL_KL89) -> str:
+    """System-Prompt des Code-Generators für „kl89“ (Standard) oder „kl10“."""
+    rule = _MAIN_RULE_KL10 if level == LEVEL_KL10 else _MAIN_RULE_KL89
+    return _CODER_PROMPT_TEMPLATE.replace("@@MAIN_RULE@@", rule) + "\n" + _fehlersuche_block(level)
+
+
+CODER_SYSTEM_PROMPT = coder_system_prompt(LEVEL_KL89)
+
 # Unsichtbar an jede Nutzernachricht angehängt – hält kleine Modelle auf Kurs
-_RULE_REMINDER = (
+_RULE_REMINDER_HEAD = (
     "\n\n[SYSTEMREGEL: Entwirf KEINEN Algorithmus selbst. "
     "Berücksichtige ALLE bisherigen Angaben aus dem Verlauf und frage NICHT "
     "erneut nach Teilen, die bereits beantwortet oder mit '-'/'keine' als leer "
@@ -495,11 +630,25 @@ _RULE_REMINDER = (
     "leer markiert und ein ABLAUF vorhanden, generiere SOFORT Code statt "
     "Rückfragen zu stellen. Stelle dieselbe Frage nie zweimal. "
     "Kein Kommentar im Code. Imports nur als 'from ... import ...'. "
+)
+_RULE_REMINDER_KL89 = (
     "KEINE 'main()'-Funktion und kein 'if __name__ == \"__main__\":' – das "
     "Programm startet direkt mit dem ersten Befehl bzw. der Schleife auf "
     "oberster Ebene. "
-    "Antworte auf Deutsch.]"
 )
+_RULE_REMINDER_KL10 = (
+    "Das Hauptprogramm steht in 'main()'; am Ende steht nur 'main()' (kein "
+    "'if __name__'). Global NUR Festwerte (GROSSBUCHSTABEN) und Bauteile, alle "
+    "anderen Variablen lokal. Funktionen mit Parametern und return, kein "
+    "'global', Sensor je Messung nur einmal lesen. "
+)
+_RULE_REMINDER_TAIL = "Antworte auf Deutsch.]"
+
+
+def rule_reminder(level: str = LEVEL_KL89) -> str:
+    mid = _RULE_REMINDER_KL10 if level == LEVEL_KL10 else _RULE_REMINDER_KL89
+    return _RULE_REMINDER_HEAD + mid + _RULE_REMINDER_TAIL
+
 
 # Erkennt einen Leer-Marker als Wert ("-", "keine", "nicht vorhanden", …).
 # Greift nur bei NICHT-leerem Wert in derselben Zeile, damit die Vorlagen-Form
@@ -761,7 +910,8 @@ class CoderPanel(QWidget):
         super().__init__(parent)
         self._ollama_url       = TUTOR_DEFAULT_URL
         self._model            = TUTOR_DEFAULT_MODEL
-        self._history: list    = [{"role": "system", "content": CODER_SYSTEM_PROMPT}]
+        self._level            = LEVEL_KL89
+        self._history: list    = [{"role": "system", "content": coder_system_prompt(self._level)}]
         self._worker           = None
         self._retired_workers: list = []
         self._pending_response = ""
@@ -1296,7 +1446,7 @@ class CoderPanel(QWidget):
         self._append_user(text)
 
         self._history.append(
-            {"role": "user", "content": text + _RULE_REMINDER}
+            {"role": "user", "content": text + rule_reminder(self._level)}
         )
 
         self._send_btn.setEnabled(False)
@@ -1393,9 +1543,19 @@ class CoderPanel(QWidget):
         if hasattr(self, "_blocks_btn"):
             self._blocks_btn.setVisible(bool(enabled))
 
+    def set_level(self, level: str):
+        """Stufe „kl89“ oder „kl10“ (Klasse 10/KS: main() und IBD-Gliederung)."""
+        level = LEVEL_KL10 if level == LEVEL_KL10 else LEVEL_KL89
+        if level == self._level:
+            return
+        self._level = level
+        # Neuer System-Prompt gilt sofort; der bisherige Verlauf bleibt erhalten.
+        if self._history and self._history[0].get("role") == "system":
+            self._history[0] = {"role": "system", "content": coder_system_prompt(level)}
+
     # ── Verlauf zurücksetzen ──────────────────────────────────────────────────
     def _clear_history(self):
-        self._history         = [{"role": "system", "content": CODER_SYSTEM_PROMPT}]
+        self._history         = [{"role": "system", "content": coder_system_prompt(self._level)}]
         self._last_code_block = ""
         self._iteration       = 0
         self._iter_lbl.setText("Iteration 0")

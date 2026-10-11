@@ -101,9 +101,10 @@ CASES: dict[str, tuple[Case, ...]] = {
     LEVEL_KL10: (
         Case("code", "Meldung zum Code", "(SyntaxError, NameError)",
              "Zeile ansehen, Fehler dort oder knapp davor."),
-        Case("hardware", "Meldung zur Hardware", "(OSError: ENODEV, ETIMEDOUT)",
-             "IBD ab **P1** prüfen. `i2c.scan()`: Antwortet ein Gerät?"),
-        Case("wert", "Wert falsch", "(z. B. 250 °C)",
+        Case("hardware", "Meldung zur Hardware", "(z. B. OSError: ENODEV, ValueError: invalid pin)",
+             "IBD ab **P1** prüfen: Stimmt der Pin im Code mit der Verdrahtung überein? "
+             "Bei I2C-Geräten: `i2c.scan()`, antwortet ein Gerät?"),
+        Case("wert", "Wert falsch", "(z. B. 250 °C, Motor brummt nur)",
              "Im **Code** `print()` an den Stellen der PAP-Kontrollpunkte und an P2/P3 der IBD "
              "setzen, mit der Erwartung vergleichen. Wo es nicht stimmt: diesen Abschnitt "
              "Zeile für Zeile im Code prüfen."),
@@ -112,7 +113,8 @@ CASES: dict[str, tuple[Case, ...]] = {
     ),
 }
 
-IBD_NOTE = "Wo stimmt die Erwartung zum ersten Mal nicht? Dort liegt der Fehler."
+IBD_NOTE = ("Beispiel BME280. Bei jedem Bauteil gilt: Wo stimmt die Erwartung zum ersten Mal "
+            "nicht? Dort liegt der Fehler.")
 IBD_IMAGE = "IBD_BME280.svg"      # liegt in assets/debug/, P1 bis P4 wie im Cheatsheet
 
 
@@ -260,7 +262,7 @@ def cheat_sheet_html(level: str) -> str:
         "Stufe für Stufe.<br>"
         "• <b>⏪ Zurück zum letzten funktionierenden Stand</b> und <b>📌 Stand merken</b> ersetzen "
         "die Kopie in Schritt 5 und 6.<br>"
-        + ("• <b>I2C-Scan</b> (Debuggen-Menü) macht <code>i2c.scan()</code> auf Knopfdruck.<br>"
+        + ("• <b>I2C-Scan</b> (Debuggen-Menü, bei I2C-Geräten) macht <code>i2c.scan()</code> auf Knopfdruck.<br>"
            if level == LEVEL_KL10 else "")
         + "• <b>Fehlerprotokoll</b> (Seitenleiste): eine Runde pro Zeile, in den Schritten 2 bis 6.</div>")
     return (
