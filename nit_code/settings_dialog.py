@@ -238,6 +238,16 @@ class SettingsDialog(QDialog):
             QPushButton:hover {{
                 background: {THEME['accent_hover']};
             }}
+            QPushButton#ok, QPushButton#ok:default, QPushButton#ok:focus {{
+                background: {THEME['accent']};
+                color: #ffffff;
+                border: 1px solid {THEME['accent']};
+            }}
+            QPushButton#ok:hover, QPushButton#ok:pressed {{
+                background: {THEME['accent_hover']};
+                color: #ffffff;
+                border: 1px solid {THEME['accent_hover']};
+            }}
             QPushButton#cancel {{
                 background: {THEME['bg_dark']};
                 color: {THEME['text']};
@@ -762,6 +772,7 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(btn_cancel)
 
         btn_ok = QPushButton("Übernehmen")
+        btn_ok.setObjectName("ok")
         btn_ok.setDefault(True)
         btn_ok.clicked.connect(self.accept)
         btn_row.addWidget(btn_ok)
