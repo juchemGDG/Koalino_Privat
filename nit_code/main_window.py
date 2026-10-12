@@ -54,7 +54,7 @@ from .worksheet_panel import WorksheetPanel
 from .help_dialog import HelpDialog, guide_path
 from .pap_editor import IbdEditorWindow, PapEditorWindow
 from .statplot_window import StatPlotWindow
-from .settings_dialog import SettingsDialog
+from .settings_dialog import ACTIVITY_TOGGLEABLE, SettingsDialog
 from .terminal_panel import ClaudeTerminalPanel, find_claude_binary, pty_available
 from .tutor_panel import TutorPanel
 from .net_hints import git_network_hint
@@ -855,6 +855,7 @@ class MainWindow(QMainWindow):
         self._settings_python_exec: str = ""
         self._settings_scrollback: int = 5000
         self._settings_blocks_enabled: bool = True    # Block-Editor, Standard: an
+        self._settings_hidden_activity: set[str] = set()   # ausgeblendete Knöpfe der Seitenleiste
         self._settings_tutor_mode: str = "none"
         self._settings_tutor_url: str = ""
         self._settings_tutor_model: str = ""
@@ -1168,6 +1169,7 @@ class MainWindow(QMainWindow):
         add("ai", "ai", "KI-Assistent ein-/ausblenden", self._toggle_ai_panel, True)
         add("debuglog", "log", "Fehlerprotokoll ein-/ausblenden (Strg+Umschalt+P)",
             self._toggle_debug_log, True)
+        add("pysite", "web", "Lehrgang py.nitbw.de ein-/ausblenden", self._toggle_py_site, True)
         add("blocks", "blocks", "Block-Editor öffnen …", self._open_block_editor)
         add("plotter", "plotter", "Serial Plotter ein-/ausblenden",
             lambda: self._act_plotter.setChecked(not self._act_plotter.isChecked()), True)
@@ -1183,6 +1185,7 @@ class MainWindow(QMainWindow):
             lambda on: self._activity_buttons["plotter"].setChecked(on)
         )
         self._refresh_activity_icons()
+        self._apply_activity_visibility()
         return bar
 
     def _refresh_activity_icons(self):
@@ -1204,9 +1207,19 @@ class MainWindow(QMainWindow):
         # Rechts ist höchstens eins sichtbar: KI-Assistent oder Fehlerprotokoll
         self._activity_buttons["ai"].setChecked(self._ai_page_visible())
         self._activity_buttons["debuglog"].setChecked(self._debug_log_visible())
+        self._activity_buttons["pysite"].setChecked(self._py_site_visible())
         self._activity_buttons["plotter"].setChecked(self._act_plotter.isChecked())
-        if hasattr(self, "_m_blocks"):
-            self._activity_buttons["blocks"].setVisible(self._m_blocks.menuAction().isVisible())
+        self._apply_activity_visibility()
+
+    def _apply_activity_visibility(self):
+        """Knöpfe gemäß Einstellung „Seitenleiste“ ein-/ausblenden. Hilfe und
+        Einstellungen bleiben immer sichtbar; der Block-Editor-Knopf folgt
+        zusätzlich der Block-Editor-Einstellung."""
+        for key, btn in getattr(self, "_activity_buttons", {}).items():
+            visible = key not in self._settings_hidden_activity
+            if key == "blocks" and hasattr(self, "_m_blocks"):
+                visible = visible and self._m_blocks.menuAction().isVisible()
+            btn.setVisible(visible)
 
     def _toggle_file_panel(self):
         if self._left_splitter.isHidden():
@@ -1226,6 +1239,11 @@ class MainWindow(QMainWindow):
         """True, wenn rechts ein KI-Panel (Infi, AIS-Chat, Code-Generator) zu sehen ist."""
         return not self._ai_stack.isHidden() and self._ai_stack.currentIndex() in (0, 1, 2)
 
+    def _py_site_visible(self) -> bool:
+        return (not self._ai_stack.isHidden()
+                and hasattr(self, "_py_site_panel")
+                and self._ai_stack.currentWidget() is self._py_site_panel)
+
     def _debug_log_visible(self) -> bool:
         return (not self._ai_stack.isHidden()
                 and hasattr(self, "_debug_log_panel")
@@ -1233,7 +1251,7 @@ class MainWindow(QMainWindow):
 
     def _toggle_ai_panel(self):
         """KI-Assistent ein/aus. Ist rechts gerade etwas anderes offen (z. B. das
-        Fehlerprotokoll), wird auf den KI-Assistenten umgeschaltet."""
+        Fehlerprotokoll oder py.nitbw.de), wird auf den KI-Assistenten umgeschaltet."""
         if self._ai_page_visible():
             self._ai_stack.setVisible(False)
         elif self._settings_tutor_mode == "none":
@@ -1247,6 +1265,28 @@ class MainWindow(QMainWindow):
                 self._debug_log_panel.save()
             self._show_tutor_panel()
         self._sync_activity_bar()
+
+    def _toggle_py_site(self):
+        """py.nitbw.de ein/aus. Ist rechts etwas anderes offen, wird umgeschaltet."""
+        if self._py_site_visible():
+            self._ai_stack.setVisible(False)
+        else:
+            if self._debug_log_visible():
+                self._debug_log_panel.save()
+            self._open_py_site()
+        self._sync_activity_bar()
+
+    def _open_py_site(self):
+        self._main_splitter.setCollapsible(2, False)
+        self._ai_stack.setMinimumWidth(0)
+        self._ai_stack.setMaximumWidth(16777215)
+        self._ai_stack.setCurrentWidget(self._py_site_panel)
+        self._ai_stack.setVisible(True)
+        sizes = self._main_splitter.sizes()
+        if sizes[2] == 0:
+            total = sum(sizes)
+            self._main_splitter.setSizes([sizes[0], max(200, total - sizes[0] - 480), 480])
+        self._py_site_panel.ensure_loaded()
 
     # ──────────────────────────────────────────────────────────────────────
     # Zentralbereich
@@ -1335,6 +1375,10 @@ class MainWindow(QMainWindow):
         self._coder_panel.set_level(self._settings_debug_level)
         self._ai_stack.addWidget(self._debug_log_panel)        # Index 5 → Fehlerprotokoll
         self._debug_log_panel.close_requested.connect(self._close_debug_log)
+        from .py_site_panel import PySitePanel
+        self._py_site_panel = PySitePanel()
+        self._ai_stack.addWidget(self._py_site_panel)          # Index 6 → py.nitbw.de
+        self._py_site_panel.close_requested.connect(self._toggle_py_site)
         self._debug_log_panel.restore_requested.connect(self._restore_last_good)
         self._debug_log_panel.pin_requested.connect(self._pin_snapshot)
         self._coder_panel.insert_code_requested.connect(self._on_insert_generated_code)
@@ -4057,6 +4101,7 @@ class MainWindow(QMainWindow):
             debug_level=self._settings_debug_level,
             debug_stepped=self._settings_debug_stepped,
             debug_change_hint=self._settings_debug_change_hint,
+            hidden_activity=self._settings_hidden_activity,
         )
         if dlg.exec() == SettingsDialog.DialogCode.Accepted:
             self._settings_debug_level = dlg.debug_level
@@ -4082,6 +4127,7 @@ class MainWindow(QMainWindow):
             self._settings_git_executable = dlg.git_exec
             self._settings_theme = dlg.theme
             self._settings_blocks_enabled = dlg.blocks_enabled
+            self._settings_hidden_activity = dlg.hidden_activity
             self._settings_plot_y_mode = dlg.plot_y_mode
             self._settings_plot_y_min = dlg.plot_y_min
             self._settings_plot_y_max = dlg.plot_y_max
@@ -4202,6 +4248,9 @@ class MainWindow(QMainWindow):
         self._settings_plot_x_max = self._settings_int("plot/x_max", self._settings_plot_x_max)
         level = str(self._settings_store.value("debug/level", self._settings_debug_level) or "kl10")
         self._settings_debug_level = level if level in ("kl89", "kl10") else "kl10"
+        raw_hidden = str(self._settings_store.value("ui/hidden_activity", "") or "")
+        self._settings_hidden_activity = {
+            k for k in raw_hidden.split(",") if k in ACTIVITY_TOGGLEABLE}
         self._settings_debug_stepped = self._settings_bool("debug/stepped", self._settings_debug_stepped)
         self._settings_debug_change_hint = self._settings_bool("debug/change_hint", self._settings_debug_change_hint)
         # Theme sofort anwenden, damit alle nachfolgenden UI-Elemente korrekte Farben erhalten
@@ -4230,6 +4279,8 @@ class MainWindow(QMainWindow):
         self._settings_store.setValue("plot/x_mode", self._settings_plot_x_mode)
         self._settings_store.setValue("plot/x_min", self._settings_plot_x_min)
         self._settings_store.setValue("plot/x_max", self._settings_plot_x_max)
+        self._settings_store.setValue(
+            "ui/hidden_activity", ",".join(sorted(self._settings_hidden_activity)))
         self._settings_store.setValue("debug/level", self._settings_debug_level)
         self._settings_store.setValue("debug/stepped", self._settings_debug_stepped)
         self._settings_store.setValue("debug/change_hint", self._settings_debug_change_hint)
@@ -4382,9 +4433,12 @@ class MainWindow(QMainWindow):
             self._autosave_timer.start(self._settings_autosave_secs * 1000)
         # KI-Tutor (3 Modi: none / ollama / aischat). Ein offenes Fehlerprotokoll bleibt offen.
         keep_log = self._debug_log_visible()
+        keep_site = self._py_site_visible()
         self._show_tutor_panel()
         if keep_log:
             self._open_debug_log()
+        elif keep_site:
+            self._open_py_site()
         self._sync_activity_bar()
 
     def _show_tutor_panel(self):

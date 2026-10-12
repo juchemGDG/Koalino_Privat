@@ -395,6 +395,9 @@ def _user_config_dir() -> Path:
 # AIS-Chat (schulischer Web-Chatbot)
 AIS_CHAT_URL = "https://app.ais-chat.schule"
 
+# Lehrgang py.nitbw.de als Seitenleisten-Panel (py_site_panel.py)
+PY_SITE_URL = "https://py.nitbw.de"
+
 # PAP-Editor (Programmablaufpläne zeichnen). Die Seite kennt einen Embed-Modus
 # (?embed=1), der nur aktiv wird, wenn sie in einem iframe steckt – siehe
 # pap_editor.py. PAP_EDITOR_ORIGIN wird als Base-URL der Host-Seite und als

@@ -8,7 +8,7 @@ from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, QFrame,
-    QComboBox, QLineEdit, QFileDialog, QWidget, QScrollArea,
+    QComboBox, QLineEdit, QFileDialog, QWidget, QScrollArea, QGridLayout,
 )
 
 from .qt_utils import UI_FONT_PT_DEFAULT, UI_FONT_PT_RANGE
@@ -125,6 +125,22 @@ class _PythonScanner(QThread):
         self.found.emit(results)
 
 
+# Knöpfe der Seitenleiste, die sich ein-/ausblenden lassen (Schlüssel wie in
+# MainWindow._build_activity_bar). Hilfe und Einstellungen bleiben immer sichtbar.
+ACTIVITY_ITEMS = [
+    ("files",    "Dateien"),
+    ("ai",       "KI-Assistent"),
+    ("debuglog", "Fehlerprotokoll"),
+    ("pysite",   "Lehrgang py.nitbw.de"),
+    ("blocks",   "Block-Editor"),
+    ("plotter",  "Serial Plotter"),
+    ("pap",      "PAP-Editor"),
+    ("ibd",      "IBD-Editor"),
+    ("stats",    "Datenauswertung"),
+]
+ACTIVITY_TOGGLEABLE = frozenset(k for k, _ in ACTIVITY_ITEMS)
+
+
 # ── Einstellungs-Dialog ──────────────────────────────────────────────────────
 
 class SettingsDialog(QDialog):
@@ -157,8 +173,10 @@ class SettingsDialog(QDialog):
         debug_level: str = "kl10",
         debug_stepped: bool = True,
         debug_change_hint: bool = True,
+        hidden_activity=(),
     ):
         super().__init__(parent)
+        self._hidden_activity_init = set(hidden_activity)
         self._initial_ui_font_pt = ui_font_pt
         self._debug_init = (debug_level, debug_stepped, debug_change_hint)
         self.setWindowTitle("Einstellungen")
@@ -354,6 +372,27 @@ class SettingsDialog(QDialog):
         form_func.addRow("", hint_blocks)
 
         root.addLayout(form_func)
+        root.addSpacing(6)
+
+        # ── Abschnitt: Seitenleiste ──────────────────────────────────────
+        title_ab, sep_ab = self._section("SEITENLEISTE")
+        root.addWidget(title_ab)
+        root.addWidget(sep_ab)
+
+        hint_ab = QLabel("Welche Schnellstart-Knöpfe sollen links in der Seitenleiste erscheinen? "
+                         "Hilfe und Einstellungen sind immer da.")
+        hint_ab.setWordWrap(True)
+        hint_ab.setStyleSheet(f"color:{THEME['text_dim']}; font-size:10px;")
+        root.addWidget(hint_ab)
+        grid_ab = QGridLayout()
+        grid_ab.setSpacing(6)
+        self._chk_activity: dict[str, QCheckBox] = {}
+        for i, (key, label) in enumerate(ACTIVITY_ITEMS):
+            chk = QCheckBox("  " + label)
+            chk.setChecked(key not in self._hidden_activity_init)
+            self._chk_activity[key] = chk
+            grid_ab.addWidget(chk, i // 2, i % 2)
+        root.addLayout(grid_ab)
         root.addSpacing(6)
 
         # ── Abschnitt: Debugging ─────────────────────────────────────────
@@ -928,6 +967,10 @@ class SettingsDialog(QDialog):
     @property
     def highlight_line(self) -> bool:
         return self._chk_hl.isChecked()
+
+    @property
+    def hidden_activity(self) -> set:
+        return {k for k, chk in self._chk_activity.items() if not chk.isChecked()}
 
     @property
     def blocks_enabled(self) -> bool:

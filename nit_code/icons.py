@@ -23,6 +23,7 @@ _PATHS: dict[str, str] = {
                 '<path d="M18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
     "log":      '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9z"/>'
                 '<path d="M8.5 10.5h7M8.5 14h7M8.5 17.5h4"/>',
+    "web":      '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3z"/>',
     "blocks":   '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/>'
                 '<rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M17 13.5v7M13.5 17h7"/>',
     "plotter":  '<path d="M4 4v16h16"/><path d="M7 15l4-5 3 3 5-6"/>',
