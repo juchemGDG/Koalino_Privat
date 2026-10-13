@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QSplitter, QTabWidget,
 )
 
-from .config import THEME, python_executable, tool_command
+from .config import THEME, mono_family, python_executable, tool_command
 
 
 def _decode_shell_bytes(raw: bytes) -> str:
@@ -1072,7 +1072,7 @@ class ConsolePanel(QWidget):
 
     def set_font_size(self, size: int):
         """Schriftgröße der Konsole und Shell ändern."""
-        font = QFont("JetBrains Mono, Fira Code, Consolas, monospace", size)
+        font = QFont(mono_family(), size)
         self.output_console.setFont(font)   # OutputConsole ist selbst das QTextEdit
         self.shell.output.setFont(font)
 

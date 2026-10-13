@@ -39,6 +39,7 @@ from .config import (
     preferred_python_interpreter,
     python_executable,
     tool_command,
+    set_mono_font,
     set_theme,
 )
 from .editor_widget import CodeEditor
@@ -52,7 +53,7 @@ from .ais_chat_panel import AisChatPanel
 from .coder_panel import CoderPanel
 from .worksheet_panel import WorksheetPanel
 from .help_dialog import HelpDialog, guide_path
-from .pap_editor import IbdEditorWindow, PapEditorWindow
+from .pap_editor import IbdEditorWindow, PapEditorWindow, SchaltLabWindow
 from .statplot_window import StatPlotWindow
 from .settings_dialog import ACTIVITY_TOGGLEABLE, SettingsDialog
 from .terminal_panel import ClaudeTerminalPanel, find_claude_binary, pty_available
@@ -863,6 +864,7 @@ class MainWindow(QMainWindow):
         self._settings_git_executable: str = ""
         self._settings_git_repo: str = ""
         self._settings_theme: str = "modern_light"
+        self._settings_editor_font: str = "default"
         self._settings_ui_font_pt: int = UI_FONT_PT_DEFAULT
         # Serial-Plotter-Achsen (Standardwerte; im Plotter live übersteuerbar)
         self._settings_plot_y_mode: str = "auto"      # "auto" | "fixed"
@@ -1175,6 +1177,7 @@ class MainWindow(QMainWindow):
             lambda: self._act_plotter.setChecked(not self._act_plotter.isChecked()), True)
         add("pap", "flow", "PAP-Editor – Programmablaufplan zeichnen", self._open_pap_editor)
         add("ibd", "ibd", "IBD-Editor – Informationsfluss darstellen", self._open_ibd_editor)
+        add("schaltlab", "circuit", "SchaltLab – Schaltplan zeichnen", self._open_schaltlab)
         add("stats", "stats", "Datenauswertung – CSV-Daten darstellen und statistisch testen",
             self._open_csv_plot)
         lay.addStretch(1)
@@ -1868,6 +1871,24 @@ class MainWindow(QMainWindow):
         win.raise_()
         win.activateWindow()
 
+    # ── SchaltLab (Schaltplan-Editor) ─────────────────────────────────────
+    def _open_schaltlab(self):
+        """Öffnet SchaltLab im Extrafenster – wie PAP- und IBD-Editor."""
+        win = getattr(self, "_schaltlab_window", None)
+        if win is None:
+            win = SchaltLabWindow(self, sketchbook_dir=self._schaltlab_start_dir)
+            self._schaltlab_window = win
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def _schaltlab_start_dir(self) -> str:
+        """Ordner des aktuellen Programms (Projekt), sonst der Sketchbook-Ordner."""
+        tab = self._current_tab()
+        if tab is not None and tab.filepath and not tab.device_path:
+            return os.path.dirname(os.path.abspath(tab.filepath))
+        return self._settings_sketchbook
+
     # ── Lernen: Parsons-Puzzle ────────────────────────────────────────────
     def _open_parsons(self):
         """Öffnet das Parsons-Puzzle (Puzzle-Datei laden oder aus Code erstellen)."""
@@ -2125,7 +2146,7 @@ class MainWindow(QMainWindow):
         tab = self._current_tab()
         code = tab.editor.get_text() if tab else ""
         from .error_hints import build_infi_error_prompt
-        prompt = build_infi_error_prompt(code, tb, self._last_hint)
+        prompt = build_infi_error_prompt(code, tb, self._last_hint, self._settings_debug_level)
         # Infi-Panel sicher einblenden (Index 0) – auch wenn der Splitter kollabiert war.
         self._ai_stack.setCurrentIndex(0)
         self._ai_stack.setVisible(True)
@@ -2211,10 +2232,11 @@ class MainWindow(QMainWindow):
         self._hint_stage = 0
         if hint:
             stepped = self._settings_debug_stepped
-            self._show_hint_stage(1, with_links=stepped)
+            final = hint.final_stage
+            self._show_hint_stage(1, with_links=stepped or final == 1)
             if not stepped:
-                self._show_hint_stage(2, with_links=False)
-                self._show_hint_stage(3)
+                for st in range(2, final + 1):
+                    self._show_hint_stage(st, with_links=(st == final))
         # KI-Erklärung nur anbieten, wenn der Ollama-Tutor (Infi) eingerichtet ist.
         if self._settings_tutor_mode == "ollama":
             self._console.set_explain_visible(True)
@@ -2320,12 +2342,12 @@ class MainWindow(QMainWindow):
         """Schritt 1 · Läuft schon was? – das Board hat den Programmstart nicht bestätigt."""
         from . import debug_guide as guide
         self._console.flush_now()
-        self._console.append_info(guide.step1_text())
+        self._console.append_info(guide.step1_text(self._settings_debug_level))
 
     def _show_danger(self, kind: str):
         from .error_hints import danger_text
         self._console.flush_now()
-        self._console.append_warning(danger_text(kind))
+        self._console.append_warning(danger_text(kind, self._settings_debug_level))
 
     def _checkpoint_line(self, error: bool) -> str | None:
         """Satz zu den Kontrollpunkten dieses Laufs (None, wenn das Programm keine hat)."""
@@ -2363,7 +2385,10 @@ class MainWindow(QMainWindow):
             resolved = self._resolve_traceback_file(fname)
             return bool(resolved and target and os.path.abspath(resolved) == target)
 
-        lines = [guide.step_header(2), "   Schreib die Meldung wörtlich ab – mit Zeilennummer."]
+        lvl = self._settings_debug_level
+        lines = [guide.step_header("beobachten", lvl),
+                 "   Lies die Meldung von unten und beachte die Zeilennummer." if lvl == "kl89"
+                 else "   Schreib die Meldung wörtlich ab – mit Zeilennummer."]
         own, origin = search_start(traceback_frames(traceback_text), is_own)
         self._last_own_line = own[1] if own else None
         if own is not None:
@@ -2394,7 +2419,7 @@ class MainWindow(QMainWindow):
         self._console.append_info("\n")
 
     def _show_hint_stage(self, stage: int, with_links: bool = True):
-        """Eine Hilfestufe von Schritt 3 anzeigen: 1 Fall, 2 Wo suche ich?, 3 Verdächtige + Test."""
+        """Eine Hilfestufe von „Eingrenzen“ anzeigen (Stufen siehe ErrorHint.final_stage)."""
         hint = self._last_hint
         if hint is None or stage != self._hint_stage + 1:
             return
@@ -2403,15 +2428,20 @@ class MainWindow(QMainWindow):
         if not with_links:
             return
         links: list[tuple[str, str]] = []
-        if self._settings_debug_stepped and stage == 1:
-            links.append(("▸ Wo suche ich?", "hint2"))
-        elif self._settings_debug_stepped and stage == 2:
-            links.append(("▸ Verdächtige & erster Test", "hint3"))
-        if stage == 3 and hint.aktion == "i2c_scan" and self._mode == "micropython":
+        final = hint.final_stage
+        if self._settings_debug_stepped and stage < final:
+            if hint.level == "kl89":
+                links.append(("▸ Was prüfe ich?", f"hint{stage + 1}"))
+            else:
+                links.append(("▸ Wo suche ich?" if stage == 1 else "▸ Verdächtige & erster Test",
+                              f"hint{stage + 1}"))
+        if stage == final and hint.aktion == "i2c_scan" and self._mode == "micropython":
             links.append(("🔍 I2C-Scan starten", "i2c_scan"))
-        # Ist schon eine Runde offen, geht es dort weiter (Schritt 4 bis 6) – kein neuer Eintrag.
-        if stage in (1, 3) and self._debug_log_panel.open_round() is None:
-            links.append(("📝 Neue Runde im Protokoll", "protokoll"))
+        # Ist schon eine Runde offen, geht es dort weiter – kein neuer Eintrag.
+        if (stage == final or (hint.level != "kl89" and stage == 1)) \
+                and self._debug_log_panel.open_round() is None:
+            links.append(("📝 Neue Zeile im Protokoll" if hint.level == "kl89"
+                          else "📝 Neue Runde im Protokoll", "protokoll"))
         self._append_console_links(links)
 
     def _on_console_action(self, action: str):
@@ -2462,7 +2492,7 @@ class MainWindow(QMainWindow):
         if ergebnis in ("ok", "error") and panel.open_round() is not None:
             from . import debug_guide as guide
             ok = ergebnis == "ok"
-            self._console.append_info(guide.step6_text(ok, panel.failed_in_a_row() >= 3))
+            self._console.append_info(guide.step6_text(ok, panel.failed_in_a_row() >= 3, self._settings_debug_level))
             links = [("📝 Ergebnis eintragen", "ergebnis")]
             if not ok:
                 links.insert(0, ("⏪ Zurück zum letzten funktionierenden Stand", "zurueck"))
@@ -4078,6 +4108,7 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(
             self,
             font_size=self._settings_font_size,
+            editor_font=self._settings_editor_font,
             line_numbers=self._settings_line_numbers,
             word_wrap=self._settings_word_wrap,
             highlight_line=self._settings_highlight_line,
@@ -4114,6 +4145,8 @@ class MainWindow(QMainWindow):
             ui_font_changed = dlg.ui_font_pt != self._settings_ui_font_pt
             self._settings_ui_font_pt = dlg.ui_font_pt
             self._settings_font_size = dlg.font_size
+            self._settings_editor_font = dlg.editor_font
+            set_mono_font(self._settings_editor_font)
             self._settings_line_numbers = dlg.line_numbers
             self._settings_word_wrap = dlg.word_wrap
             self._settings_highlight_line = dlg.highlight_line
@@ -4182,6 +4215,8 @@ class MainWindow(QMainWindow):
 
     def _load_persistent_settings(self):
         self._settings_font_size = self._settings_int("editor/font_size", self._settings_font_size)
+        self._settings_editor_font = str(self._settings_store.value("editor/font_family", "default") or "default")
+        set_mono_font(self._settings_editor_font)
         self._settings_line_numbers = self._settings_bool("editor/line_numbers", self._settings_line_numbers)
         self._settings_word_wrap = self._settings_bool("editor/word_wrap", self._settings_word_wrap)
         self._settings_highlight_line = self._settings_bool("editor/highlight_line", self._settings_highlight_line)
@@ -4258,6 +4293,7 @@ class MainWindow(QMainWindow):
 
     def _save_persistent_settings(self):
         self._settings_store.setValue("editor/font_size", self._settings_font_size)
+        self._settings_store.setValue("editor/font_family", self._settings_editor_font)
         self._settings_store.setValue("editor/line_numbers", self._settings_line_numbers)
         self._settings_store.setValue("editor/word_wrap", self._settings_word_wrap)
         self._settings_store.setValue("editor/highlight_line", self._settings_highlight_line)
@@ -4411,7 +4447,8 @@ class MainWindow(QMainWindow):
         self._claude_terminal_panel.refresh_theme()
         self._worksheet_panel.refresh_theme()
         self._debug_log_panel.refresh_theme()
-        for attr in ("_parsons_window", "_csv_window", "_pap_window", "_ibd_window"):
+        for attr in ("_parsons_window", "_csv_window", "_pap_window", "_ibd_window",
+                     "_schaltlab_window"):
             win = getattr(self, attr, None)
             if win is not None:
                 win.apply_theme()

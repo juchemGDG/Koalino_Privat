@@ -1,9 +1,11 @@
 """Fehlerprotokoll als Seitenleiste (Cheatsheet „Fehler finden: Schritt für Schritt“).
 
-Eine Zeile pro Runde, Spalten wie im Heft: Nr., Soll / Ist, Eingrenzen, Vermutung,
-Änderung, Ergebnis. Im Panel führen farbige Schrittkarten (2 Beobachten, 3 Eingrenzen,
-4 Vermuten, 5 Ändern und testen, 6 Geklappt?) durch die Runde – gleiche Wörter und
-Farben wie auf dem Cheatsheet.
+Klasse 10/KS: eine Zeile pro Runde, Spalten wie im Heft: Nr., Soll / Ist, Eingrenzen,
+Vermutung, Änderung, Ergebnis. Farbige Schrittkarten (2 Beobachten, 3 Eingrenzen,
+4 Vermuten, 5 Ändern und testen, 6 Geklappt?) führen durch die Runde.
+Klasse 8/9: eine Zeile pro gelöstem Fehler, zwei Spalten (Meldung oder Symptom,
+Ursache und Änderung); vier Karten (1 Beobachten, 2 Eingrenzen, 3 Eine Sache ändern,
+4 Geklappt?). Gleiche Wörter und Farben wie auf dem jeweiligen Cheatsheet.
 
 Grundsatz: NIT_Code trägt nur Fakten ein (Meldung, Läufe mit Änderungen, Scan-Ergebnis
 auf Knopfdruck). Fall, Vermutung und Ergebnis schreiben die SuS selbst.
@@ -72,18 +74,25 @@ def laeufe_text(r: Runde) -> str:
 
 
 def to_markdown(name: str, runden: list[Runde], level: str) -> str:
+    cols = guide.protocol_columns(level)
+    kl89 = level == LEVEL_KL89
     out = [f"# Fehlerprotokoll – {name}", "",
-           f"*{guide.LEVEL_LABEL.get(level, '')} · eine Zeile pro Runde · "
+           f"*{guide.LEVEL_LABEL.get(level, '')} · "
+           f"{'eine Zeile pro gelöstem Fehler' if kl89 else 'eine Zeile pro Runde'} · "
            f"Stand {time.strftime('%d.%m.%Y %H:%M')}*", "",
-           "| " + " | ".join(guide.PROTOCOL_COLUMNS) + " |",
-           "|" + "---|" * len(guide.PROTOCOL_COLUMNS)]
+           "| " + " | ".join(cols) + " |",
+           "|" + "---|" * len(cols)]
     for r in runden:
+        sym = {"ja": "✓", "nein": "✗"}.get(r.geklappt, "")
+        if kl89:
+            ursache = " ".join(x for x in (_cell(r.aenderung), sym) if x)
+            out.append(f"| {_cell(r.soll_ist)} | {ursache} |")
+            continue
         label = guide.case_label(r.fall, level) if r.fall else ""
         eingrenzen = "; ".join(x for x in (f"**{label}**" if label else "", _cell(r.eingrenzen)) if x)
         aend = _cell(r.aenderung)
         if r.laeufe:
             aend += ("<br>" if aend else "") + "*Läufe: " + _cell(laeufe_text(r)) + "*"
-        sym = {"ja": "✓", "nein": "✗"}.get(r.geklappt, "")
         ergebnis = " ".join(x for x in (sym, _cell(r.ergebnis)) if x)
         out.append(f"| {r.nr} | {_cell(r.soll_ist)} | {eingrenzen} | {_cell(r.vermutung)} | "
                    f"{aend} | {ergebnis} |")
@@ -127,10 +136,11 @@ def from_markdown(text: str) -> tuple[list[Runde], str | None]:
 class _StepCard(QFrame):
     """Farbiger Block mit Schrittnummer links (wie auf dem Cheatsheet) und Inhalt rechts."""
 
-    def __init__(self, nr: int, parent=None):
+    def __init__(self, key: str, parent=None):
         super().__init__(parent)
         self.setObjectName("stepCard")
-        self._step = guide.STEP[nr]
+        self.key = key
+        self._step = guide.step(key, LEVEL_KL10)
         self._leads: list[tuple[QLabel, str, str]] = []
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -140,10 +150,7 @@ class _StepCard(QFrame):
         self._badge.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self._badge.setWordWrap(True)
         self._badge.setTextFormat(Qt.TextFormat.RichText)
-        title = html.escape(self._step.title)
-        self._badge.setText(
-            f"<div style='font-size:22px; font-weight:bold; color:{guide.YELLOW}'>{nr}</div>"
-            f"<div style='font-weight:bold; font-size:11px'>{title}</div>")
+        self._render_badge()
         outer.addWidget(self._badge)
         bodyw = QWidget()
         bodyw.setObjectName("stepBody")
@@ -152,6 +159,26 @@ class _StepCard(QFrame):
         self.body.setSpacing(5)
         outer.addWidget(bodyw, 1)
         self.apply_theme()
+
+    def _render_badge(self):
+        title = html.escape(self._step.title)
+        self._badge.setText(
+            f"<div style='font-size:22px; font-weight:bold; color:{guide.YELLOW}'>{self._step.nr}</div>"
+            f"<div style='font-weight:bold; font-size:11px'>{title}</div>")
+
+    def set_level(self, level: str) -> bool:
+        """Nummer, Titel und Text der Stufe übernehmen. False: den Schritt gibt es dort nicht."""
+        try:
+            self._step = guide.step(self.key, level)
+        except StopIteration:
+            return False
+        self._render_badge()
+        if self._leads:
+            lbl, _, _ = self._leads[0]
+            self._leads[0] = (lbl, self._step.lead, self._step.detail)
+            self._render_lead(lbl, self._step.lead, self._step.detail)
+        self.apply_theme()
+        return True
 
     def add_lead(self, lead: str, detail: str = "") -> QLabel:
         lbl = QLabel()
@@ -251,10 +278,7 @@ class DebugLogPanel(QWidget):
         tl = QVBoxLayout(top)
         tl.setContentsMargins(8, 4, 8, 4)
         tl.setSpacing(6)
-        s0 = guide.STEP[0]
-        self._banner = QLabel(
-            f"<b>SCHRITT 0 · STOPP</b> &nbsp;{html.escape(s0.lead)}<br>"
-            f"→ {html.escape(guide.plain(s0.detail))}")
+        self._banner = QLabel()
         self._banner.setWordWrap(True)
         self._banner.setTextFormat(Qt.TextFormat.RichText)
         tl.addWidget(self._banner)
@@ -307,15 +331,15 @@ class DebugLogPanel(QWidget):
             return w
 
         # 2 Beobachten
-        c2 = self._card(2, cl)
-        c2.add_lead(guide.STEP[2].lead, guide.STEP[2].detail)
+        c2 = self._card("beobachten", cl)
+        c2.add_lead(*self._lead_of("beobachten"))
         self._f_soll = text_field(62)
         self._f_soll.setPlaceholderText("Soll: …\nIst: …  (Meldung wörtlich, mit Zeilennummer)")
         c2.body.addWidget(self._f_soll)
 
         # 3 Eingrenzen
-        c3 = self._card(3, cl)
-        c3.add_lead(guide.STEP[3].lead)
+        c3 = self._card("eingrenzen", cl)
+        c3.add_lead(guide.step("eingrenzen", LEVEL_KL10).lead)
         chips_w = QWidget()
         self._chip_grid = QGridLayout(chips_w)
         self._chip_grid.setContentsMargins(0, 0, 0, 0)
@@ -327,8 +351,9 @@ class DebugLogPanel(QWidget):
         c3.body.addWidget(self._f_eingr)
 
         # 4 Vermuten
-        c4 = self._card(4, cl)
-        c4.add_lead(guide.STEP[4].lead, guide.STEP[4].detail)
+        c4 = self._card("vermuten", cl)
+        self._c4 = c4
+        c4.add_lead(*self._lead_of("vermuten"))
         self._f_verm = text_field(62)
         self._f_verm.setPlaceholderText("Ich vermute …, weil …")
         c4.body.addWidget(self._f_verm)
@@ -337,11 +362,13 @@ class DebugLogPanel(QWidget):
         c4.body.addWidget(self._weil_hint)
 
         # 5 Ändern und testen
-        c5 = self._card(5, cl)
-        c5.add_lead(guide.STEP[5].lead, guide.STEP[5].detail)
+        c5 = self._card("aendern", cl)
+        c5.add_lead(*self._lead_of("aendern"))
         self._f_aend = text_field(54)
-        self._f_aend.setPlaceholderText("Genau eine Änderung, z. B. „Zeile 6: address=0x77“")
         c5.body.addWidget(self._f_aend)
+        self._weil_hint5 = QLabel("")
+        self._weil_hint5.setWordWrap(True)
+        c5.body.addWidget(self._weil_hint5)
         self._facts = QLabel("")
         self._facts.setWordWrap(True)
         self._facts.setTextFormat(Qt.TextFormat.RichText)
@@ -356,7 +383,7 @@ class DebugLogPanel(QWidget):
         c5.body.addLayout(r5)
 
         # 6 Geklappt?
-        c6 = self._card(6, cl)
+        c6 = self._card("geklappt", cl)
         self._c6 = c6
         r6 = QHBoxLayout()
         self._btn_ja = QPushButton("✓  Ja")
@@ -383,7 +410,7 @@ class DebugLogPanel(QWidget):
         btn_back = QPushButton("⏪  Letzter funktionierender Stand")
         btn_back.setToolTip("Zurück zum letzten funktionierenden Stand: Änderung rückgängig machen")
         btn_back.clicked.connect(self.restore_requested.emit)
-        btn_next = QPushButton("➕  Nächste Runde (weiter bei 4)")
+        btn_next = self._btn_next = QPushButton("➕  Nächste Runde (weiter bei 4)")
         btn_next.setToolTip("Neue Zeile – Soll/Ist und Eingrenzen werden übernommen")
         btn_next.clicked.connect(lambda: self.new_round())
         nr.addWidget(btn_back)
@@ -408,8 +435,13 @@ class DebugLogPanel(QWidget):
         split.setSizes([190, 420])
         self.set_level(LEVEL_KL10)
 
-    def _card(self, nr: int, layout: QVBoxLayout) -> _StepCard:
-        c = _StepCard(nr)
+    @staticmethod
+    def _lead_of(key: str) -> tuple[str, str]:
+        st = guide.step(key, LEVEL_KL10)
+        return st.lead, st.detail
+
+    def _card(self, key: str, layout: QVBoxLayout) -> _StepCard:
+        c = _StepCard(key)
         self._cards.append(c)
         layout.addWidget(c)
         return c
@@ -421,6 +453,7 @@ class DebugLogPanel(QWidget):
         self._file_lbl.setStyleSheet(f"color:{dim}; font-size:10px;")
         self._empty_hint.setStyleSheet(f"color:{dim}; padding:6px 2px;")
         self._weil_hint.setStyleSheet(f"color:{guide.RED}; font-size:11px;")
+        self._weil_hint5.setStyleSheet(f"color:{guide.RED}; font-size:11px;")
         self._facts.setStyleSheet(f"color:{dim}; font-size:11px;")
         chip = (f"QPushButton#caseChip {{ background:transparent; color:{THEME['text']}; "
                 f"border:1px solid {THEME['border']}; border-radius:12px; padding:4px 6px; "
@@ -470,6 +503,23 @@ class DebugLogPanel(QWidget):
             b.toggled.connect(lambda on, key=c.key: self._on_chip(key, on))
             self._chips[c.key] = b
             self._chip_grid.addWidget(b, i // spalten, i % spalten)
+        for c in self._cards:
+            c.setVisible(c.set_level(level) or False)
+        s0 = guide.step("stopp", level)
+        self._banner.setText(
+            f"<b>SCHRITT 0 · {html.escape(s0.title.upper().rstrip('?'))}</b> &nbsp;{html.escape(s0.lead)}<br>"
+            f"→ {html.escape(guide.plain(s0.detail))}")
+        kl89 = level == LEVEL_KL89
+        self._btn_next.setText("➕  Nächste Runde (weiter bei 2)" if kl89
+                               else "➕  Nächste Runde (weiter bei 4)")
+        self._f_soll.setPlaceholderText(
+            "Meldung wörtlich, mit Zeilennummer – oder: was passiert statt dem, was soll" if kl89
+            else "Soll: …\nIst: …  (Meldung wörtlich, mit Zeilennummer)")
+        self._f_aend.setPlaceholderText(
+            "Ich ändere …, weil …" if kl89
+            else "Genau eine Änderung, z. B. „Zeile 6: address=0x77“")
+        self._f_erg.setPlaceholderText("Ergebnis, z. B. „blinkt im Sekundentakt“")
+        self._f_erg.setVisible(not kl89)    # Klasse 8/9: Ursache steht schon im „weil“ der Änderung
         self._f_eingr.setPlaceholderText(
             "Was hast du gefunden? z. B. K3 und K2 kommen gleichzeitig; nach K3 fehlt „1 s warten“ aus dem PAP"
             if level == LEVEL_KL89 else
@@ -530,7 +580,7 @@ class DebugLogPanel(QWidget):
         r = Runde(nr=nr)
         prev = self._runden[-1] if self._runden else None
         if ist:
-            r.soll_ist = f"Ist: {ist}"
+            r.soll_ist = ist if self._level == LEVEL_KL89 else f"Ist: {ist}"
         elif copy_previous and prev is not None and prev.geklappt == "nein":
             r.soll_ist, r.fall, r.eingrenzen = prev.soll_ist, prev.fall, prev.eingrenzen
         self._runden.append(r)
@@ -710,10 +760,10 @@ class DebugLogPanel(QWidget):
         res = r.geklappt if r else ""
         if res == "ja":
             self._res_hint.setText(f"<span style='color:{guide.GREEN}'><b>Ja:</b></span> "
-                                   f"{html.escape(guide.STEP6_JA)}")
+                                   f"{guide.inline_html(guide.geklappt_ja(self._level))}")
         elif res == "nein":
             self._res_hint.setText(f"<span style='color:{guide.RED}'><b>Nein:</b></span> "
-                                   f"{html.escape(guide.STEP6_NEIN)}")
+                                   f"{guide.inline_html(guide.geklappt_nein(self._level))}")
         else:
             self._res_hint.setText(
                 f"<span style='color:{THEME['text_dim']}'>Teste das ganze Programm und entscheide.</span>")
@@ -722,11 +772,16 @@ class DebugLogPanel(QWidget):
         self._three.setVisible(self.failed_in_a_row() >= 3)
 
     def _refresh_weil(self):
-        text = self._f_verm.toPlainText().strip()
+        kl89 = self._level == LEVEL_KL89
+        text = (self._f_aend if kl89 else self._f_verm).toPlainText().strip()
         show = bool(text) and "weil" not in text.lower()
-        self._weil_hint.setText("Fehlt das „weil“? Es stützt sich auf das, was du in 2 und 3 gesehen hast."
-                                if show else "")
-        self._weil_hint.setVisible(show)
+        hint = (self._weil_hint5 if kl89 else self._weil_hint)
+        other = (self._weil_hint if kl89 else self._weil_hint5)
+        other.setVisible(False)
+        nums = "1 und 2" if kl89 else "2 und 3"
+        hint.setText(f"Fehlt das „weil“? Es stützt sich auf das, was du in {nums} gesehen hast."
+                     if show else "")
+        hint.setVisible(show)
 
     def _show_facts(self, r: Runde | None):
         if r is not None and r.laeufe:

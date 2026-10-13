@@ -14,12 +14,77 @@ try:
 except ImportError:
     HAS_QSCI = False
 
-from .config import THEME
+from .config import THEME, mono_family
 from .completion import JediCompleter, HAS_JEDI
 
 
 def _hex(color: str) -> QColor:
     return QColor(color)
+
+
+if HAS_QSCI:
+    class _PyScintilla(QsciScintilla):
+        """QScintilla mit eigenen Einrückungslinien.
+
+        Die eingebauten Führungslinien zeichnet Scintilla gepunktet – das wirkt
+        unruhig. Hier werden sie nach dem normalen Zeichnen als durchgehende,
+        dünne Linien in einer hellen Grautönung über den Text gelegt.
+        """
+
+        GUIDE_COLOR_KEY = "scroll"
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.guide_color = QColor("#cbd5e1")
+
+        def paintEvent(self, event):
+            super().paintEvent(event)
+            try:
+                self._paint_guides()
+            except Exception:
+                pass     # Linien sind Zierde – nie das Zeichnen des Editors stören
+
+        def _paint_guides(self):
+            from PyQt6.QtGui import QPainter, QPen
+            send = self.SendScintilla
+            width = self.tabWidth() or 4
+            first = send(self.SCI_GETFIRSTVISIBLELINE)
+            shown = send(self.SCI_LINESONSCREEN) + 2
+            total = self.lines()
+            char_w = send(self.SCI_TEXTWIDTH, self.STYLE_DEFAULT, b" ")
+            if char_w <= 0:
+                return
+            # Einrückungstiefe je sichtbarer Zeile; Leerzeilen erben von der nächsten
+            # gefüllten Zeile darunter (sonst reißen die Linien bei Leerzeilen ab).
+            levels: list[int] = []
+            doc_lines = range(first, min(total, first + shown + 40))
+            for ln in doc_lines:
+                txt = self.text(ln)
+                if txt.strip():
+                    levels.append((send(self.SCI_GETLINEINDENTATION, ln)) // width)
+                else:
+                    levels.append(-1)
+            nxt = 0
+            for i in range(len(levels) - 1, -1, -1):
+                if levels[i] < 0:
+                    levels[i] = nxt
+                else:
+                    nxt = levels[i]
+            painter = QPainter(self.viewport())
+            pen = QPen(self.guide_color)
+            pen.setWidth(1)
+            painter.setPen(pen)
+            for i, ln in enumerate(doc_lines):
+                if i >= shown:
+                    break
+                y_pos = send(self.SCI_POSITIONFROMLINE, ln)
+                top = send(self.SCI_POINTYFROMPOSITION, 0, y_pos)
+                h = send(self.SCI_TEXTHEIGHT, ln)
+                x0 = send(self.SCI_POINTXFROMPOSITION, 0, y_pos)
+                for lvl in range(levels[i]):
+                    x = x0 + lvl * width * char_w
+                    painter.drawLine(x, top, x, top + h)
+            painter.end()
 
 
 class CodeEditor(QWidget):
@@ -52,7 +117,7 @@ class CodeEditor(QWidget):
 
         # Tab-Leiste (Datei-Tabs) wird von MainWindow verwaltet
         if HAS_QSCI:
-            self.sci = QsciScintilla(self)
+            self.sci = _PyScintilla(self)
             self._configure_scintilla()
             self._setup_completion()
             layout.addWidget(self.sci)
@@ -70,7 +135,7 @@ class CodeEditor(QWidget):
 
         # Allgemein
         sci.setUtf8(True)
-        sci.setFont(QFont("JetBrains Mono, Fira Code, Consolas, monospace", 12))
+        sci.setFont(QFont(mono_family(), 12))
         # Zeilenenden immer \n: Der QScintilla-Default ist das Plattform-EOL
         # (Windows: \r\n) – beim Speichern im Textmodus wird daraus \r\r\n
         # und beim nächsten Laden eine Leerzeile pro Zeile.
@@ -87,13 +152,15 @@ class CodeEditor(QWidget):
         sci.setMarginsForegroundColor(_hex(t["text_dim"]))
 
         # Einrückungsführungslinien
-        sci.setIndentationGuides(True)
-        sci.setIndentationGuidesBackgroundColor(_hex(t["border"]))
-        sci.setIndentationGuidesForegroundColor(_hex(t["border"]))
+        # (eigene durchgehende Linien, siehe _PyScintilla – die eingebauten sind gepunktet)
+        sci.setIndentationGuides(False)
+        sci.guide_color = _hex(t["scroll"])
 
         # Tabs → Spaces
         sci.setTabWidth(4)
         sci.setIndentationsUseTabs(False)
+        sci.setTabIndents(True)              # Tab / Shift+Tab rücken Zeilenanfang ein/aus
+        sci.setBackspaceUnindents(True)      # Rücktaste im Einzug nimmt eine ganze Ebene weg
         sci.setAutoIndent(True)
 
         # Aktuelle Zeile hervorheben
@@ -127,7 +194,7 @@ class CodeEditor(QWidget):
             return
         t = THEME
         lexer = QsciLexerPython(self.sci)
-        font = QFont("JetBrains Mono, Fira Code, Consolas, monospace", 12)
+        font = QFont(mono_family(), getattr(self, "_font_size", 12))
 
         # Basis-Farben
         lexer.setDefaultPaper(_hex(t["bg_editor"]))
@@ -283,7 +350,8 @@ class CodeEditor(QWidget):
 
     def set_font_size(self, size: int):
         """Schriftgröße des Editors und des Lexers ändern."""
-        font = QFont("JetBrains Mono, Fira Code, Consolas, monospace", size)
+        self._font_size = size
+        font = QFont(mono_family(), size)
         if HAS_QSCI:
             self.sci.setFont(font)
             if hasattr(self, "_lexer") and self._lexer:
@@ -441,8 +509,10 @@ class CodeEditor(QWidget):
         self.sci.setMarginsForegroundColor(_hex(t["text_dim"]))
         self.sci.setCaretLineBackgroundColor(_hex(t["selection"]))
         self.sci.setCaretForegroundColor(_hex(t["accent"]))
-        self.sci.setIndentationGuidesBackgroundColor(_hex(t["border"]))
-        self.sci.setIndentationGuidesForegroundColor(_hex(t["border"]))
+        self.sci.guide_color = _hex(t["scroll"])
+        self.sci.viewport().update()
+        if hasattr(self, "_completer"):
+            self._style_calltip()
         self.sci.setMarkerBackgroundColor(_hex(t["error"]), self._error_marker)
         self.sci.setMarkerForegroundColor(_hex(t["error"]), self._error_marker)
         self._set_lexer_python()
@@ -480,6 +550,8 @@ class CodeEditor(QWidget):
 
         self._completer = JediCompleter(self)
         self._completer.completions_ready.connect(self._show_completions)
+        self._completer.signature_ready.connect(self._show_signature)
+        self._completer.help_ready.connect(self._show_help)
 
         self._completion_timer = QTimer(self)
         self._completion_timer.setSingleShot(True)
@@ -488,18 +560,80 @@ class CodeEditor(QWidget):
         sci.SCN_CHARADDED.connect(self._on_char_added)
         sci.SCN_USERLISTSELECTION.connect(self._on_completion_selected)
 
+        # Docstring beim Verweilen der Maus über einem Namen (Tooltip)
+        sci.SendScintilla(sci.SCI_SETMOUSEDWELLTIME, 650)
+        sci.SCN_DWELLSTART.connect(self._on_dwell_start)
+        sci.SCN_DWELLEND.connect(self._hide_calltip)
+        sci.SendScintilla(sci.SCI_CALLTIPUSESTYLE, 4)
+        self._style_calltip()
+
         # Ctrl+Space: Vervollständigung manuell auslösen
         shortcut = QShortcut(QKeySequence("Ctrl+Space"), sci)
         shortcut.activated.connect(self._request_completion)
 
+        # Der erste jedi-Aufruf dauert Sekunden – schon beim Start vorwärmen,
+        # damit die erste Vervollständigung nicht „hängt“.
+        QTimer.singleShot(1500, self._completer.warm_up)
+
+    def _style_calltip(self):
+        sci = self.sci
+        t = THEME
+        sci.SendScintilla(sci.SCI_CALLTIPSETBACK, _hex(t["bg_mid"]))
+        sci.SendScintilla(sci.SCI_CALLTIPSETFORE, _hex(t["text"]))
+        sci.SendScintilla(sci.SCI_STYLESETBACK, sci.STYLE_CALLTIP, _hex(t["bg_mid"]))
+        sci.SendScintilla(sci.SCI_STYLESETFORE, sci.STYLE_CALLTIP, _hex(t["text"]))
+
     def _on_char_added(self, char: int):
         ch = chr(char) if 0 < char < 128 else ""
+        if ch == "(" or (ch == "," and self._in_call()):
+            # Signatur samt Docstring zeigen, solange man die Argumente tippt
+            self._completion_timer.stop()
+            line, col = self.sci.getCursorPosition()
+            self._completer.request_signature(self.sci.text(), line, col, self._filepath)
+            return
+        if ch == ")":
+            self._hide_calltip()
         if ch in (" ", "\n", "\r", "\t", ")", "]", "}", ";", ","):
             self._completion_timer.stop()
             return
-        # Kürzere Wartezeit beim Punkt (Attributzugriff)
-        self._completion_timer.setInterval(150 if ch == "." else 400)
+        # Beim Punkt (Attributzugriff) sofort, sonst nach kurzer Tipp-Pause
+        self._completion_timer.setInterval(30 if ch == "." else 120)
         self._completion_timer.start()
+
+    def _in_call(self) -> bool:
+        """Steht der Cursor in einer offenen Klammer der aktuellen Zeile?"""
+        line, col = self.sci.getCursorPosition()
+        before = self.sci.text(line)[:col]
+        return before.count("(") > before.count(")")
+
+    def _hide_calltip(self, *_args):
+        try:
+            self.sci.SendScintilla(self.sci.SCI_CALLTIPCANCEL)
+        except Exception:
+            pass
+
+    def _show_signature(self, text: str):
+        sci = self.sci
+        if sci.SendScintilla(sci.SCI_AUTOCACTIVE):
+            return
+        pos = sci.SendScintilla(sci.SCI_GETCURRENTPOS)
+        sci.SendScintilla(sci.SCI_CALLTIPSHOW, pos, text.encode("utf-8"))
+
+    def _on_dwell_start(self, pos: int, _x: int, _y: int):
+        if pos < 0 or self.sci.SendScintilla(self.sci.SCI_AUTOCACTIVE):
+            return
+        sci = self.sci
+        ch = sci.SendScintilla(sci.SCI_GETCHARAT, pos)
+        if not (chr(ch).isalnum() or chr(ch) == "_"):
+            return
+        line, col = sci.lineIndexFromPosition(pos)
+        self._completer.request_help(sci.text(), line, col, pos, self._filepath)
+
+    def _show_help(self, pos: int, text: str):
+        sci = self.sci
+        if not sci.underMouse() or sci.SendScintilla(sci.SCI_AUTOCACTIVE):
+            return
+        sci.SendScintilla(sci.SCI_CALLTIPSHOW, pos, text.encode("utf-8"))
 
     def _request_completion(self):
         sci = self.sci

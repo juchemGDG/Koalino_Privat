@@ -2,11 +2,18 @@
 
 Eine Quelle für alles, was NIT_Code zum Debugging anzeigt – Konsole, Fehlerprotokoll
 und die Anleitungsseite –, damit die Wörter überall dieselben sind wie auf dem
-Cheatsheet: Schritte 0 bis 6, in Schritt 3 vier Fälle, ein Protokoll mit sechs
-Spalten und einer Zeile pro Runde.
+Cheatsheet.
 
-Zwei Stufen: Klasse 8/9 (``kl89``) und Klasse 10/KS (``kl10``). Sie unterscheiden sich
-nur in Schritt 3 (Fälle, IBD).
+Zwei Stufen mit eigenem Cheatsheet:
+
+* Klasse 8/9 (``kl89``): fünf Schritte – 0 Vorcheck, 1 Beobachten, 2 Eingrenzen (drei
+  Fälle), 3 Eine Sache ändern, 4 Geklappt? – und ein Heft mit zwei Spalten, einer Zeile
+  pro gelöstem Fehler.
+* Klasse 10/KS (``kl10``): sieben Schritte 0 bis 6, vier Fälle, IBD, ein Protokoll mit
+  sechs Spalten und einer Zeile pro Runde.
+
+Schritte werden über ihren Schlüssel (``"eingrenzen"``, ``"aendern"`` …) angesprochen,
+weil die Nummern je Stufe verschieden sind (:func:`nr`).
 
 Texte stehen mit `Backticks` für Code; :func:`plain` entfernt sie für die Konsole,
 :func:`inline_html` macht daraus ``<code>``.
@@ -35,42 +42,99 @@ CREAM_TEXT = "#3d3200"
 @dataclass(frozen=True)
 class Step:
     nr: int
+    key: str
     title: str
     lead: str          # fett
     detail: str        # normal, \n = Zeilenumbruch
     color: str
+    lead2: str = ""    # zweiter Absatz (Klasse 8/9: „Läuft schon was?“ im Vorcheck)
+    detail2: str = ""
 
 
-STEPS: tuple[Step, ...] = (
-    Step(0, "Stopp?",
+_STEPS_KL10: tuple[Step, ...] = (
+    Step(0, "stopp", "Stopp?",
          "Wird etwas warm, riecht es, ist die Betriebs-LED aus?",
          "Sofort USB trennen, nichts anfassen, Lehrkraft rufen.", RED),
-    Step(1, "Läuft schon was?",
+    Step(1, "busy", "Läuft schon was?",
          "Tut das Board etwas, bevor du startest? Reagiert die Konsole nicht oder meldet „busy“?",
          "Dann läuft ein altes Programm (`main.py`). Stopp-Knopf der Programmierumgebung "
          "oder **Strg+C** in der Konsole.\n"
          "Hilft nicht: Reset-Taster am Board, sofort Strg+C.", BLUE),
-    Step(2, "Beobachten",
+    Step(2, "beobachten", "Beobachten",
          "Was soll passieren? Was passiert?",
          "Gibt es eine Meldung? Dann schreib sie **wörtlich** ab, mit Zeilennummer.", NAVY),
-    Step(3, "Eingrenzen", "Welcher Fall liegt vor?", "", NAVY),
-    Step(4, "Vermuten",
+    Step(3, "eingrenzen", "Eingrenzen", "Welcher Fall liegt vor?", "", NAVY),
+    Step(4, "vermuten", "Vermuten",
          "Schreib einen Satz: „Ich vermute …, weil …“",
          "Das „weil“ stützt sich auf das, was du in 2 und 3 gesehen hast.", NAVY),
-    Step(5, "Ändern und testen",
+    Step(5, "aendern", "Ändern und testen",
          "Ändere genau eine Sache.",
          "Vorher eine Kopie machen oder `#` vor die alte Zeile setzen.\n"
          "Dann starten und beobachten.", NAVY),
-    Step(6, "Geklappt?", "", "", NAVY),
+    Step(6, "geklappt", "Geklappt?", "", "", NAVY),
 )
-STEP = {s.nr: s for s in STEPS}
 
-STEP6_JA = "Ganzes Programm noch einmal testen. Zeile ins Heft."
-STEP6_NEIN = "Änderung rückgängig machen, zurück zu 4."
+_STEPS_KL89: tuple[Step, ...] = (
+    Step(0, "vorcheck", "Vorcheck",
+         "Wird etwas warm, riecht es, ist die Betriebs-LED aus?",
+         "Sofort USB trennen, nichts anfassen, Lehrkraft rufen.", RED,
+         lead2="Tut das Board etwas, bevor du startest?",
+         detail2="Altes Programm stoppen: Stopp-Knopf oder **Strg+C**. "
+                 "Hilft das nicht: Reset-Taster, sofort Strg+C."),
+    Step(1, "beobachten", "Beobachten",
+         "Was soll passieren? Was passiert?",
+         "Gibt es eine Meldung? Dann lies sie **von unten** und beachte die Zeilennummer.", NAVY),
+    Step(2, "eingrenzen", "Eingrenzen", "Welcher Fall liegt vor?", "", NAVY),
+    Step(3, "aendern", "Eine Sache ändern",
+         "Überlege kurz: **Ich ändere …, weil …**",
+         "Ändere **genau eine** Sache. Vorher eine Kopie machen oder `#` vor die alte Zeile "
+         "setzen. Dann starten.", NAVY),
+    Step(4, "geklappt", "Geklappt?", "", "", NAVY),
+)
+
+STEPS_BY_LEVEL = {LEVEL_KL89: _STEPS_KL89, LEVEL_KL10: _STEPS_KL10}
+
+
+def steps(level: str) -> tuple[Step, ...]:
+    return STEPS_BY_LEVEL.get(level, _STEPS_KL10)
+
+
+def step(key: str, level: str) -> Step:
+    """Schritt über seinen Schlüssel; ``"stopp"``/``"busy"`` meinen in Klasse 8/9 den Vorcheck."""
+    if level == LEVEL_KL89 and key in ("stopp", "busy"):
+        key = "vorcheck"
+    return next(st for st in steps(level) if st.key == key)
+
+
+def nr(key: str, level: str) -> int:
+    return step(key, level).nr
+
+
+_GEKLAPPT = {
+    LEVEL_KL89: ("Ganzes Programm noch einmal testen. **Eine Zeile ins Heft.**",
+                 "Änderung **rückgängig** machen, zurück zu 2. Schreib jetzt dein "
+                 "„Ich ändere …, weil …“ auf."),
+    LEVEL_KL10: ("Ganzes Programm noch einmal testen. Zeile ins Heft.",
+                 "Änderung rückgängig machen, zurück zu 4."),
+}
 STEP6_NOTE = "Drei Runden ohne Erfolg? Partner oder Lehrkraft holen."
 
-# Spalten des Protokolls („Ins Heft oder Laborbuch: eine Zeile pro Runde“)
-PROTOCOL_COLUMNS = ("Nr.", "Soll / Ist", "Eingrenzen", "Vermutung", "Änderung", "Ergebnis")
+
+def geklappt_ja(level: str) -> str:
+    return _GEKLAPPT.get(level, _GEKLAPPT[LEVEL_KL10])[0]
+
+
+def geklappt_nein(level: str) -> str:
+    return _GEKLAPPT.get(level, _GEKLAPPT[LEVEL_KL10])[1]
+
+
+# Spalten des Protokolls
+PROTOCOL_COLUMNS_KL10 = ("Nr.", "Soll / Ist", "Eingrenzen", "Vermutung", "Änderung", "Ergebnis")
+PROTOCOL_COLUMNS_KL89 = ("Meldung oder Symptom", "Ursache und Änderung")
+
+
+def protocol_columns(level: str) -> tuple[str, ...]:
+    return PROTOCOL_COLUMNS_KL89 if level == LEVEL_KL89 else PROTOCOL_COLUMNS_KL10
 
 
 @dataclass(frozen=True)
@@ -92,8 +156,8 @@ CASES: dict[str, tuple[Case, ...]] = {
              "Tippfehler? Doppelpunkt? Einrückung?"),
         Case("wert", "Keine Meldung, Ergebnis falsch", "",
              "Im **Code** an den Stellen der Kontrollpunkte (K) im PAP ein `print(\"K1\")` usw. "
-             "setzen. Vorher überlegen: Was erwarte ich dort laut PAP? Wo es zum ersten Mal "
-             "nicht stimmt: diesen Abschnitt **Zeile für Zeile** im Code prüfen."),
+             "setzen. Vorher überlegen: Was erwarte ich dort? Wo es zum ersten Mal "
+             "nicht stimmt: diesen Abschnitt **Zeile für Zeile** prüfen."),
         Case("nichts", "Nichts reagiert", "", _KL9_NICHTS),
         # Hardware-Meldung (z. B. OSError) – in Klasse 8/9 kein eigener Fall, hier gilt die Checkliste.
         Case("hardware", "Meldung", "", _KL9_NICHTS, visible=False),
@@ -146,44 +210,50 @@ def inline_html(text: str) -> str:
     return t.replace("\n", "<br>")
 
 
-def step_header(nr: int) -> str:
+def step_header(key: str, level: str = LEVEL_KL10) -> str:
     """„◆ Schritt 3 · Eingrenzen“ für die Konsole."""
-    return f"◆ Schritt {nr} · {STEP[nr].title}"
+    st = step(key, level)
+    return f"◆ Schritt {st.nr} · {st.title}"
 
 
 # ── Konsolentexte zu den Schritten ────────────────────────────────────────────
-def step0_text(grund: str = "") -> str:
-    s = STEP[0]
-    out = "\n⚠  SCHRITT 0 · STOPP\n"
+def step0_text(grund: str = "", level: str = LEVEL_KL10) -> str:
+    s = step("stopp", level)
+    out = f"\n⚠  SCHRITT 0 · {s.title.upper().rstrip('?')}\n"
     if grund:
         out += f"   {grund}\n"
     out += f"   {s.lead}\n   → {plain(s.detail)} Erst danach weiterdenken.\n"
     return out
 
 
-def step1_text() -> str:
-    s = STEP[1]
-    lines = plain(s.detail).split("\n")
-    return ("\n" + step_header(1) + "\n"
-            f"   {s.lead}\n   " + "\n   ".join(lines) + "\n")
+def step1_text(level: str = LEVEL_KL10) -> str:
+    """„Läuft schon was?“ – in Klasse 8/9 der zweite Absatz des Vorchecks."""
+    s = step("busy", level)
+    lead, detail = (s.lead2, s.detail2) if level == LEVEL_KL89 else (s.lead, s.detail)
+    return ("\n" + step_header("busy", level) + "\n"
+            f"   {lead}\n   " + "\n   ".join(plain(detail).split("\n")) + "\n")
 
 
-def steps45_text() -> str:
-    """Abschluss der Fehlerhilfe: Schritt 4 und 5 als Erinnerung."""
-    s4, s5 = STEP[4], STEP[5]
-    return ("\n" + step_header(4) + f" – {s4.lead}\n"
+def steps45_text(level: str = LEVEL_KL10) -> str:
+    """Abschluss der Fehlerhilfe: das Ändern als Erinnerung (Klasse 10: Schritt 4 und 5)."""
+    sicher = " NIT_Code sichert bei jedem Start automatisch einen Stand (⏪ bringt dich zurück).\n"
+    if level == LEVEL_KL89:
+        s = step("aendern", level)
+        return ("\n" + step_header("aendern", level) + f" – {plain(s.lead)}\n"
+                "   " + plain(s.detail) + sicher)
+    s4, s5 = step("vermuten", level), step("aendern", level)
+    return ("\n" + step_header("vermuten", level) + f" – {s4.lead}\n"
             f"   {s4.detail}\n"
-            + step_header(5) + f" – {s5.lead}\n"
-            "   " + plain(s5.detail).replace("\n", " ")
-            + " NIT_Code sichert bei jedem Start automatisch einen Stand (⏪ bringt dich zurück).\n")
+            + step_header("aendern", level) + f" – {s5.lead}\n"
+            "   " + plain(s5.detail).replace("\n", " ") + sicher)
 
 
-def step6_text(ok: bool, drei_runden: bool = False) -> str:
-    head = step_header(6) + "\n"
+def step6_text(ok: bool, drei_runden: bool = False, level: str = LEVEL_KL10) -> str:
+    head = step_header("geklappt", level) + "\n"
     if ok:
-        body = f"   Ja: {STEP6_JA}\n"
+        body = f"   Ja: {plain(geklappt_ja(level))}\n"
     else:
-        body = f"   Nein: {STEP6_NEIN}\n"
+        body = f"   Nein: {plain(geklappt_nein(level))}\n"
     if drei_runden:
         body += f"   {STEP6_NOTE}\n"
     return "\n" + head + body
@@ -223,7 +293,7 @@ div.nitcode b.h {{ color:{CREAM_TEXT}; }}
 
 
 def _step_body_html(step: Step, level: str) -> str:
-    if step.nr == 3:
+    if step.key == "eingrenzen":
         items = []
         for c in cases(level):
             zusatz = f" <span class='note'>{html.escape(c.zusatz)}</span>" if c.zusatz else ""
@@ -233,44 +303,53 @@ def _step_body_html(step: Step, level: str) -> str:
             out += (f"<div class='ibd'><img src='{IBD_IMAGE}' width='330' alt='IBD mit P1 bis P4'></div>"
                     f"<div class='note'>{html.escape(IBD_NOTE)}</div>")
         return out
-    if step.nr == 6:
-        return (f"<div><span class='ja'>Ja:</span> {html.escape(STEP6_JA)}<br>"
-                f"<span class='nein'>Nein:</span> {html.escape(STEP6_NEIN)}</div>"
+    if step.key == "geklappt":
+        return (f"<div><span class='ja'>Ja:</span> {inline_html(geklappt_ja(level))}<br>"
+                f"<span class='nein'>Nein:</span> {inline_html(geklappt_nein(level))}</div>"
                 f"<div class='note'>{html.escape(STEP6_NOTE)}</div>")
     lead = f"<div class='lead'>{inline_html(step.lead)}</div>" if step.lead else ""
     detail = f"<div>{inline_html(step.detail)}</div>" if step.detail else ""
+    if step.lead2:
+        lead2 = f"<div class='lead' style='margin-top:6px'>{inline_html(step.lead2)}</div>"
+        detail2 = f"<div>{inline_html(step.detail2)}</div>" if step.detail2 else ""
+        return lead + detail + lead2 + detail2
     return lead + detail
 
 
 def cheat_sheet_html(level: str) -> str:
     """Das Cheatsheet „Fehler finden: Schritt für Schritt“ ohne Beispiel als HTML-Seite."""
     rows = []
-    for st in STEPS:
+    for st in steps(level):
         rows.append(
             f"<tr><td class='badge' bgcolor='{st.color}' width='118' valign='top' "
             f"style='background-color:{st.color}; color:#ffffff; padding:10px;'>"
             f"<div class='nr'><font color='{YELLOW}' size='5'><b>{st.nr}</b></font></div>"
             f"<div class='ttl'><font color='#ffffff'><b>{html.escape(st.title)}</b></font></div></td>"
             f"<td class='body' valign='top' style='padding:10px;'>{_step_body_html(st, level)}</td></tr>")
-    head = "".join(f"<th>{html.escape(c)}</th>" for c in PROTOCOL_COLUMNS)
-    empty = "".join("<td>&nbsp;</td>" for _ in PROTOCOL_COLUMNS)
+    cols = protocol_columns(level)
+    head = "".join(f"<th>{html.escape(c)}</th>" for c in cols)
+    empty = "".join("<td>&nbsp;</td>" for _ in cols)
+    kl89 = level == LEVEL_KL89
     nit = (
         "<div class='nitcode'><b class='h'>So hilft dir NIT_Code</b><br>"
         "• <b>Strg+K</b> setzt einen Kontrollpunkt <code>print(\"K1\")</code>, die Nummern "
         "folgen dem Programm. Nach einem Absturz zeigt die Konsole den letzten erreichten.<br>"
-        "• <b>Konsole</b>: Nach einer Fehlermeldung begleitet sie dich durch Schritt 2 und 3 – "
-        "Stufe für Stufe.<br>"
-        "• <b>⏪ Zurück zum letzten funktionierenden Stand</b> und <b>📌 Stand merken</b> ersetzen "
-        "die Kopie in Schritt 5 und 6.<br>"
+        "• <b>Konsole</b>: Nach einer Fehlermeldung begleitet sie dich durch Schritt "
+        + ("1 und 2" if kl89 else "2 und 3") + (" – kurz und knapp.<br>" if kl89 else " – Stufe für Stufe.<br>")
+        + "• <b>⏪ Zurück zum letzten funktionierenden Stand</b> und <b>📌 Stand merken</b> ersetzen "
+        "die Kopie in Schritt " + ("3 und 4" if kl89 else "5 und 6") + ".<br>"
         + ("• <b>I2C-Scan</b> (Debuggen-Menü, bei I2C-Geräten) macht <code>i2c.scan()</code> auf Knopfdruck.<br>"
            if level == LEVEL_KL10 else "")
-        + "• <b>Fehlerprotokoll</b> (Seitenleiste): eine Runde pro Zeile, in den Schritten 2 bis 6.</div>")
+        + "• <b>Fehlerprotokoll</b> (Seitenleiste): "
+        + ("eine Zeile pro gelöstem Fehler.</div>" if kl89 else "eine Runde pro Zeile, in den Schritten 2 bis 6.</div>"))
+    sub = "Ändere immer <b>nur eine</b> Sache." if kl89 else "Überspringe keinen."
+    heft = ("INS HEFT: EINE ZEILE PRO GELÖSTEM FEHLER" if kl89
+            else "INS HEFT ODER LABORBUCH: EINE ZEILE PRO RUNDE")
     return (
         f"<!DOCTYPE html><html><head><meta charset='utf-8'><style>{_CSS}</style></head><body>"
         f"<h1>Fehler finden: Schritt für Schritt</h1>"
-        f"<p class='sub'>{LEVEL_LABEL[level]} · Gehe die Schritte von oben nach unten durch. "
-        f"Überspringe keinen.</p>"
+        f"<p class='sub'>{LEVEL_LABEL[level]} · Gehe die Schritte von oben nach unten durch. {sub}</p>"
         f"<table class='steps' width='100%' cellspacing='6' cellpadding='0'>{''.join(rows)}</table>"
-        f"<h2>INS HEFT ODER LABORBUCH: EINE ZEILE PRO RUNDE</h2>"
+        f"<h2>{heft}</h2>"
         f"<table class='prot' width='100%' border='1' cellspacing='0' cellpadding='6'>"
         f"<tr>{head}</tr><tr>{empty}</tr></table>{nit}</body></html>")

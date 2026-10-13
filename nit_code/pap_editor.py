@@ -53,7 +53,8 @@ except Exception:
     HAS_WEBENGINE = False
 
 from .config import (
-    IBD_EDITOR_ORIGIN, IBD_EDITOR_URL, PAP_EDITOR_ORIGIN, PAP_EDITOR_URL, THEME,
+    IBD_EDITOR_ORIGIN, IBD_EDITOR_URL, PAP_EDITOR_ORIGIN, PAP_EDITOR_URL,
+    SCHALTLAB_ORIGIN, SCHALTLAB_URL, THEME,
 )
 from .pap_import import PAP_MIME
 
@@ -446,6 +447,10 @@ class PapEditorWindow(QMainWindow):
                if self._MIME else ""),
             kind="success",
         )
+        self._after_png()
+
+    def _after_png(self):
+        """Hook: nach dem Übernehmen eines Bildes (Unterklassen)."""
 
     def _start_dir(self) -> str:
         """Startordner des Speichern-Dialogs: der Sketchbook-Ordner."""
@@ -552,3 +557,29 @@ class IbdEditorWindow(PapEditorWindow):
     _HINT = ("„In Projekt übernehmen“ legt das Diagramm in die Zwischenablage – "
              "für Seiten, die kein Einfügen erlauben (z. B. AIS-Chat), danach "
              "„Bild speichern“ benutzen.")
+
+
+class SchaltLabWindow(PapEditorWindow):
+    """Schaltplan-Editor (schaltlab.mint-checker.de) – gleiches Protokoll wie der IBD-Editor.
+
+    „In Projekt übernehmen“ legt das Bild nicht nur in die Zwischenablage, sondern
+    fragt gleich nach dem Speichern als PNG – der Dialog startet im Ordner des
+    aktuellen Programms, damit der Schaltplan neben dem Code im Projekt liegt.
+    """
+
+    _URL = SCHALTLAB_URL
+    _ORIGIN = SCHALTLAB_ORIGIN
+    _SOURCE = "schaltlab"
+    _NAME = "SchaltLab"
+    _WINDOW_TITLE = "NIT SchaltLab"
+    _HOST = "schaltlab.mint-checker.de"
+    _PNG_NAME = "schaltplan.png"
+    _SAVE_TITLE = "Schaltplan speichern"
+    _MIME = None
+    _HINT = ("„In Projekt übernehmen“ speichert den Schaltplan als PNG im Projektordner "
+             "und legt ihn in die Zwischenablage.")
+
+    def _after_png(self):
+        # Erst nach dem Zurückkehren in die Ereignisschleife: Der Dialog soll nicht
+        # mitten im Polling-Rückruf der WebEngine aufgehen.
+        QTimer.singleShot(0, self._save_last_png)

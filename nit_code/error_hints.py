@@ -173,29 +173,64 @@ class ErrorHint:
     def fall_name(self) -> str:
         return guide.case_label(self.fall, self.level)
 
+    @property
+    def final_stage(self) -> int:
+        """Letzte Hilfestufe. Klasse 10: 3 (Fall → Wo suche ich? → Verdächtige). Klasse 8/9
+        ist kürzer: Fall und Suchort stehen zusammen in Stufe 1, und bei Meldungen zum Code
+        (SyntaxError, NameError …) steht schon dort alles – das Wichtigste auf einmal."""
+        if self.level == LEVEL_KL89:
+            return 1 if self.fall == "code" else 2
+        return 3
+
     def render(self, stage: int) -> str:
-        """Text einer Hilfestufe: 1 = Fall + Lesart, 2 = Wo suche ich?, 3 = Verdächtige + Test."""
+        """Text einer Hilfestufe (Klasse 10: 1 = Fall + Lesart, 2 = Wo suche ich?,
+        3 = Verdächtige + Test; Klasse 8/9: siehe :attr:`final_stage`)."""
+        if self.level == LEVEL_KL89:
+            return self._render_kl89(stage)
         if stage == 1:
-            kurz = self._kurzmeldung()
-            tail = f"   ({self.etype}" + (f" · {kurz})" if kurz else ")")
-            return (f"{guide.step_header(3)} – Fall: {self.fall_name}{tail}\n"
-                    f"   {self.lesart}\n")
+            return (f"{guide.step_header('eingrenzen', self.level)} – Fall: {self.fall_name}"
+                    f"{self._tail()}\n   {self.lesart}\n")
         if stage == 2:
-            c = guide.case(self.fall, self.level)
-            text = guide.plain(c.text) if c else ""
-            if self.vor_start:
-                text = (text + " " if text else "") + VOR_START_HINWEIS
-            return "🧭  Wo suche ich?\n   " + text + "\n"
+            return self._wo_suche_ich()
         if stage == 3:
-            if self.belegt or self.level == LEVEL_KL89:
-                titel = "🔎  Prüfe nacheinander:"
-            else:
-                titel = ("🔎  Mögliche Verdächtige (Arbeitshypothese – eine Meldung nennt "
-                         "Verdächtige, keinen Schuldigen):")
-            out = titel + "\n" + "".join(f"   • {v}\n" for v in self.verdaechtige)
-            if self.erster_test:
-                out += f"🧪  Erster Test: {self.erster_test}\n"
-            return out + guide.steps45_text()
+            return self._pruefliste() + guide.steps45_text(self.level)
+        return ""
+
+    def _tail(self) -> str:
+        kurz = self._kurzmeldung()
+        return f"   ({self.etype}" + (f" · {kurz})" if kurz else ")")
+
+    def _wo_suche_ich(self) -> str:
+        c = guide.case(self.fall, self.level)
+        text = guide.plain(c.text) if c else ""
+        if self.vor_start:
+            hinweis = ("Das Programm läuft gar nicht erst los, Kontrollpunkte helfen hier nicht."
+                       if self.level == LEVEL_KL89 else VOR_START_HINWEIS)
+            text = (text + " " if text else "") + hinweis
+        return "🧭  Wo suche ich?\n   " + text + "\n"
+
+    def _pruefliste(self) -> str:
+        if self.belegt or self.level == LEVEL_KL89:
+            titel = "🔎  Prüfe nacheinander:"
+        else:
+            titel = ("🔎  Mögliche Verdächtige (Arbeitshypothese – eine Meldung nennt "
+                     "Verdächtige, keinen Schuldigen):")
+        out = titel + "\n" + "".join(f"   • {v}\n" for v in self.verdaechtige)
+        if self.erster_test:
+            out += f"🧪  Erster Test: {self.erster_test}\n"
+        return out
+
+    def _render_kl89(self, stage: int) -> str:
+        if stage == 1:
+            out = (f"{guide.step_header('eingrenzen', self.level)} – Fall: {self.fall_name}"
+                   f"{self._tail()}\n   {self.lesart}\n")
+            if self.fall != "hardware":     # Hardware: die Prüfliste ist schon die Checkliste
+                out += self._wo_suche_ich()
+            if self.final_stage == 1:
+                out += self._pruefliste() + guide.steps45_text(self.level)
+            return out
+        if stage == 2 and self.final_stage == 2:
+            return self._pruefliste() + guide.steps45_text(self.level)
         return ""
 
     def _kurzmeldung(self) -> str:
@@ -322,7 +357,7 @@ def detect_busy(text: str) -> bool:
     return bool(_BUSY_PATTERNS.search(text or ""))
 
 
-def danger_text(kind: str) -> str:
+def danger_text(kind: str, level: str = LEVEL_KL10) -> str:
     """Schritt-0-Kasten (Wortlaut wie auf dem Cheatsheet)."""
     grund = {
         "brownout": "Der Controller meldet einen Spannungseinbruch (Brownout) – das passt zu "
@@ -330,24 +365,33 @@ def danger_text(kind: str) -> str:
         "reset":    "Der Controller ist während des Programms neu gestartet.",
         "usb":      "Die USB-Verbindung zum Controller ist abgebrochen.",
     }.get(kind, "")
-    return guide.step0_text(grund)
+    return guide.step0_text(grund, level)
 
 
 def build_infi_error_prompt(code: str, traceback_text: str,
-                            hint: ErrorHint | None = None) -> str:
+                            hint: ErrorHint | None = None, level: str = LEVEL_KL10) -> str:
     """Baut einen schülergerechten Prompt, mit dem Infi den Fehler erklären soll."""
     tb_tail = "\n".join(traceback_text.strip().splitlines()[-15:])
     code = (code or "").strip()
     if len(code) > 4000:
         code = code[:4000] + "\n# … (gekürzt)"
-    zyklus = (
-        "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
-        "Schritt 3 (Eingrenzen): Nenne den Fall (Meldung zum Code oder zur Hardware), wo "
-        "ich suchen soll (PAP, Kontrollpunkte, bei Hardware die IBD von P1 an), höchstens "
-        "drei Verdächtige und EINEN Test, der sie unterscheidet. Die Vermutung (Schritt 4: "
-        "„Ich vermute …, weil …“) formuliere ich selbst. Gib keine fertige Lösung und "
-        "keinen korrigierten Code.\n\n"
-    )
+    if level == LEVEL_KL89:
+        zyklus = (
+            "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
+            "Schritt 2 (Eingrenzen): Nenne den Fall (Meldung, Ergebnis falsch oder nichts "
+            "reagiert), wo ich im Code suchen soll und höchstens drei Verdächtige. Was ich "
+            "ändere („Ich ändere …, weil …“, Schritt 3) formuliere ich selbst. Gib keine "
+            "fertige Lösung und keinen korrigierten Code.\n\n"
+        )
+    else:
+        zyklus = (
+            "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
+            "Schritt 3 (Eingrenzen): Nenne den Fall (Meldung zum Code oder zur Hardware), wo "
+            "ich suchen soll (PAP, Kontrollpunkte, bei Hardware die IBD von P1 an), höchstens "
+            "drei Verdächtige und EINEN Test, der sie unterscheidet. Die Vermutung (Schritt 4: "
+            "„Ich vermute …, weil …“) formuliere ich selbst. Gib keine fertige Lösung und "
+            "keinen korrigierten Code.\n\n"
+        )
     kontext = ""
     if hint is not None:
         kontext = f"--- Einordnung von NIT_Code ---\nFall: {hint.fall_name}\n"

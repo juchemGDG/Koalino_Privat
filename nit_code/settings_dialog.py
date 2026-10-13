@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 
 from .qt_utils import UI_FONT_PT_DEFAULT, UI_FONT_PT_RANGE
 from .config import (
-    THEME, THEMES,
+    MONO_FONTS, THEME, THEMES,
     TUTOR_DEFAULT_URL, TUTOR_DEFAULT_MODEL,
     ollama_web_password,
     is_ollama_available, AIS_CHAT_URL,
@@ -136,6 +136,7 @@ ACTIVITY_ITEMS = [
     ("plotter",  "Serial Plotter"),
     ("pap",      "PAP-Editor"),
     ("ibd",      "IBD-Editor"),
+    ("schaltlab", "SchaltLab (Schaltplan)"),
     ("stats",    "Datenauswertung"),
 ]
 ACTIVITY_TOGGLEABLE = frozenset(k for k, _ in ACTIVITY_ITEMS)
@@ -174,8 +175,10 @@ class SettingsDialog(QDialog):
         debug_stepped: bool = True,
         debug_change_hint: bool = True,
         hidden_activity=(),
+        editor_font: str = "default",
     ):
         super().__init__(parent)
+        self._editor_font_init = editor_font
         self._hidden_activity_init = set(hidden_activity)
         self._initial_ui_font_pt = ui_font_pt
         self._debug_init = (debug_level, debug_stepped, debug_change_hint)
@@ -559,13 +562,24 @@ class SettingsDialog(QDialog):
         form_design.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._combo_theme = QComboBox()
-        self._combo_theme.setMaxVisibleItems(6)
+        self._combo_theme.setMaxVisibleItems(8)
         self._combo_theme.addItem("Modernes Hell-Design", "modern_light")
         self._combo_theme.addItem("Modernes Dunkel-Design", "modern_dark")
         self._combo_theme.addItem("Klassisches Hell-Design (Eclipse)", "classic_light")
+        self._combo_theme.addItem("Solarized (warmes Hell-Design)", "solarized")
+        self._combo_theme.addItem("Dracula (Dunkel, kräftige Farben)", "dracula")
+        self._combo_theme.addItem("Hoher Kontrast (Schwarz auf Weiß)", "contrast")
         tidx = max(0, self._combo_theme.findData(theme))
         self._combo_theme.setCurrentIndex(tidx)
         form_design.addRow("Design:", self._combo_theme)
+
+        self._combo_font = QComboBox()
+        for key, (label, _family) in MONO_FONTS.items():
+            self._combo_font.addItem(label, key)
+        self._combo_font.setCurrentIndex(max(0, self._combo_font.findData(self._editor_font_init)))
+        self._combo_font.setToolTip("Schriftart für Editor und Konsole. Fehlt eine Schrift auf dem "
+                                    "Rechner, nimmt Qt automatisch die nächste.")
+        form_design.addRow("Schriftart (Editor/Konsole):", self._combo_font)
 
         self._spin_ui_font = QSpinBox()
         self._spin_ui_font.setRange(*UI_FONT_PT_RANGE)
@@ -986,6 +1000,10 @@ class SettingsDialog(QDialog):
     @property
     def blocks_enabled(self) -> bool:
         return self._chk_blocks.isChecked()
+
+    @property
+    def editor_font(self) -> str:
+        return self._combo_font.currentData()
 
     @property
     def debug_level(self) -> str:

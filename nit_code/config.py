@@ -409,6 +409,11 @@ PAP_EDITOR_URL = PAP_EDITOR_ORIGIN + "/?embed=1"
 IBD_EDITOR_ORIGIN = "https://ibd.mint-checker.de"
 IBD_EDITOR_URL = IBD_EDITOR_ORIGIN + "/?embed=1"
 
+# SchaltLab (Schaltplan-Editor): gleiches Embed-Protokoll wie PAP- und IBD-Editor
+# (source/target "schaltlab").
+SCHALTLAB_ORIGIN = "https://schaltlab.mint-checker.de"
+SCHALTLAB_URL = SCHALTLAB_ORIGIN + "/?embed=1"
+
 # StatPlot (Datenauswertung): erst online, ohne Netz die mitgelieferte Kopie –
 # siehe statplot_window.py.
 STATPLOT_ORIGIN = "https://statplot.mint-checker.de"
@@ -483,13 +488,96 @@ _LIGHT_THEME: dict[str, str] = {          # Eclipse-klassisch
     "terminal_text": "#1a1a1a",
 }
 
+_SOLARIZED_THEME: dict[str, str] = {      # Solarized Light: warmes Cremeweiß, augenschonend
+    "bg_dark":       "#fdf6e3",
+    "bg_mid":        "#eee8d5",
+    "bg_panel":      "#f5efdc",
+    "bg_editor":     "#fdf6e3",
+    "accent":        "#268bd2",
+    "accent_hover":  "#6c71c4",            # Schlüsselwörter: Violett
+    "text":          "#073642",
+    "text_dim":      "#7c8b8d",
+    "success":       "#2a7f78",            # Strings: Cyan-Grün
+    "error":         "#dc322f",
+    "warning":       "#b4540a",            # Zahlen: Orange
+    "info":          "#1f6fb0",
+    "selection":     "#eadfb8",
+    "border":        "#e4dcc4",
+    "scroll":        "#c9c0a4",
+    "terminal_bg":   "#fdf6e3",
+    "terminal_text": "#073642",
+}
+
+_DRACULA_THEME: dict[str, str] = {        # Dunkel mit kräftigen Farben, gut für Beamer im Dunkeln
+    "bg_dark":       "#21222c",
+    "bg_mid":        "#282a36",
+    "bg_panel":      "#282a36",
+    "bg_editor":     "#282a36",
+    "accent":        "#bd93f9",
+    "accent_hover":  "#ff79c6",            # Schlüsselwörter: Pink
+    "text":          "#f8f8f2",
+    "text_dim":      "#8b93b8",
+    "success":       "#f1fa8c",            # Strings: Gelb
+    "error":         "#ff5555",
+    "warning":       "#ffb86c",            # Zahlen: Orange
+    "info":          "#8be9fd",
+    "selection":     "#44475a",
+    "border":        "#3b3e52",
+    "scroll":        "#5b5f7a",
+    "sidebar":       "#1b1c25",
+    "terminal_bg":   "#1e1f29",
+    "terminal_text": "#f8f8f2",
+}
+
+_CONTRAST_THEME: dict[str, str] = {       # Hoher Kontrast: Schwarz auf Weiß, für Beamer und Sehhilfe
+    "bg_dark":       "#ffffff",
+    "bg_mid":        "#ececec",
+    "bg_panel":      "#f4f4f4",
+    "bg_editor":     "#ffffff",
+    "accent":        "#0033cc",
+    "accent_hover":  "#7a0099",
+    "text":          "#000000",
+    "text_dim":      "#4d4d4d",
+    "success":       "#00661a",
+    "error":         "#c00000",
+    "warning":       "#a34700",
+    "info":          "#003399",
+    "selection":     "#cfe0ff",
+    "border":        "#8c8c8c",
+    "scroll":        "#a6a6a6",
+    "terminal_bg":   "#ffffff",
+    "terminal_text": "#000000",
+}
+
 THEMES: dict[str, dict[str, str]] = {
     "modern_light":  _LIGHT_MODERN_THEME,
     "modern_dark":   _DARK_THEME,
     "classic_light": _LIGHT_THEME,
+    "solarized":     _SOLARIZED_THEME,
+    "dracula":       _DRACULA_THEME,
+    "contrast":      _CONTRAST_THEME,
 }
 
 THEME: dict[str, str] = dict(_LIGHT_MODERN_THEME)  # aktives Theme (veränderlich), Standard: modern hell
+
+
+# ── Schriftart für Editor und Konsole ────────────────────────────────────────
+MONO_FONTS: dict[str, tuple[str, str]] = {
+    "default": ("Standard (JetBrains Mono)", "JetBrains Mono, Fira Code, Consolas, monospace"),
+    "system":  ("Systemschrift (Consolas / Menlo)", "Consolas, Menlo, DejaVu Sans Mono, monospace"),
+    "courier": ("Courier New (klassisch)", "Courier New, Courier, monospace"),
+}
+_mono_key = "default"
+
+
+def set_mono_font(key: str) -> None:
+    global _mono_key
+    _mono_key = key if key in MONO_FONTS else "default"
+
+
+def mono_family() -> str:
+    """Schriftfamilien-Liste für Editor und Konsole (Qt wählt die erste vorhandene)."""
+    return MONO_FONTS[_mono_key][1]
 
 
 def set_theme(name: str) -> None:
