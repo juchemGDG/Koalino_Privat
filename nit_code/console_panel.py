@@ -586,6 +586,8 @@ class ShellWidget(QWidget):
         # steckt, könnte die Nummer neu vergeben werden und der Thread läse aus
         # einer fremden Datei (z. B. Qt-intern) – Absturz-Kandidat, v. a. beim
         # Wechsel Python ⇄ MicroPython, wo die Shell neu gestartet wird.
+        from . import crash_log
+        crash_log.note("Shell wird beendet")
         self._master_fd = None
         proc = self._proc
         self._proc = None
@@ -611,6 +613,8 @@ class ShellWidget(QWidget):
 
     def _start_shell(self, cmd: list):
         """Startet cmd als interaktiven Prozess (PTY auf Unix, PIPE auf Windows)."""
+        from . import crash_log
+        crash_log.note(f"Shell startet: {' '.join(map(str, cmd))[-80:]}")
         try:
             if sys.platform != "win32":
                 # Unix/macOS: PTY damit readline/REPL korrekt funktioniert

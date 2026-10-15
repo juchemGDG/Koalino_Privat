@@ -335,6 +335,8 @@ class DeviceListWorker(QThread):
         # Programm). Das äußert sich in "could not enter raw repl" – in dem Fall
         # ein paar Mal mit kurzer Pause erneut versuchen, statt sofort zu scheitern.
         import time
+        from . import crash_log
+        crash_log.note("Dateiliste: mpremote-Aufruf")
         r = None
         last_err = ""
         for attempt in range(4):
@@ -356,6 +358,7 @@ class DeviceListWorker(QThread):
                 continue
             break
 
+        crash_log.note(f"Dateiliste: mpremote fertig (rc={getattr(r, 'returncode', None)})")
         if r is None or r.returncode != 0:
             self.error.emit(self._friendly_error(last_err))
             return
@@ -532,6 +535,8 @@ class DeviceFilePanel(QWidget):
             self._status_lbl.setVisible(True)
         self._btn_refresh.setEnabled(False)
 
+        from . import crash_log
+        crash_log.note(f"Dateiliste: Abruf startet ({port}, '{self._cwd}')")
         worker = DeviceListWorker(port, self._cwd)
         worker.result.connect(self._on_result)
         worker.firmware_info.connect(self.firmware_info)

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import atexit
 import faulthandler
+import os
 import platform
 import time
 from pathlib import Path
@@ -89,6 +90,18 @@ def _write_end() -> None:
         if _file is not None and not _file.closed:
             _file.write(f"=== ENDE {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
             _file.flush()
+    except (OSError, ValueError):
+        pass
+
+
+def note(msg: str) -> None:
+    """Brotkrume ins Protokoll (sofort auf die Platte, thread-sicher genug für Diagnose).
+    Bei einem Abbruch ohne Python-Spur zeigt die letzte Zeile, wo es passiert ist."""
+    try:
+        if _file is not None and not _file.closed:
+            _file.write(f"· {time.strftime('%H:%M:%S')} {msg}\n")
+            _file.flush()
+            os.fsync(_file.fileno())
     except (OSError, ValueError):
         pass
 

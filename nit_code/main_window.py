@@ -61,6 +61,11 @@ from .tutor_panel import TutorPanel
 from .net_hints import git_network_hint
 
 
+
+def _note(msg: str) -> None:
+    from . import crash_log
+    crash_log.note(msg)
+
 def _git_network_env() -> dict | None:
     """Umgebung für Git-Netzwerkbefehle: System-Proxy an Git durchreichen.
 
@@ -823,10 +828,14 @@ class _PortScanWorker(QThread):
 
     def run(self):
         try:
+            from . import crash_log
+            crash_log.note("Port-Scan: comports() startet")
             import serial.tools.list_ports
             ports = [(p.device, p.description) for p in serial.tools.list_ports.comports()]
         except Exception:
             ports = []
+        from . import crash_log
+        crash_log.note(f"Port-Scan: fertig ({len(ports)} Ports)")
         self.result.emit(ports)
 
 
@@ -1801,6 +1810,7 @@ class MainWindow(QMainWindow):
     def _on_mode_changed(self, index: int):
         self._mode = self._mode_combo.itemData(index)
         is_upy = self._mode == "micropython"
+        _note(f"Moduswechsel → {self._mode}")
         self._m_upy.setEnabled(is_upy)
         self._m_python.setEnabled(not is_upy)
         self._port_lbl_act.setVisible(is_upy)
@@ -1813,12 +1823,16 @@ class MainWindow(QMainWindow):
         if is_upy:
             port = self._get_serial_port(silent=True)
             self._file_panel.set_device_connected(bool(port))
+            _note(f"Port im Modus: {port}")
             if port:
                 # Beim Zurückwechseln ist die Port-Liste unverändert, der Scan löst dann
                 # nichts mehr aus – Dateiliste und REPL hier selbst neu aufbauen.
                 self._device_panel.refresh(port)
+                _note("Dateiliste angestoßen")
                 self._console.set_shell_mode("micropython", port=port)
+                _note("REPL-Shell vorbereitet")
             self._refresh_ports()
+            _note("Port-Scan angestoßen")
             self._port_scan_timer.start()
             self._status_mode.setText("MicroPython")
             self._left_splitter.setSizes([300, 250])
@@ -3989,6 +4003,7 @@ class MainWindow(QMainWindow):
         Baut die Liste nur neu auf, wenn sich die erkannten Geräte tatsächlich
         geändert haben – das vermeidet unnötige UI-Arbeit beim Sekunden-Polling.
         """
+        _note(f"Port-Scan ausgewertet: {[d for d, _ in ports]}")
         current = self._port_combo.currentData()
         existing = [self._port_combo.itemData(i) for i in range(self._port_combo.count())]
         new_devices = [d for d, _ in ports] if ports else [None]
