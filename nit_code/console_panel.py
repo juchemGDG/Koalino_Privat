@@ -592,13 +592,23 @@ class ShellWidget(QWidget):
         proc = self._proc
         self._proc = None
         if proc and proc.poll() is None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
+            self._terminate_child(proc)
         if proc:
             # Zombie vermeiden, ohne den UI-Thread zu blockieren
             threading.Thread(target=self._reap, args=(proc,), daemon=True).start()
+
+    @staticmethod
+    def _terminate_child(proc):
+        """SIGTERM an die eigene Gruppe der Shell – nie an die Gruppe der App."""
+        try:
+            if sys.platform != "win32":
+                pgid = os.getpgid(proc.pid)
+                if pgid == proc.pid and pgid != os.getpgrp():
+                    os.killpg(pgid, 15)
+                    return
+            proc.terminate()
+        except Exception:
+            pass
 
     @staticmethod
     def _reap(proc):
@@ -636,6 +646,10 @@ class ShellWidget(QWidget):
                     close_fds=True,
                     cwd=Path.home(),
                     env=env,
+                    # Eigene Sitzung/Prozessgruppe: das Kind teilt weder Gruppe noch
+                    # Terminal mit der App, ein Signal an die Shell kann die App
+                    # (und das Terminal-Skript run.sh) nicht mehr treffen.
+                    start_new_session=True,
                 )
                 os.close(slave_fd)
                 self._master_fd = master_fd

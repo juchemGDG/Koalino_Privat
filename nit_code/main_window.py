@@ -832,6 +832,12 @@ class _PortScanWorker(QThread):
             crash_log.note("Port-Scan: comports() startet")
             import serial.tools.list_ports
             ports = [(p.device, p.description) for p in serial.tools.list_ports.comports()]
+            if sys.platform == "darwin":
+                # Systemeigene Pseudo-Ports (Debug-Konsole, Bluetooth) sind keine Controller;
+                # USB-Geräte zuerst, damit beim ersten Befüllen nicht das falsche gewählt wird.
+                ports = [(d, t) for d, t in ports
+                         if "debug-console" not in d and "Bluetooth-Incoming" not in d]
+                ports.sort(key=lambda dt: 0 if ("usb" in dt[0].lower()) else 1)
         except Exception:
             ports = []
         from . import crash_log
