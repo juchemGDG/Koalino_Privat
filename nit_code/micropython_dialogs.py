@@ -297,6 +297,38 @@ class FlashWorker(QThread):
                                     candidates.append(os.path.join(subpath, entry))
         return candidates[0] if candidates else None
 
+    # UF2-Familien-IDs (https://github.com/microsoft/uf2)
+    _UF2_RP2040 = 0xE48BFF56
+    _UF2_RP2350 = {0xE48BFF57, 0xE48BFF59, 0xE48BFF5A}   # absolut, ARM-S, RISC-V
+
+    def _check_uf2(self, fw: str, drive: str) -> str | None:
+        """Prüft Datei und Chip-Familie. Ein UF2 für den falschen Chip (oder eine
+        defekte/unvollständige Datei) wird vom Bootloader kommentarlos verworfen:
+        Das Laufwerk verschwindet wie bei Erfolg, auf dem Pico ändert sich aber nichts."""
+        import os, struct
+        try:
+            size = os.path.getsize(fw)
+            with open(fw, "rb") as f:
+                head = f.read(512)
+        except OSError as e:
+            return f"Firmware-Datei nicht lesbar: {e}"
+        if size < 512 or size % 512 or len(head) < 512:
+            return ("Die Firmware-Datei ist unvollständig oder keine UF2-Datei "
+                    f"({size} Bytes). Bitte erneut herunterladen.")
+        m0, m1, _flags, _addr, _n, _blk, _total, family = struct.unpack("<8I", head[:32])
+        if m0 != 0x0A324655 or m1 != 0x9E5D5157:
+            return "Die Datei ist keine gültige UF2-Datei (evtl. wurde eine Webseite statt der Firmware geladen)."
+        is_rp2350_drive = os.path.basename(drive).upper().startswith("RP2350")
+        self.log.emit(f"UF2-Familie: 0x{family:08X} ({'RP2350' if family in self._UF2_RP2350 else 'RP2040' if family == self._UF2_RP2040 else '?'}), "
+                      f"Laufwerk: {os.path.basename(drive)}\n")
+        if is_rp2350_drive and family == self._UF2_RP2040:
+            return ("Diese Firmware ist für den Raspberry Pi Pico (RP2040), das Gerät ist aber ein "
+                    "Pico 2 / 2W (RP2350). Bitte als Board „RPI Pico 2W“ wählen.")
+        if not is_rp2350_drive and family in self._UF2_RP2350:
+            return ("Diese Firmware ist für den Pico 2 / 2W (RP2350), das Gerät ist aber ein "
+                    "Pico mit RP2040. Bitte das passende Board wählen.")
+        return None
+
     def _flash_pico(self):
         import shutil, time
         self.log.emit("Suche Raspberry Pi Pico im BOOTSEL-Modus ...\n")
@@ -338,6 +370,11 @@ class FlashWorker(QThread):
             self.done.emit(False, "Für den Raspberry Pi Pico wird eine .uf2-Datei benötigt!")
             return
 
+        problem = self._check_uf2(fw, drive)
+        if problem:
+            self.done.emit(False, problem)
+            return
+
         try:
             import os, sys, time, subprocess as _sp
             fw_size = os.path.getsize(fw)
@@ -347,9 +384,10 @@ class FlashWorker(QThread):
             if sys.platform == "darwin":
                 # macOS: Python open() hängt auf USB-FAT-Volumes (bekanntes Problem).
                 # /bin/cp nutzt fcopyfile() auf Kernel-Ebene – zuverlässiger.
-                self.log.emit("(macOS: verwende /bin/cp)\n")
+                # -X: keine erweiterten Attribute – sonst landen „._“-Dateien auf dem FAT-Laufwerk
+                self.log.emit("(macOS: verwende /bin/cp -X)\n")
                 proc = _sp.Popen(
-                    ["/bin/cp", fw, dest],
+                    ["/bin/cp", "-X", fw, dest],
                     stderr=_sp.PIPE, stdout=_sp.PIPE
                 )
                 deadline = time.monotonic() + 90

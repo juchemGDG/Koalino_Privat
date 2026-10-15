@@ -581,18 +581,33 @@ class ShellWidget(QWidget):
             self._start_shell(self._current_cmd)
 
     def _kill_proc(self):
-        if self._master_fd is not None:
+        # Den PTY-Master schließt ausschließlich der Lesethread (siehe _read_pty).
+        # Würde er hier geschlossen, während der Thread noch in select()/read()
+        # steckt, könnte die Nummer neu vergeben werden und der Thread läse aus
+        # einer fremden Datei (z. B. Qt-intern) – Absturz-Kandidat, v. a. beim
+        # Wechsel Python ⇄ MicroPython, wo die Shell neu gestartet wird.
+        self._master_fd = None
+        proc = self._proc
+        self._proc = None
+        if proc and proc.poll() is None:
             try:
-                os.close(self._master_fd)
-            except OSError:
-                pass
-            self._master_fd = None
-        if self._proc and self._proc.poll() is None:
-            try:
-                self._proc.terminate()
+                proc.terminate()
             except Exception:
                 pass
-        self._proc = None
+        if proc:
+            # Zombie vermeiden, ohne den UI-Thread zu blockieren
+            threading.Thread(target=self._reap, args=(proc,), daemon=True).start()
+
+    @staticmethod
+    def _reap(proc):
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            try:
+                proc.kill()
+                proc.wait(timeout=2)
+            except Exception:
+                pass
 
     def _start_shell(self, cmd: list):
         """Startet cmd als interaktiven Prozess (PTY auf Unix, PIPE auf Windows)."""
@@ -620,7 +635,8 @@ class ShellWidget(QWidget):
                 )
                 os.close(slave_fd)
                 self._master_fd = master_fd
-                t = threading.Thread(target=self._read_pty, daemon=True)
+                t = threading.Thread(target=self._read_pty, args=(master_fd, self._proc),
+                                     daemon=True)
                 t.start()
             else:
                 # Binär lesen und selbst dekodieren: Windows-Programme geben oft
@@ -643,19 +659,18 @@ class ShellWidget(QWidget):
         except Exception as e:
             self._append(f"Prozess konnte nicht gestartet werden: {e}\n", THEME["error"])
 
-    def _read_pty(self):
-        """Liest kontinuierlich vom PTY-Master (Unix/macOS)."""
+    def _read_pty(self, fd: int, proc):
+        """Liest kontinuierlich vom PTY-Master (Unix/macOS) und schließt ihn am Ende."""
         import select, re as _re
-        while True:
-            # Lokale Kopie sichert gegen Race mit _kill_proc (setzt master_fd = None)
-            fd = self._master_fd
-            if fd is None or self._proc is None or self._proc.poll() is not None:
-                break
-            try:
-                r, _, _ = select.select([fd], [], [], 0.1)
-                if r:
-                    data = os.read(fd, 4096)
-                    if data:
+        try:
+            # Weiterlaufen, solange dies noch die aktuelle Sitzung ist
+            while self._master_fd == fd and proc.poll() is None:
+                try:
+                    r, _, _ = select.select([fd], [], [], 0.1)
+                    if r:
+                        data = os.read(fd, 4096)
+                        if not data:
+                            break
                         text = data.decode("utf-8", errors="replace")
                         # ANSI/VT100-Escape-Sequenzen entfernen
                         text = _re.sub(r'\x1b\[[\x20-\x3f]*[\x40-\x7e]', '', text)
@@ -664,8 +679,15 @@ class ShellWidget(QWidget):
                         text = _re.sub(r'\r(?!\n)', '', text)
                         text = text.replace('\r\n', '\n')
                         self._bridge_append(text, THEME["terminal_text"])
-            except (OSError, TypeError):
-                break
+                except (OSError, TypeError, ValueError):
+                    break
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            if self._master_fd == fd:
+                self._master_fd = None
 
     def _read_output(self):
         """Liest stdout des Shell-Prozesses (Windows, binäre Pipe)."""
@@ -739,14 +761,7 @@ class ShellWidget(QWidget):
         return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
-        if self._master_fd is not None:
-            try:
-                os.close(self._master_fd)
-            except OSError:
-                pass
-            self._master_fd = None
-        if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
+        self._kill_proc()
         super().closeEvent(event)
 
 

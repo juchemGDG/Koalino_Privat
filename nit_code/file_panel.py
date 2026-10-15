@@ -5,7 +5,7 @@ import tempfile
 import subprocess
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, pyqtSignal, QDir, QThread, QSortFilterProxyModel, QModelIndex
+from PyQt6.QtCore import Qt, pyqtSignal, QDir, QThread, QSortFilterProxyModel, QModelIndex, QTimer
 from PyQt6.QtGui import QFileSystemModel, QIcon, QFont, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView,
@@ -337,7 +337,7 @@ class DeviceListWorker(QThread):
         import time
         r = None
         last_err = ""
-        for attempt in range(3):
+        for attempt in range(4):
             try:
                 r = subprocess.run(
                     [*tool_command("mpremote"), "connect", self._port, "exec", code],
@@ -352,7 +352,7 @@ class DeviceListWorker(QThread):
                 last_err = r.stderr.strip() or "Verbindung fehlgeschlagen"
             if "raw repl" in last_err.lower() or "could not enter" in last_err.lower() \
                     or (r is None):
-                time.sleep(0.4)
+                time.sleep(0.8)
                 continue
             break
 
@@ -417,6 +417,7 @@ class DeviceFilePanel(QWidget):
         self._cwd = ""   # aktuell angezeigtes Verzeichnis ("" = Wurzel)
         self._worker: DeviceListWorker | None = None
         self._retired_workers: list = []
+        self._auto_retries = 0
         self._cmd_busy = False   # es läuft gerade eine Geräte-Operation
         self._setup_ui()
 
@@ -535,13 +536,20 @@ class DeviceFilePanel(QWidget):
         worker.result.connect(self._on_result)
         worker.firmware_info.connect(self.firmware_info)
         worker.error.connect(self._on_error)
-        worker.finished.connect(lambda: self._btn_refresh.setEnabled(True))
-        worker.finished.connect(lambda: self.refresh_done.emit())
-        worker.start()
+        # Nur der jeweils neueste Worker meldet „fertig“. Ein abgelöster Worker
+        # darf weder die Shell wieder starten (sie würde den Port belegen, während
+        # die neue Abfrage läuft) noch den ↻-Knopf freigeben.
+        def _finished(w=worker):
+            if w is self._worker:
+                self._btn_refresh.setEnabled(True)
+                self.refresh_done.emit()
+        worker.finished.connect(_finished)
         self._worker = worker
+        worker.start()
         self.refresh_started.emit()
 
     def _on_result(self, files: list):
+        self._auto_retries = 0
         self._list.clear()
         self._update_title()
 
@@ -607,6 +615,12 @@ class DeviceFilePanel(QWidget):
     def _on_error(self, msg: str):
         # Sind bereits Dateien sichtbar, NICHT die Liste leeren – die Anzeige
         # bleibt erhalten, der Fehler war vermutlich nur vorübergehend.
+        # Ein paar Sekunden später automatisch noch einmal versuchen, damit die
+        # Anzeige nicht dauerhaft veraltet bleibt.
+        if self._port and self._auto_retries < 3:
+            self._auto_retries += 1
+            port = self._port
+            QTimer.singleShot(1500, lambda: self.refresh(port) if port == self._port else None)
         if self._list.count() > 0:
             self._status_lbl.setVisible(False)
             self._list.setVisible(True)

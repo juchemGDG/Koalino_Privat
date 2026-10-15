@@ -1811,7 +1811,13 @@ class MainWindow(QMainWindow):
         self._reset_btn_act.setVisible(is_upy)
         self._device_panel.setVisible(is_upy)
         if is_upy:
-            self._file_panel.set_device_connected(bool(self._get_serial_port(silent=True)))
+            port = self._get_serial_port(silent=True)
+            self._file_panel.set_device_connected(bool(port))
+            if port:
+                # Beim Zurückwechseln ist die Port-Liste unverändert, der Scan löst dann
+                # nichts mehr aus – Dateiliste und REPL hier selbst neu aufbauen.
+                self._device_panel.refresh(port)
+                self._console.set_shell_mode("micropython", port=port)
             self._refresh_ports()
             self._port_scan_timer.start()
             self._status_mode.setText("MicroPython")
