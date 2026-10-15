@@ -75,6 +75,14 @@ def start() -> bool:
         _file.write(f"\n{_HEADER} {time.strftime('%Y-%m-%d %H:%M:%S')} · NIT_Code {APP_VERSION} · "
                     f"{platform.platform()} · Python {platform.python_version()} ===\n")
         faulthandler.enable(file=_file, all_threads=True)
+        try:
+            # Von außen geschicktes SIGTERM ("zsh: terminated") hinterlässt sonst keine
+            # Spur: Stack aller Threads ins Protokoll, danach normales Beenden (chain).
+            import signal
+            if hasattr(faulthandler, "register"):
+                faulthandler.register(signal.SIGTERM, file=_file, all_threads=True, chain=True)
+        except (OSError, ValueError, RuntimeError, AttributeError):
+            pass
         atexit.register(_write_end)
     except (OSError, ImportError):
         _file = None
