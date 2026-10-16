@@ -2,7 +2,7 @@
 
 Die übrige Statistik der früheren Datenauswertung (Kennwerte, Klassen, Tests)
 steckt seit v1.10.1 in StatPlot (stats.js, mitgeliefert unter
-nit_code/assets/statplot). Gleichungsformat und Zahlenformat sind dort gleich.
+koalino/assets/statplot). Gleichungsformat und Zahlenformat sind dort gleich.
 """
 
 

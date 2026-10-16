@@ -103,7 +103,7 @@ class _NitCodeBlockPreprocessor(Preprocessor if HAS_MARKDOWN else object):
             f'<span class="nit-code-lang">{html.escape(lang)}</span>'
             f'<a href="#" class="nit-btn nit-btn-copy" '
             f"onclick=\"nitCopyBlock('{block_id}', this); return false;\">📋 Kopieren</a>"
-            f'<a href="nitcode://insert?id={block_id}" '
+            f'<a href="koalino://insert?id={block_id}" '
             f'class="nit-btn nit-btn-insert">⬇ In Editor einfügen</a>'
             f"</div>{highlighted}</div>"
         )

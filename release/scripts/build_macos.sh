@@ -11,11 +11,11 @@ mkdir -p "$OUT_DIR"
 python -m pip install --upgrade pip
 python -m pip install -r "$ROOT_DIR/requirements.txt" -r "$ROOT_DIR/release/requirements-build.txt"
 
-# logo.png → NIT_Code.icns
-LOGO_PNG="$ROOT_DIR/nit_code/logo.png"
-ICNS_PATH="$ROOT_DIR/release/NIT_Code.icns"
+# logo.png → Koalino.icns
+LOGO_PNG="$ROOT_DIR/koalino/logo.png"
+ICNS_PATH="$ROOT_DIR/release/Koalino.icns"
 if [ -f "$LOGO_PNG" ]; then
-  ICONSET_DIR="$(mktemp -d)/NIT_Code.iconset"
+  ICONSET_DIR="$(mktemp -d)/Koalino.iconset"
   mkdir -p "$ICONSET_DIR"
   for size in 16 32 128 256 512; do
     sips -z $size $size "$LOGO_PNG" --out "$ICONSET_DIR/icon_${size}x${size}.png" > /dev/null
@@ -28,8 +28,8 @@ fi
 
 pyinstaller "$ROOT_DIR/release/pyinstaller.spec" --noconfirm --clean
 
-DMG_PATH="$OUT_DIR/NIT_Code-macos.dmg"
-APP_PATH="$ROOT_DIR/dist/NIT_Code.app"
+DMG_PATH="$OUT_DIR/Koalino-macos.dmg"
+APP_PATH="$ROOT_DIR/dist/Koalino.app"
 
 if [[ "$INCLUDE_RUNTIME" == "1" ]]; then
   echo "Erzeuge eingebettete Runtime (python_runtime/) ..."
@@ -37,7 +37,7 @@ if [[ "$INCLUDE_RUNTIME" == "1" ]]; then
   # Nach Contents/Resources, NICHT Contents/MacOS: dort behandelt codesign
   # die Runtime-Ordner als "nested code" und bricht ab ("bundle format
   # unrecognized ... In subcomponent: .../include/python3.12"). Unter
-  # Resources wird sie nur als Daten versiegelt; nit_code/config.py sucht
+  # Resources wird sie nur als Daten versiegelt; koalino/config.py sucht
   # dort ebenfalls. ditto statt cp -R: erhaelt Zeitstempel/Metadaten.
   echo "Kopiere python_runtime ins App-Bundle ..."
   rm -rf "$APP_PATH/Contents/Resources/python_runtime"
@@ -61,7 +61,7 @@ if [[ "$INCLUDE_RUNTIME" == "1" ]]; then
 fi
 
 hdiutil create \
-  -volname "NIT_Code" \
+  -volname "Koalino" \
   -srcfolder "$APP_PATH" \
   -ov \
   -format UDZO \
@@ -69,7 +69,7 @@ hdiutil create \
 
 # -y erhält Symlinks (App-Bundle und Runtime enthalten welche); aus dist/
 # heraus packen, damit im Archiv nicht der komplette Build-Pfad landet.
-rm -f "$OUT_DIR/NIT_Code-macos-app.zip"
-(cd "$ROOT_DIR/dist" && zip -ryq "$OUT_DIR/NIT_Code-macos-app.zip" "NIT_Code.app")
+rm -f "$OUT_DIR/Koalino-macos-app.zip"
+(cd "$ROOT_DIR/dist" && zip -ryq "$OUT_DIR/Koalino-macos-app.zip" "Koalino.app")
 
-echo "macOS-Pakete erstellt: $DMG_PATH und NIT_Code-macos-app.zip"
+echo "macOS-Pakete erstellt: $DMG_PATH und Koalino-macos-app.zip"

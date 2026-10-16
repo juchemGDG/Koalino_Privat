@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NIT_Code - Python & MicroPython Editor für den Unterricht.
+"""Koalino - Python & MicroPython Editor für den Unterricht.
 
 Hybrid-Start:
 - bevorzugt eine mitgelieferte Python-Runtime aus `python_runtime/`
@@ -30,10 +30,10 @@ def _current_python_arch() -> str:
 def _user_data_root() -> Path:
     if sys.platform == "win32":
         base = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData/Local")))
-        return base / "NIT_Code"
+        return base / "Koalino"
     if sys.platform == "darwin":
-        return Path.home() / "Library/Application Support/NIT_Code"
-    return Path.home() / ".local/share/NIT_Code"
+        return Path.home() / "Library/Application Support/Koalino"
+    return Path.home() / ".local/share/Koalino"
 
 
 def _resolve_venv_dir() -> Path:
@@ -152,7 +152,7 @@ def run_editor(venv_dir: Path):
     project_dir = str(PROJECT_DIR)
     env = os.environ.copy()
     env["PYTHONPATH"] = project_dir
-    os.execve(str(python), [str(python), "-m", "nit_code.main"] + sys.argv[1:], env)
+    os.execve(str(python), [str(python), "-m", "koalino.main"] + sys.argv[1:], env)
 
 
 def main():

@@ -1,4 +1,4 @@
-"""Einstellungs-Dialog für NIT_Code."""
+"""Einstellungs-Dialog für Koalino."""
 import os
 import shutil
 from pathlib import Path

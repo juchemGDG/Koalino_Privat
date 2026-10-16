@@ -99,7 +99,7 @@ class BlockEditorWindow(QMainWindow):
         lay = QVBoxLayout(w)
         msg = ("Der Block-Editor ist nicht verfügbar.\n\n"
                "Benötigt PyQt6-WebEngine und die Blockly-Dateien im Ordner "
-               "nit_code/assets/blockly/.")
+               "koalino/assets/blockly/.")
         if not HAS_WEBENGINE:
             msg += "\n\n→ PyQt6-WebEngine fehlt."
         if not self._editor_html:
@@ -126,7 +126,7 @@ class BlockEditorWindow(QMainWindow):
             self, "Block-Editor",
             "Die Anzeige des Block-Editors ist abgestürzt (Grafik-Problem).\n\n"
             "Unter Windows ist Software-Rendering bereits automatisch aktiv.\n"
-            "Falls der Fehler weiter auftritt, NIT_Code neu starten.\n\n"
+            "Falls der Fehler weiter auftritt, Koalino neu starten.\n\n"
             "Optionaler Override:\n"
             "    NIT_SOFTWARE_RENDER=1\n"
             "(erzwingt Software-Rendering vor dem Start).",

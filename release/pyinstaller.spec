@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(SPECPATH, ".."))
-from nit_code.config import APP_VERSION
+from koalino.config import APP_VERSION
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
@@ -37,15 +37,15 @@ else:
 
 entry_script = os.path.join(spec_dir, 'launcher.py')
 
-logo_path = os.path.join(project_root, 'nit_code', 'logo.png')
+logo_path = os.path.join(project_root, 'koalino', 'logo.png')
 datas = []
 if os.path.exists(logo_path):
-    datas.append((logo_path, 'nit_code'))
+    datas.append((logo_path, 'koalino'))
 
 # Offline-Assets (z. B. mermaid.min.js für die Ablauf-Vorschau) mitnehmen.
-assets_dir = os.path.join(project_root, 'nit_code', 'assets')
+assets_dir = os.path.join(project_root, 'koalino', 'assets')
 if os.path.isdir(assets_dir):
-    datas.append((assets_dir, os.path.join('nit_code', 'assets')))
+    datas.append((assets_dir, os.path.join('koalino', 'assets')))
 
 # Standalone-Blockly-Firmware (boot.py, main.py, www/) mitnehmen, damit die
 # Menü-Aktion „iPad-Blockly aufs Board spielen“ auch im gepackten Programm
@@ -57,7 +57,7 @@ if os.path.isdir(firmware_dir):
 icon_file = None
 if sys.platform == 'win32' and os.path.exists(logo_path):
     from PIL import Image
-    ico_path = os.path.join(spec_dir, 'NIT_Code.ico')
+    ico_path = os.path.join(spec_dir, 'Koalino.ico')
     if not os.path.exists(ico_path):
         img = Image.open(logo_path).convert('RGBA')
         img.save(ico_path, format='ICO',
@@ -66,9 +66,9 @@ if sys.platform == 'win32' and os.path.exists(logo_path):
         icon_file = ico_path
 elif sys.platform == 'darwin' and os.path.exists(logo_path):
     import subprocess, tempfile
-    icns_path = os.path.join(spec_dir, 'NIT_Code.icns')
+    icns_path = os.path.join(spec_dir, 'Koalino.icns')
     if not os.path.exists(icns_path):
-        iconset_dir = os.path.join(tempfile.mkdtemp(), 'NIT_Code.iconset')
+        iconset_dir = os.path.join(tempfile.mkdtemp(), 'Koalino.iconset')
         os.makedirs(iconset_dir)
         for size in [16, 32, 128, 256, 512]:
             subprocess.run(['sips', '-z', str(size), str(size), logo_path,
@@ -106,7 +106,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     # 'cryptography' wird nur von espsecure (ESP-Secure-Boot-Signierung) benötigt,
-    # das NIT_Code nicht verwendet. Ihr Rust-Binärteil (_rust.abi3.so) wird von
+    # das Koalino nicht verwendet. Ihr Rust-Binärteil (_rust.abi3.so) wird von
     # mehreren Virenscannern fälschlich als 'OSX/CrossC2' gemeldet (Fehlalarm).
     # Ausschluss entfernt die Datei und damit den Fehlalarm – ohne Funktionsverlust.
     excludes=['cryptography', 'espsecure', 'espefuse'],
@@ -119,7 +119,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='NIT_Code',
+    name='Koalino',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -137,18 +137,18 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='NIT_Code',
+    name='Koalino',
 )
 
 if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
-        name='NIT_Code.app',
+        name='Koalino.app',
         icon=icon_file,
-        bundle_identifier='de.nit.nitcode',
+        bundle_identifier='de.koalino.app',
         info_plist={
-            'CFBundleName': 'NIT_Code',
-            'CFBundleDisplayName': 'NIT_Code',
+            'CFBundleName': 'Koalino',
+            'CFBundleDisplayName': 'Koalino',
             'CFBundleShortVersionString': APP_VERSION,
             'CFBundleVersion': APP_VERSION,
         },

@@ -36,7 +36,7 @@ function nitCopyBlock(id, btn) {{
 # Bewusst theme-unabhängig: Arbeitsblätter sind auf Papier/Druck ausgelegt
 # (feste helle Grautöne in arbeitsblatt-farben.css/arbeitsblatt.css) und
 # sollen 1:1 wie in Obsidian aussehen – die Vorschau bleibt deshalb immer
-# hell, auch wenn NIT_Code im Dunkelmodus läuft.
+# hell, auch wenn Koalino im Dunkelmodus läuft.
 _BASE_CSS = """
 img { max-width: 100%; height: auto; }
 :root {
@@ -315,12 +315,12 @@ figure.bild figcaption { font-size: 0.85em; font-style: italic; text-align: cent
 
 
 class _WorksheetPage(QWebEnginePage if _WEBENGINE_AVAILABLE else object):
-    """Fängt Klicks auf nitcode://insert?id=… ab, statt sie zu navigieren."""
+    """Fängt Klicks auf koalino://insert?id=… ab, statt sie zu navigieren."""
 
     insert_requested = pyqtSignal(str)  # block_id
 
     def acceptNavigationRequest(self, url, nav_type, is_main_frame):
-        if url.scheme() == "nitcode" and url.host() == "insert":
+        if url.scheme() == "koalino" and url.host() == "insert":
             block_id = QUrlQuery(url).queryItemValue("id")
             if block_id:
                 self.insert_requested.emit(block_id)

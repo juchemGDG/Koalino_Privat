@@ -181,7 +181,7 @@ def _host_html(url: str = PAP_EDITOR_URL, origin: str = PAP_EDITOR_ORIGIN,
                source: str = "pap-editor", title: str = "PAP-Editor",
                load: dict | None = None) -> str:
     if load is None:
-        load = {"diagram": None, "title": "NIT_Code", "downloads": True}
+        load = {"diagram": None, "title": "Koalino", "downloads": True}
     return (_HOST_HTML
             .replace("__PAP_URL__", url)
             .replace("__PAP_ORIGIN__", origin)
@@ -205,7 +205,7 @@ class PapEditorWindow(QMainWindow):
     _SAVE_TITLE = "Ablaufplan speichern"
     _MIME = PAP_MIME                  # None = keine Diagrammdaten in die Zwischenablage
     # Inhalt der ersten load-Nachricht (Fähigkeiten des Hosts)
-    _LOAD = {"diagram": None, "title": "NIT_Code", "downloads": True}
+    _LOAD = {"diagram": None, "title": "Koalino", "downloads": True}
     _NO_CONNECTION = "Internetverbindung/Proxy prüfen."
 
     _HINT = ("„In Projekt übernehmen“ legt den Plan in die Zwischenablage – "
@@ -327,7 +327,7 @@ class PapEditorWindow(QMainWindow):
             self, self._NAME,
             f"Die Anzeige des {self._NAME} ist abgestürzt (Grafik-Problem).\n\n"
             "Unter Windows ist Software-Rendering bereits automatisch aktiv.\n"
-            "Falls der Fehler weiter auftritt, NIT_Code neu starten.\n\n"
+            "Falls der Fehler weiter auftritt, Koalino neu starten.\n\n"
             "Optionaler Override:\n"
             "    NIT_SOFTWARE_RENDER=1\n"
             "(erzwingt Software-Rendering vor dem Start).",

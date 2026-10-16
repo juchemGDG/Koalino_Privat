@@ -1,14 +1,14 @@
-"""Absturzprotokoll: hält fest, wenn NIT_Code unerwartet beendet wird.
+"""Absturzprotokoll: hält fest, wenn Koalino unerwartet beendet wird.
 
 Hintergrund: Stürzt ein Programm auf Qt-/C-Ebene ab (Segfault, ``abort``), verschwindet das
 Fenster ohne Meldung, und bei der installierten App gibt es kein Terminal, in dem man den
 Grund lesen könnte. Dieses Modul schreibt deshalb in eine Datei:
 
 * bei **harten Abstürzen** den Python-Stack aller Threads (``faulthandler``),
-* bei **Python-Fehlern**, die NIT_Code abfängt und als Dialog zeigt, die Fehlermeldung,
+* bei **Python-Fehlern**, die Koalino abfängt und als Dialog zeigt, die Fehlermeldung,
 * je Sitzung eine Kopfzeile (Zeit, Version, System) und beim regulären Beenden ``ENDE``.
 
-Datei: ``<Konfigordner>/nit_code/crash.log`` (Windows ``%APPDATA%``, macOS
+Datei: ``<Konfigordner>/koalino/crash.log`` (Windows ``%APPDATA%``, macOS
 ``~/Library/Application Support``, Linux ``~/.config``). Sie bleibt klein (Kürzen ab 256 KB).
 
 Beim nächsten Start erkennt :func:`start`, ob die **letzte Sitzung hart abgestürzt** ist
@@ -72,7 +72,7 @@ def start() -> bool:
         _trim(path)
         crashed = last_session_crashed(path)
         _file = open(path, "a", encoding="utf-8", buffering=1)
-        _file.write(f"\n{_HEADER} {time.strftime('%Y-%m-%d %H:%M:%S')} · NIT_Code {APP_VERSION} · "
+        _file.write(f"\n{_HEADER} {time.strftime('%Y-%m-%d %H:%M:%S')} · Koalino {APP_VERSION} · "
                     f"{platform.platform()} · Python {platform.python_version()} ===\n")
         faulthandler.enable(file=_file, all_threads=True)
         try:
@@ -115,7 +115,7 @@ def note(msg: str) -> None:
 
 
 def log_exception(text: str) -> None:
-    """Von NIT_Code abgefangenen Python-Fehler (der als Dialog erscheint) mitschreiben."""
+    """Von Koalino abgefangenen Python-Fehler (der als Dialog erscheint) mitschreiben."""
     try:
         if _file is not None and not _file.closed:
             _file.write(f"--- Python-Fehler {time.strftime('%H:%M:%S')} ---\n{text.rstrip()}\n")
@@ -147,7 +147,7 @@ def show_dialog(parent=None) -> None:
     lay = QVBoxLayout(dlg)
     path = log_path()
     info = QLabel(
-        "Hier hält NIT_Code fest, wenn es unerwartet beendet wurde oder ein Fehler aufgetreten "
+        "Hier hält Koalino fest, wenn es unerwartet beendet wurde oder ein Fehler aufgetreten "
         "ist.\nWenn du einen Absturz melden willst, kopiere den Text und schicke ihn mit.\n"
         f"Datei: {path}")
     info.setWordWrap(True)
@@ -179,8 +179,8 @@ def announce_previous_crash(parent=None) -> None:
     from PyQt6.QtWidgets import QMessageBox
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Information)
-    box.setWindowTitle("NIT_Code wurde unerwartet beendet")
-    box.setText("Beim letzten Mal ist NIT_Code unerwartet beendet worden.")
+    box.setWindowTitle("Koalino wurde unerwartet beendet")
+    box.setText("Beim letzten Mal ist Koalino unerwartet beendet worden.")
     box.setInformativeText(
         "Der Grund ist im Absturzprotokoll festgehalten. Wenn du ihn melden möchtest, "
         "öffne es hier und kopiere den Text.\n(Das findest du auch unter Hilfe → Absturzprotokoll.)")

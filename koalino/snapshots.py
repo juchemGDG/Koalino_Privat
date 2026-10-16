@@ -1,6 +1,6 @@
 """Stände einer Datei sichern und zurückgehen (Debugging-Landkarte, Schritt „Zurück“).
 
-Bei jedem Programmstart legt NIT_Code einen Stand der Datei an und trägt nach
+Bei jedem Programmstart legt Koalino einen Stand der Datei an und trägt nach
 dem Lauf das Ergebnis ein (✓ ohne Fehler, ✗ mit Meldung, ■ gestoppt). Zusätzlich
 kann ein Stand von Hand gemerkt werden (📌, mit Notiz). Daraus ergibt sich
 „Zurück zum letzten funktionierenden Stand“ ohne Git.

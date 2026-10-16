@@ -14,7 +14,7 @@ param(
 # verschiebbares CPython (inkl. tkinter und pip) von
 # https://github.com/astral-sh/python-build-standalone
 #
-# Ergebnis-Layout (von nit_code/config.py und start.py erwartet):
+# Ergebnis-Layout (von koalino/config.py und start.py erwartet):
 #   python_runtime/python/python.exe
 
 $ErrorActionPreference = 'Stop'
@@ -107,7 +107,7 @@ if (-not $SkipRequirements) {
 
 # Nicht benoetigte Anteile entfernen (Build-only-Tools/redundante Doku).
 # tcl/tk bleibt erhalten: tkinter/turtle wird von Schueler-Programmen
-# unterstuetzt (siehe nit_code/micropython_dialogs.py). include/libs fliegen
+# unterstuetzt (siehe koalino/micropython_dialogs.py). include/libs fliegen
 # raus, weil auf den Zielrechnern ohnehin kein C-Compiler vorhanden ist -
 # pyserial/requests sind reine Python-Pakete, die nie kompiliert werden.
 Write-Host "Entferne nicht benoetigte Runtime-Anteile ..."

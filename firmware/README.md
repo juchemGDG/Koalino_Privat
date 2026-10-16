@@ -13,25 +13,25 @@ unten eine **Konsole** mit den Ausgaben und Fehlermeldungen des Programms.
 ```
 boot.py                          Richtet WLAN-Accesspoint ein
 main.py                          Webserver (uasyncio): liefert /www aus, führt Code im Thread aus, sammelt Ausgaben
-www/index.html                   Oberfläche: Blöcke + Python-Editor + Konsole (Toolbox aus NIT_Code)
+www/index.html                   Oberfläche: Blöcke + Python-Editor + Konsole (Toolbox aus Koalino)
 www/app.js                       Live-Codegen, Ausführen -> /api/run, Konsole pollt /api/output, Stopp -> /api/stop
 www/blockly/*.js                 Blockly-Core + geteilte Blockdefinitionen (nit_blocks.js, nitbw_blocks.js)
 www/blockly/msg/de.js            Deutsche Übersetzung
 www/blockly/media/               Sprites/Sounds (offline)
-sync_from_nit_code.py            Hält www/ mit nit_code/assets/blockly/ synchron
+sync_from_koalino.py            Hält www/ mit koalino/assets/blockly/ synchron
 ```
 
 ## Blöcke: eine gemeinsame Quelle
 
-Der iPad-Modus nutzt **dieselben Blöcke wie der NIT_Code-Block-Editor** – exakt
-die Dateien aus `nit_code/assets/blockly/` (`nit_blocks.js`, `nitbw_blocks.js`)
+Der iPad-Modus nutzt **dieselben Blöcke wie der Koalino-Block-Editor** – exakt
+die Dateien aus `koalino/assets/blockly/` (`nit_blocks.js`, `nitbw_blocks.js`)
 und dieselbe Toolbox aus `editor.html`. `www/blockly/` ist eine gespiegelte
 Kopie davon; die Oberfläche ist damit komplett offline lauffähig.
 
-Wenn du in NIT_Code Blöcke oder die Toolbox änderst, danach einmal ausführen:
+Wenn du in Koalino Blöcke oder die Toolbox änderst, danach einmal ausführen:
 
 ```bash
-python firmware/sync_from_nit_code.py
+python firmware/sync_from_koalino.py
 ```
 
 Das kopiert Binaries + Blockdefinitionen und übernimmt die Toolbox in
@@ -68,7 +68,7 @@ erneuten Öffnen wiederhergestellt – ein Reload verliert also nichts. Zusätzl
 > USB-Serial-Chip `/dev/ttyUSB0`.
 
 Zuerst muss **MicroPython** auf dem Board sein – am einfachsten über den
-NIT_Code-Flash-Dialog (Board „ESP32-C3" wählen, neueste Firmware automatisch).
+Koalino-Flash-Dialog (Board „ESP32-C3" wählen, neueste Firmware automatisch).
 Manuell:
 
 ```bash
@@ -76,7 +76,7 @@ esptool --chip esp32c3 --port /dev/ttyACM0 --baud 460800 \
     write_flash -e -z 0x0 ESP32_GENERIC_C3-*.bin
 ```
 
-### Weg A – direkt in NIT_Code (empfohlen)
+### Weg A – direkt in Koalino (empfohlen)
 
 Menü **MicroPython → 📲 iPad-Blockly aufs Board spielen**. Kopiert `boot.py`,
 `main.py` und `www/` automatisch auf den angeschlossenen Controller und startet
@@ -157,11 +157,11 @@ Bleibt es instabil:
 - **iPad-Seite**: Netzwerk einmal „ignorieren" und neu verbinden, falls iOS
   einen alten Zustand gespeichert hat.
 
-## Integration in NIT_Code (später)
+## Integration in Koalino (später)
 
-Denkbarer Weg: NIT_Code bekommt einen "Firmware"-Modus, in dem die hier
+Denkbarer Weg: Koalino bekommt einen "Firmware"-Modus, in dem die hier
 gebaute www/-Struktur + main.py/boot.py als flashbares Firmware-Image
 bereitgestellt wird (z. B. per esptool + vorgefertigtem Filesystem-Image).
 Nutzer:in flasht einmalig, verbindet sich danach direkt mit dem ESP32-WLAN
-und programmiert über dieselbe Blockly-Oberfläche wie in NIT_Code –
+und programmiert über dieselbe Blockly-Oberfläche wie in Koalino –
 ohne Server, ohne Internet, auch vom iPad aus nutzbar.

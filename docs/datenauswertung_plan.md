@@ -4,7 +4,7 @@ Stand: 2026-10-06 · Ausgangsversion 1.10.0-beta.8, Stufe 1 in 1.10.0-beta.9, al
 
 ## Ziel
 
-Das bisherige Fenster „CSV-Streudiagramm“ (`nit_code/csv_plot.py`) wird zu einer
+Das bisherige Fenster „CSV-Streudiagramm“ (`koalino/csv_plot.py`) wird zu einer
 kleinen **Datenauswertung** ausgebaut. Orientierung an numiqo.de, aber bewusst
 beschränkt auf **beschreibende Statistik** (Bildungsplan BW Mathe, Leitidee
 „Daten und Zufall“, Kl. 5–10) plus Kennlinien für Physik/NwT.
@@ -20,7 +20,7 @@ das ist Oberstufe/Uni und überfrachtet das Tool.
 - **Keine neuen Abhängigkeiten** (kein pandas/matplotlib im IDE-Bundle).
   Einlesen mit stdlib `csv`, Zeichnen mit eigenem `QPainter`-Canvas wie bisher.
 - Reine Rechenfunktionen (Kennwerte, Quartile, Klassen, Häufigkeiten) in ein
-  eigenes Qt-freies Modul `nit_code/csv_stats.py` → leicht testbar.
+  eigenes Qt-freies Modul `koalino/csv_stats.py` → leicht testbar.
 - Klassenname `CsvPlotWindow` und Modul `csv_plot.py` bleiben (Import in
   `main_window.py`), Fenstertitel/Menüeintrag werden „Datenauswertung“.
 - Theme-Farben aus `config.THEME`, Kategorienfarben aus `_CAT_COLORS`.
@@ -80,7 +80,7 @@ auf Windows/macOS im echten Fenster.
 
 - [x] Toolbar-Knopf „🐍 Als Python-Code …“: Dialog mit Vorschau, „Kopieren“
       und „In neuen Editor-Tab“ (`MainWindow._open_code_in_new_tab`).
-- [x] Generator `nit_code/csv_codegen.py` (Qt-frei): `csv`-Modul + Listen/
+- [x] Generator `koalino/csv_codegen.py` (Qt-frei): `csv`-Modul + Listen/
       Dictionaries + matplotlib, kein pandas/numpy. Spaltennummern als
       Konstanten mit Spaltennamen im Kommentar, absoluter Pfad plus Hinweis
       auf den Dateinamen, freundliche Meldung, falls matplotlib fehlt.
@@ -99,8 +99,8 @@ auf Windows/macOS im echten Fenster.
 - [x] Boxplot-Option „Werte beschriften“: Min, q₁, Median, q₃, Max neben dem
       Kasten, Mittelwert x̄ als Raute. (Median, Quartilsabstand, σ und s
       standen schon im Reiter Kennwerte.)
-- [x] Reiter „Statistik-Tests“ (`nit_code/stat_tests_panel.py`), Rechnungen
-      Qt- und scipy-frei in `nit_code/stat_tests.py`:
+- [x] Reiter „Statistik-Tests“ (`koalino/stat_tests_panel.py`), Rechnungen
+      Qt- und scipy-frei in `koalino/stat_tests.py`:
   - Signifikanztest (Binomialtest, Kursstufe BW): Daten aus einer Spalte
     (Treffer = Ausprägung) oder manuell n, k; p₀, ein-/zweiseitig, α.
     Ausgabe: h, μ, σ, Ablehnungsbereich, tatsächliche Irrtumswahrscheinlichkeit,
@@ -126,7 +126,7 @@ auf Windows/macOS im echten Fenster.
       Symbolen, EINSTELLUNGEN, „Hilfe & Bedienung“), heller Arbeitsbereich mit
       Kopfleiste (Diagrammname, Status, Knöpfe, „Als Python-Code“ blau),
       Diagramm oben, Reiter darunter.
-- Farben/Stylesheets zentral in `nit_code/mint_style.py` (feste Palette,
+- Farben/Stylesheets zentral in `koalino/mint_style.py` (feste Palette,
   unabhängig vom IDE-Theme – wie die eingebetteten Web-Editoren).
 - Klapp-Pfeile werden aus `icons.py` („chevron“) als PNG ins Temp-Verzeichnis
   gerendert, weil Qt-Stylesheets eine Bilddatei brauchen.
@@ -135,21 +135,21 @@ auf Windows/macOS im echten Fenster.
 
 Die Datenauswertung ist jetzt eine eigene Web-App:
 [StatPlot](https://github.com/juchemGDG/StatPlot) – Web-Version (z. B. auf dem
-iPad), Desktop-Version (pywebview) und eingebettet in NIT_Code, wie PAP-/IBD-Editor.
+iPad), Desktop-Version (pywebview) und eingebettet in Koalino, wie PAP-/IBD-Editor.
 
 - Rechenkern `stats.js` ist eine 1:1-Portierung von `csv_stats.py`,
   `stat_tests.py`, `csv_codegen.py` und dem CSV-Einlesen (Stand v1.10.1).
   StatPlots `tests/test_stats.js` prüft ihn gegen die Python-Ergebnisse
   (331 Fälle, Python-Code zeichengenau). Beim CSV-Einlesen ist StatPlot in zwei
   Fällen besser als `csv.Sniffer` (Dezimalkomma ohne Kopfzeile, Tab-Dateien).
-- Seit 1.10.3 lädt NIT_Code zuerst die Online-Version von
+- Seit 1.10.3 lädt Koalino zuerst die Online-Version von
   statplot.mint-checker.de (Änderungen dort sind sofort sichtbar). Meldet sie
   sich nicht binnen 8 s, zeigt es die mitgelieferte Kopie unter
-  `nit_code/assets/statplot` über einen lokalen Server auf 127.0.0.1
-  (`nit_code/statplot_window.py`, Unterklasse von `PapEditorWindow`).
+  `koalino/assets/statplot` über einen lokalen Server auf 127.0.0.1
+  (`koalino/statplot_window.py`, Unterklasse von `PapEditorWindow`).
   Die Kopie gleicht jeder Release-Build automatisch mit StatPlot `main` ab;
   von Hand: `bash release/scripts/sync_statplot.sh ../StatPlot`, Stand steht in
-  `nit_code/assets/statplot/VERSION`.
+  `koalino/assets/statplot/VERSION`.
 - Embed-Protokoll wie PAP/IBD (`source/target: 'statplot'`) plus Schalter in
   `load`: `open` (Dateidialog im Sketchbook), `code` (neuer Editor-Tab),
   `clipboard` (Kopieren über Qt), `nit` (Hinweise im Python-Code),
@@ -167,12 +167,12 @@ iPad), Desktop-Version (pywebview) und eingebettet in NIT_Code, wie PAP-/IBD-Edi
 
 | Datei | Rolle |
 |---|---|
-| `nit_code/statplot_window.py` | Fenster, lokaler Server, Dateidialog, Code → Editor-Tab |
-| `nit_code/pap_editor.py` | gemeinsame Host-Seite (iframe, postMessage, PNG-Rasterung) |
-| `nit_code/assets/statplot/` | mitgelieferte StatPlot-Web-App (nicht von Hand ändern) |
+| `koalino/statplot_window.py` | Fenster, lokaler Server, Dateidialog, Code → Editor-Tab |
+| `koalino/pap_editor.py` | gemeinsame Host-Seite (iframe, postMessage, PNG-Rasterung) |
+| `koalino/assets/statplot/` | mitgelieferte StatPlot-Web-App (nicht von Hand ändern) |
 | `release/scripts/sync_statplot.sh` | übernimmt StatPlot aus dessen Repository |
-| `nit_code/csv_stats.py` | Ausgleichsgerade für den Serial Plotter (X-Y-Modus) |
+| `koalino/csv_stats.py` | Ausgleichsgerade für den Serial Plotter (X-Y-Modus) |
 | `release/requirements-runtime.txt` | matplotlib für die Schüler-Runtime |
-| `nit_code/main_window.py` | `_open_csv_plot` |
-| `README.md`, `nit_code/assets/hilfe/Kurzanleitung.md` | Doku |
-| `nit_code/config.py` | `APP_VERSION` |
+| `koalino/main_window.py` | `_open_csv_plot` |
+| `README.md`, `koalino/assets/hilfe/Kurzanleitung.md` | Doku |
+| `koalino/config.py` | `APP_VERSION` |

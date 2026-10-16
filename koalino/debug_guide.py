@@ -1,6 +1,6 @@
 """Der Leitfaden „Fehler finden: Schritt für Schritt“ als Daten (Cheatsheet V2).
 
-Eine Quelle für alles, was NIT_Code zum Debugging anzeigt – Konsole, Fehlerprotokoll
+Eine Quelle für alles, was Koalino zum Debugging anzeigt – Konsole, Fehlerprotokoll
 und die Anleitungsseite –, damit die Wörter überall dieselben sind wie auf dem
 Cheatsheet.
 
@@ -236,7 +236,7 @@ def step1_text(level: str = LEVEL_KL10) -> str:
 
 def steps45_text(level: str = LEVEL_KL10) -> str:
     """Abschluss der Fehlerhilfe: das Ändern als Erinnerung (Klasse 10: Schritt 4 und 5)."""
-    sicher = " NIT_Code sichert bei jedem Start automatisch einen Stand (⏪ bringt dich zurück).\n"
+    sicher = " Koalino sichert bei jedem Start automatisch einen Stand (⏪ bringt dich zurück).\n"
     if level == LEVEL_KL89:
         s = step("aendern", level)
         return ("\n" + step_header("aendern", level) + f" – {plain(s.lead)}\n"
@@ -331,7 +331,7 @@ def cheat_sheet_html(level: str) -> str:
     empty = "".join("<td>&nbsp;</td>" for _ in cols)
     kl89 = level == LEVEL_KL89
     nit = (
-        "<div class='nitcode'><b class='h'>So hilft dir NIT_Code</b><br>"
+        "<div class='nitcode'><b class='h'>So hilft dir Koalino</b><br>"
         "• <b>Strg+K</b> setzt einen Kontrollpunkt <code>print(\"K1\")</code>, die Nummern "
         "folgen dem Programm. Nach einem Absturz zeigt die Konsole den letzten erreichten.<br>"
         "• <b>Konsole</b>: Nach einer Fehlermeldung begleitet sie dich durch Schritt "

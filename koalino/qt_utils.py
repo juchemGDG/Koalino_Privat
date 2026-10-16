@@ -91,13 +91,13 @@ def find_logo() -> QIcon:
     """Sucht logo.png im Paket- oder Projektordner (Dev- wie Frozen-Modus)."""
     candidates = []
     if getattr(sys, "frozen", False):
-        # PyInstaller-Bundle: logo.png liegt neben der EXE in nit_code/
+        # PyInstaller-Bundle: logo.png liegt neben der EXE in koalino/
         exe_dir = Path(sys.executable).parent
-        candidates.append(exe_dir / "nit_code" / "logo.png")
+        candidates.append(exe_dir / "koalino" / "logo.png")
         if hasattr(sys, "_MEIPASS"):
-            candidates.append(Path(sys._MEIPASS) / "nit_code" / "logo.png")
+            candidates.append(Path(sys._MEIPASS) / "koalino" / "logo.png")
     candidates += [
-        Path(__file__).resolve().parent / "logo.png",           # nit_code/logo.png
+        Path(__file__).resolve().parent / "logo.png",           # koalino/logo.png
         Path(__file__).resolve().parent.parent / "logo.png",    # Projektordner/logo.png
     ]
     for p in candidates:

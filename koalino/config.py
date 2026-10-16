@@ -1,4 +1,4 @@
-"""Konstanten und Konfiguration für NIT_Code."""
+"""Konstanten und Konfiguration für Koalino."""
 import os
 import shutil
 import subprocess
@@ -10,7 +10,7 @@ def python_executable() -> str:
     """Liefert einen echten Python-Interpreter zum Starten von Subprozessen.
 
     WICHTIG: In einem PyInstaller-Bundle ist ``sys.executable`` die App selbst
-    (z. B. ``NIT_Code.app/Contents/MacOS/NIT_Code``) und KEIN Python-Interpreter.
+    (z. B. ``Koalino.app/Contents/MacOS/Koalino``) und KEIN Python-Interpreter.
     Würde man sie als Interpreter starten (``[sys.executable, "-i"]`` o. ä.),
     ignoriert der Bootloader die Argumente und startet die GUI rekursiv neu –
     eine Endlosschleife / Fork-Bomb, die den Rechner zum Absturz bringen kann.
@@ -248,8 +248,8 @@ def asset_path(name: str) -> Path | None:
     candidates = []
     if getattr(sys, "frozen", False):
         if hasattr(sys, "_MEIPASS"):
-            candidates.append(Path(sys._MEIPASS) / "nit_code" / "assets" / name)
-        candidates.append(Path(sys.executable).parent / "nit_code" / "assets" / name)
+            candidates.append(Path(sys._MEIPASS) / "koalino" / "assets" / name)
+        candidates.append(Path(sys.executable).parent / "koalino" / "assets" / name)
     candidates.append(Path(__file__).resolve().parent / "assets" / name)
     for p in candidates:
         if p.exists():
@@ -273,7 +273,7 @@ def tool_command(module: str) -> list[str]:
     return [python_executable(), "-m", module]
 
 
-APP_NAME = "NIT_Code"
+APP_NAME = "Koalino"
 APP_VERSION = "1.11.1"
 
 # GitHub-Repository für Bibliotheken
@@ -364,7 +364,7 @@ def ollama_web_password() -> str:
 
     Wird NICHT im Quellcode gespeichert (kein Klartext im Repository). Reihenfolge:
       1. Umgebungsvariable ``NIT_OLLAMA_PASSWORD``
-      2. lokale, nicht versionierte Datei ``<config-dir>/nit_code/ollama_password``
+      2. lokale, nicht versionierte Datei ``<config-dir>/koalino/ollama_password``
       3. leer → es wird ohne Authentifizierung versucht (lokales Ollama braucht keine)
 
     Lokales Ollama (localhost) benötigt ohnehin kein Passwort; relevant ist dies
@@ -383,14 +383,41 @@ def ollama_web_password() -> str:
 
 
 def _user_config_dir() -> Path:
-    """Plattformabhängiges, nutzerspezifisches Konfigverzeichnis für NIT_Code."""
+    """Plattformabhängiges, nutzerspezifisches Konfigverzeichnis für Koalino."""
     if sys.platform == "win32":
         base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
     elif sys.platform == "darwin":
         base = str(Path.home() / "Library" / "Application Support")
     else:
         base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "nit_code"
+    return Path(base) / "koalino"
+
+
+def migrate_legacy_data() -> None:
+    """Übernimmt Konfig und Einstellungen aus der Zeit, als das Programm NIT_Code hieß.
+
+    Läuft bei jedem Start, ist aber nach der ersten Übernahme ein No-op: Ordner
+    werden nur kopiert, wenn der neue noch fehlt; QSettings-Werte nur, wenn der
+    neue Speicher noch leer ist. Die alten Daten bleiben unangetastet.
+    """
+    import shutil
+    try:
+        new_dir = _user_config_dir()
+        old_dir = new_dir.parent / "nit_code"
+        if old_dir.is_dir() and not new_dir.exists():
+            shutil.copytree(old_dir, new_dir)
+    except OSError:
+        pass
+    try:
+        from PyQt6.QtCore import QSettings
+        neu = QSettings("NIT", "Koalino")
+        if not neu.allKeys():
+            alt = QSettings("NIT", "NIT_Code")
+            for key in alt.allKeys():
+                neu.setValue(key, alt.value(key))
+            neu.sync()
+    except Exception:
+        pass
 
 # AIS-Chat (schulischer Web-Chatbot)
 AIS_CHAT_URL = "https://app.ais-chat.schule"

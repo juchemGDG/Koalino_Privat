@@ -25,7 +25,7 @@ if (-not $SkipRuntime) {
         throw "Erzeugen der eingebetteten Runtime ist fehlgeschlagen."
     }
     Write-Host "Kopiere python_runtime ins Bundle ..."
-    $DistRuntime = Join-Path $RootDir "dist/NIT_Code/python_runtime"
+    $DistRuntime = Join-Path $RootDir "dist/Koalino/python_runtime"
     if (Test-Path $DistRuntime) {
         Remove-Item $DistRuntime -Recurse -Force
     }
@@ -43,8 +43,8 @@ if (-not $SkipRuntime) {
     }
 }
 
-$DistDir = Join-Path $RootDir "dist/NIT_Code"
-$ZipPath = Join-Path $OutDir "NIT_Code-windows.zip"
+$DistDir = Join-Path $RootDir "dist/Koalino"
+$ZipPath = Join-Path $OutDir "Koalino-windows.zip"
 
 if (Test-Path $ZipPath) {
     Remove-Item $ZipPath -Force
@@ -56,10 +56,10 @@ Write-Host "Windows-ZIP erstellt: $ZipPath"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Installer (Setup.exe) via Inno Setup
-# Versionsnummer aus nit_code/config.py (einzige Quelle der Wahrheit) lesen und
+# Versionsnummer aus koalino/config.py (einzige Quelle der Wahrheit) lesen und
 # an das .iss-Skript durchreichen.
 # ──────────────────────────────────────────────────────────────────────────────
-$Version = (python -c "import sys; sys.path.insert(0, r'$RootDir'); from nit_code.config import APP_VERSION; print(APP_VERSION)").Trim()
+$Version = (python -c "import sys; sys.path.insert(0, r'$RootDir'); from koalino.config import APP_VERSION; print(APP_VERSION)").Trim()
 Write-Host "App-Version: $Version"
 
 # ISCC.exe finden: erst PATH, dann Standard-Installationspfade.
@@ -83,5 +83,5 @@ if (-not $Iscc) {
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup Compiler ist mit Fehlercode $LASTEXITCODE fehlgeschlagen."
     }
-    Write-Host "Windows-Installer erstellt: $(Join-Path $OutDir 'NIT_Code-Setup.exe')"
+    Write-Host "Windows-Installer erstellt: $(Join-Path $OutDir 'Koalino-Setup.exe')"
 }

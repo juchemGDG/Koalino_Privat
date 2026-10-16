@@ -1,14 +1,14 @@
 """Datenauswertung (CSV) – StatPlot eingebettet wie PAP-/IBD-Editor.
 
 StatPlot (github.com/juchemGDG/StatPlot) ist die frühere Datenauswertung von
-NIT_Code als Web-App: Diagramme, Kennwerte, Häufigkeiten, Statistik-Tests und
+Koalino als Web-App: Diagramme, Kennwerte, Häufigkeiten, Statistik-Tests und
 Python-Code-Export. Dieselbe Seite läuft auf statplot.mint-checker.de, als
 Desktop-App und hier im iframe mit ``?embed=1``.
 
 Wie PAP/IBD wird zuerst die Online-Version geladen – Änderungen an
-statplot.mint-checker.de sind damit sofort in NIT_Code zu sehen. Meldet sich die
+statplot.mint-checker.de sind damit sofort in Koalino zu sehen. Meldet sich die
 Seite nicht innerhalb von ``_ONLINE_TIMEOUT_MS`` (kein Netz, Proxy), schalten wir
-auf die mitgelieferte Kopie in ``nit_code/assets/statplot`` um. Sie wird über
+auf die mitgelieferte Kopie in ``koalino/assets/statplot`` um. Sie wird über
 einen kleinen lokalen HTTP-Server auf 127.0.0.1 ausgeliefert, damit die
 Host-Seite eine echte Origin für postMessage hat (siehe pap_editor.py). Die
 Kopie aktualisiert der Release-Build automatisch (sync_statplot.sh), von Hand
@@ -21,8 +21,8 @@ Zusätzlich zum PAP-Protokoll (Schalter in ``_LOAD``):
 * code:true      – „In neuen Editor-Tab“ meldet 'code' → ``set_code_sink``.
 * clipboard:true – Kopieren läuft über Qt ('copy'), im iframe ist die
                    Zwischenablage sonst oft gesperrt.
-* nit:true       – der Python-Code verweist auf NIT_Codes Paket-Menü.
-* save:false     – kein „In Projekt übernehmen“: NIT_Code übernimmt kein
+* nit:true       – der Python-Code verweist auf Koalinos Paket-Menü.
+* save:false     – kein „In Projekt übernehmen“: Koalino übernimmt kein
                    Diagramm, der Code-Export ist der Weg ins Projekt.
 """
 import functools
@@ -92,7 +92,7 @@ class StatPlotWindow(PapEditorWindow):
     _MIME = None
     _LOAD = {"downloads": True, "open": True, "code": True, "clipboard": True, "nit": True,
              "save": False}
-    _NO_CONNECTION = "bitte NIT_Code neu starten."
+    _NO_CONNECTION = "bitte Koalino neu starten."
     _HINT = "„Als Python-Code“ öffnet das Programm in einem neuen Editor-Tab."
     _OFFLINE_HINT = "Offline-Version der Datenauswertung (keine Verbindung zu statplot.mint-checker.de)."
     _ONLINE_TIMEOUT_MS = 8000
@@ -123,7 +123,7 @@ class StatPlotWindow(PapEditorWindow):
         if origin is None:
             self._set_status("Keine Verbindung zu statplot.mint-checker.de, und die "
                              "Offline-Version fehlt in dieser Installation "
-                             "(nit_code/assets/statplot).", kind="error")
+                             "(koalino/assets/statplot).", kind="error")
             return
         self._offline = True
         self._ORIGIN = origin

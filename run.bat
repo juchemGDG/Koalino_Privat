@@ -1,5 +1,5 @@
 @echo off
-REM NIT_Code – Windows Starter
+REM Koalino – Windows Starter
 cd /d "%~dp0"
 
 set "PYTHON_EXE=python"

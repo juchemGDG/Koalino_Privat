@@ -22,7 +22,7 @@ on:
 # sichtbar. Artefakte gibt es nur noch bei Nicht-Tag-Builds (zum Testen), mit
 # einem Tag Aufbewahrung.
 #
-# Die Datenauswertung (StatPlot) lädt NIT_Code online; für den Offline-Fall
+# Die Datenauswertung (StatPlot) lädt Koalino online; für den Offline-Fall
 # holt jeder Build den aktuellen StatPlot-Stand von GitHub (sync_statplot.sh).
 permissions:
   contents: write
@@ -79,7 +79,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: nit-code-linux-${{ matrix.arch }}
+          name: koalino-linux-${{ matrix.arch }}
           path: release/downloads/linux/*
           retention-days: 1
 
@@ -127,7 +127,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: nit-code-macos
+          name: koalino-macos
           path: release/downloads/macos/*
           retention-days: 1
 
@@ -174,7 +174,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: nit-code-windows
+          name: koalino-windows
           path: release/downloads/windows/*
           retention-days: 1
 

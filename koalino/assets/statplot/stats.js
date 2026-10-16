@@ -2,7 +2,7 @@
 // ════════════════════════════════════════════════════════════
 // StatPlot – Rechenkern (ohne DOM)
 //
-// Portiert aus NIT_Code (csv_stats.py, stat_tests.py, csv_codegen.py und dem
+// Portiert aus Koalino (csv_stats.py, stat_tests.py, csv_codegen.py und dem
 // CSV-Einlesen aus csv_plot.py). Läuft im Browser (window.StatCore) und unter
 // Node (require) – tests/test_stats.js prüft die Ergebnisse gegen die
 // Python-Originale.
@@ -561,8 +561,8 @@
    * Erzeugt ein Python-Programm, das das aktuelle Diagramm mit matplotlib zeichnet.
    * spec: path, delimiter, header, headers, chart_type, x_col, y_col, value_col
    * (null = Anzahl), cat_col, numeric_categories, agg, bins, relative,
-   * regression, outliers – wie in NIT_Code (csv_codegen.generate_code);
-   * nit = true schreibt die Hinweise für NIT_Code.
+   * regression, outliers – wie in Koalino (csv_codegen.generate_code);
+   * nit = true schreibt die Hinweise für Koalino.
    */
   function generateCode(spec) {
     const t = spec.chart_type, h = spec.headers;
@@ -580,9 +580,9 @@
     const lines = [];
     const c = (text, indent) => { lines.push(text ? '    '.repeat(indent || 0) + text : ''); };
 
-    // In NIT_Code (spec.nit) mit Verweis auf dessen Paket-Menü, sonst allgemein.
+    // In Koalino (spec.nit) mit Verweis auf dessen Paket-Menü, sonst allgemein.
     const nit = !!spec.nit;
-    c('"""' + `${t} zu „${fileName}“ – erzeugt ${nit ? 'von NIT_Code (Datenauswertung)' : 'mit StatPlot'}.`);
+    c('"""' + `${t} zu „${fileName}“ – erzeugt ${nit ? 'von Koalino (Datenauswertung)' : 'mit StatPlot'}.`);
     c();
     c('Das Programm liest die CSV-Datei Zeile für Zeile ein und zeichnet das');
     c('Diagramm mit matplotlib. Ändere ruhig Spalten, Farben oder Beschriftungen!');

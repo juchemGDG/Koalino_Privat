@@ -35,11 +35,11 @@ print(sensor.read_all())
    - `[118]` (eine andere Adresse antwortet) → Adresse im Code (Nr. 1).
    - `[]` (niemand antwortet) → Pins im Code, Kabel, Versorgung (Nr. 2, 3, 5, 6).
 3. **Innerhalb von `[]` hilft nur noch Hinsehen:** Nr. 2 (Code) und Nr. 3 (Kabel) sind in Meldung und Scan **identisch**. Unterscheiden lassen sie sich nur, indem man die Pin-Nummern im Code mit dem Aufbau vergleicht (IBD, P1). Das ist die Aufgabe „gleiches Symptom, zwei Ursachen“.
-4. **Der Ort im Traceback trennt „von Anfang an“ und „später“:** Läuft der Fehler über `__init__`, war der Sensor nie erreichbar (Nr. 1, 2, 3, 5). Läuft er über `read_all`, hat der Sensor zuerst geantwortet und dann nicht mehr (Nr. 6, Wackler). NIT_Code zeigt dafür zwei verschiedene Hinweise.
+4. **Der Ort im Traceback trennt „von Anfang an“ und „später“:** Läuft der Fehler über `__init__`, war der Sensor nie erreichbar (Nr. 1, 2, 3, 5). Läuft er über `read_all`, hat der Sensor zuerst geantwortet und dann nicht mehr (Nr. 6, Wackler). Koalino zeigt dafür zwei verschiedene Hinweise.
 5. **`ETIMEDOUT` ist bei Hardware-I2C auf diesem Aufbau in keinem Fall aufgetreten.** Die Lesart bleibt Arbeitshypothese.
 6. Ein `ValueError: invalid pin`, der in einem Mehrfachlauf auftrat, war ein Artefakt (mehrere Fälle nacheinander auf demselben Bus). Im sauberen Einzellauf ergibt Nr. 2 `ENODEV`.
 
-## Was NIT_Code daraus macht
+## Was Koalino daraus macht
 
 - `ENODEV` ist **belegt** (alle genannten Verdächtigen erzeugen sie). Der erste Test lautet jetzt: `i2c.scan()` – leere Liste oder andere Zahl.
 - Zwei Varianten je nach Ort im Traceback (siehe 4); ohne erkennbaren Ort gilt der allgemeine Text.
@@ -69,7 +69,7 @@ Das passt zur MicroPython-Dokumentation (für `SoftI2C` ist `ETIMEDOUT` das Zeic
 
 ## Testskript: ETIMEDOUT mit der Bibliothek
 
-Ein Skript, mit dem sich Bus (SoftI2C oder Hardware) und Zeitpunkt (Start oder im Betrieb) umschalten lassen. Der Fehler bleibt **ungefangen**, damit NIT_Code seine Hinweise zeigt; `finally` gibt den Bus danach wieder frei.
+Ein Skript, mit dem sich Bus (SoftI2C oder Hardware) und Zeitpunkt (Start oder im Betrieb) umschalten lassen. Der Fehler bleibt **ungefangen**, damit Koalino seine Hinweise zeigt; `finally` gibt den Bus danach wieder frei.
 
 ```python
 from machine import Pin, SoftI2C, I2C

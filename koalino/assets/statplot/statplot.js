@@ -3,7 +3,7 @@
 // StatPlot – CSV-Daten darstellen, beschreiben und testen
 //
 // Schwesterprojekt zu PAP Editor und IBD Editor (gleiche Bedienung, gleiches
-// Aussehen). Ursprünglich die „Datenauswertung“ in NIT_Code; NIT_Code bettet
+// Aussehen). Ursprünglich die „Datenauswertung“ in Koalino; Koalino bettet
 // diese Seite inzwischen per iframe (?embed=1) ein.
 //
 // Rechnen: stats.js (ohne DOM, mit Node getestet). Hier: Oberfläche,
@@ -34,7 +34,7 @@ const SCATTER = 'Streudiagramm', LINE = 'Liniendiagramm', COLUMN = 'Säulendiagr
 const CHART_TYPES = [SCATTER, LINE, COLUMN, BAR, PIE, HIST, BOX];
 const GROUP_CHARTS = [COLUMN, BAR, PIE];
 
-// Symbole (24×24, Strich) – dieselben wie in NIT_Code
+// Symbole (24×24, Strich) – dieselben wie in Koalino
 const ICONS = {
   open: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   [SCATTER]: '<path d="M4 4v16h16"/><circle cx="8.5" cy="15" r="1.4"/><circle cx="11.5" cy="10.5" r="1.4"/><circle cx="15" cy="13" r="1.4"/><circle cx="18" cy="7" r="1.4"/>',
@@ -1064,7 +1064,7 @@ function refresh() {
 // ════════════════════════════════════════════════════════════
 // Laden
 // ════════════════════════════════════════════════════════════
-/** CSV-Text übernehmen. path = voller Pfad (Desktop/NIT_Code) für den Code-Export. */
+/** CSV-Text übernehmen. path = voller Pfad (Desktop/Koalino) für den Code-Export. */
 function loadText(text, name, path, keepSettings) {
   let parsed;
   try { parsed = S.parseCSV(text); } catch (e) { setStatus('Fehler beim Lesen: ' + e.message, 'error'); return false; }

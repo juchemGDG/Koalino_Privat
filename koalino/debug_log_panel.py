@@ -7,7 +7,7 @@ Klasse 8/9: eine Zeile pro gelöstem Fehler, zwei Spalten (Meldung oder Symptom,
 Ursache und Änderung); vier Karten (1 Beobachten, 2 Eingrenzen, 3 Eine Sache ändern,
 4 Geklappt?). Gleiche Wörter und Farben wie auf dem jeweiligen Cheatsheet.
 
-Grundsatz: NIT_Code trägt nur Fakten ein (Meldung, Läufe mit Änderungen, Scan-Ergebnis
+Grundsatz: Koalino trägt nur Fakten ein (Meldung, Läufe mit Änderungen, Scan-Ergebnis
 auf Knopfdruck). Fall, Vermutung und Ergebnis schreiben die SuS selbst.
 
 Gespeichert wird als ``<programm>.fehlerprotokoll.md`` neben dem Programm (Obsidian-
@@ -376,7 +376,7 @@ class DebugLogPanel(QWidget):
         c5.body.addWidget(self._facts)
         r5 = QHBoxLayout()
         self._btn_pin = QPushButton("📌  Stand merken")
-        self._btn_pin.setToolTip("Eine Kopie vor der Änderung – NIT_Code sichert aber auch "
+        self._btn_pin.setToolTip("Eine Kopie vor der Änderung – Koalino sichert aber auch "
                                  "bei jedem Start automatisch einen Stand")
         self._btn_pin.clicked.connect(self.pin_requested.emit)
         r5.addWidget(self._btn_pin)
@@ -786,7 +786,7 @@ class DebugLogPanel(QWidget):
 
     def _show_facts(self, r: Runde | None):
         if r is not None and r.laeufe:
-            self._facts.setText("Läufe (von NIT_Code): " + html.escape(laeufe_text(r)))
+            self._facts.setText("Läufe (von Koalino): " + html.escape(laeufe_text(r)))
             self._facts.setVisible(True)
         else:
             self._facts.setText("")

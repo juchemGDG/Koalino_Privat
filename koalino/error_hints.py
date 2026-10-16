@@ -257,7 +257,7 @@ def lesetabelle() -> dict:
 def _find_rule(etype: str, message: str, traceback_text: str = "") -> dict | None:
     """Erste passende Regel. Neben Typ und Meldung kann eine Regel den Traceback prüfen:
     ``traceback`` (mindestens ein Muster kommt vor) und ``traceback_nicht`` (keines kommt
-    vor). So unterscheidet NIT_Code z. B. ENODEV beim Start (``__init__``) von ENODEV
+    vor). So unterscheidet Koalino z. B. ENODEV beim Start (``__init__``) von ENODEV
     mitten im Betrieb."""
     for regel in lesetabelle().get("regeln", []):
         if regel.get("typ") != etype:
@@ -394,7 +394,7 @@ def build_infi_error_prompt(code: str, traceback_text: str,
         )
     kontext = ""
     if hint is not None:
-        kontext = f"--- Einordnung von NIT_Code ---\nFall: {hint.fall_name}\n"
+        kontext = f"--- Einordnung von Koalino ---\nFall: {hint.fall_name}\n"
         if hint.verdaechtige:
             kontext += "Verdächtige: " + "; ".join(hint.verdaechtige) + "\n"
         kontext += "\n"

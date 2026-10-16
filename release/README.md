@@ -4,13 +4,13 @@ Dieser Ordner enthaelt alles, um automatisch downloadbare Pakete zu bauen.
 
 ## Neue Version veroeffentlichen (Schnellanleitung)
 
-Beispiel: Version `1.3.2`. Im Terminal des Codespace (Ordner `/workspaces/NIT_Code`):
+Beispiel: Version `1.3.2`. Im Terminal des Codespace (Ordner `/workspaces/Koalino`):
 
-1. Versionsnummer aendern in `nit_code/config.py` (einzige Quelle der Wahrheit):
+1. Versionsnummer aendern in `koalino/config.py` (einzige Quelle der Wahrheit):
    `APP_VERSION = "1.3.2"`
 2. Committen:
    ```bash
-   git add nit_code/config.py
+   git add koalino/config.py
    git commit -m "chore: Version 1.3.2"
    ```
 3. Tag setzen (Name MUSS mit `v` beginnen und zur Version passen):
@@ -40,9 +40,9 @@ Hinweise:
 
 ## Zielartefakte
 
-- macOS: `NIT_Code-macos.dmg`
-- Windows: `NIT_Code-Setup.exe` (Installer, empfohlen) und `NIT_Code-windows.zip` (portabel)
-- Linux: `NIT_Code-linux-x86_64.tar.gz`
+- macOS: `Koalino-macos.dmg`
+- Windows: `Koalino-Setup.exe` (Installer, empfohlen) und `Koalino-windows.zip` (portabel)
+- Linux: `Koalino-linux-x86_64.tar.gz`
 
 ## Lokal bauen
 
@@ -54,7 +54,7 @@ Voraussetzungen: Python 3.11+ und Plattform-spezifische Build-Umgebung.
   - `bash release/scripts/build_macos.sh`
 - Windows (PowerShell):
   - `pwsh -File release/scripts/build_windows.ps1`
-  - Fuer die `NIT_Code-Setup.exe` wird zusaetzlich [Inno Setup 6](https://jrsoftware.org/isdl.php) benoetigt.
+  - Fuer die `Koalino-Setup.exe` wird zusaetzlich [Inno Setup 6](https://jrsoftware.org/isdl.php) benoetigt.
     Fehlt es, wird nur das ZIP erstellt (das Skript bricht nicht ab). Auf den
     GitHub-Actions-Runnern (`windows-latest`) ist Inno Setup vorinstalliert.
 
@@ -77,7 +77,7 @@ Zielsystemen.
 
 Fuer Schulserver oder Umgebungen ohne zuverlaessige Python-Installation kann
 eine Runtime im Projektordner unter `python_runtime/` erzeugt werden. Beim Start
-nutzt NIT_Code diese Runtime bevorzugt automatisch, und in den Einstellungen
+nutzt Koalino diese Runtime bevorzugt automatisch, und in den Einstellungen
 wird sie als Standard-Interpreter vorausgewaehlt.
 
 Die Runtime basiert auf

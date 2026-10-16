@@ -1,4 +1,4 @@
-"""Haupt-Fenster von NIT_Code."""
+"""Haupt-Fenster von Koalino."""
 import os
 import re
 import shutil
@@ -4199,7 +4199,7 @@ class MainWindow(QMainWindow):
                     self,
                     "Einstellungen",
                     "Die neue Schriftgröße der Oberfläche wird nach einem Neustart "
-                    "von NIT_Code wirksam.",
+                    "von Koalino wirksam.",
                 )
 
     def _settings_bool(self, key: str, default: bool) -> bool:

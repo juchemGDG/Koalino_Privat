@@ -1,4 +1,4 @@
-"""Einstiegspunkt für NIT_Code."""
+"""Einstiegspunkt für Koalino."""
 import os
 import sys
 import traceback
@@ -32,7 +32,7 @@ def _show_exception_box(msg: str):
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle("Unerwarteter Fehler")
         box.setText(
-            "In NIT_Code ist ein unerwarteter Fehler aufgetreten.\n"
+            "In Koalino ist ein unerwarteter Fehler aufgetreten.\n"
             "Das Programm versucht weiterzulaufen."
         )
         box.setDetailedText(msg)
@@ -109,7 +109,7 @@ def _configure_webengine():
     Auf älteren Windows-Rechnern sowie in Terminalserver-/RDP-Sitzungen steht
     oft keine stabile GPU-Beschleunigung für QtWebEngine zur Verfügung.
     Chromiums GPU-Prozess kann dort beim Start einer WebEngine-Ansicht
-    abstürzen und die App mitreißen (Symptom: „Block-Editor öffnen → NIT_Code
+    abstürzen und die App mitreißen (Symptom: „Block-Editor öffnen → Koalino
     beendet sich“).
 
     Daher nutzen wir unter Windows standardmäßig Software-Rendering. Das
@@ -193,7 +193,7 @@ def _suppress_child_consoles():
     """Verhindert, dass unter Windows bei jedem Subprozess ein schwarzes
     Konsolenfenster aufpoppt.
 
-    NIT_Code ist eine GUI-Anwendung (PyInstaller: console=False). Alle
+    Koalino ist eine GUI-Anwendung (PyInstaller: console=False). Alle
     Hilfsprozesse (git, pip, mpremote, die Python-Shell …) sollen unsichtbar
     im Hintergrund laufen – ihre Ausgabe wird ohnehin in der GUI angezeigt.
     Ohne das Flag CREATE_NO_WINDOW oeffnet Windows fuer jeden dieser Aufrufe
@@ -228,8 +228,10 @@ def main():
 
     app = QApplication(sys.argv)
     _install_exception_hook()
-    app.setApplicationName("NIT_Code")
+    app.setApplicationName("Koalino")
     app.setOrganizationName("NIT")
+    from .config import migrate_legacy_data
+    migrate_legacy_data()
     # Oberflächen-Schriftgröße (Einstellungen → Design); muss vor dem Bauen
     # jedes Widgets/Stylesheets aktiv sein.
     try:
@@ -244,7 +246,7 @@ def main():
         app.setWindowIcon(logo)
 
     # Beim Start übergebener Dateipfad (z. B. Doppelklick auf .py über die
-    # Windows-Dateizuordnung oder "NIT_Code datei.py" auf der Kommandozeile).
+    # Windows-Dateizuordnung oder "Koalino datei.py" auf der Kommandozeile).
     initial_file = None
     for _arg in sys.argv[1:]:
         if not _arg.startswith("-") and os.path.isfile(_arg):

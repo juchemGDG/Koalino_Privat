@@ -7,7 +7,7 @@ Erklärung samt konkretem Behebungs-Schritt an – besonders für die typischen
 Schulnetz-Probleme (authentifizierender Proxy, gesperrte Domains, TLS-Inspektion).
 """
 
-# Domains, die NIT_Code für Downloads braucht – tauchen im Proxy-Hinweis auf,
+# Domains, die Koalino für Downloads braucht – tauchen im Proxy-Hinweis auf,
 # damit Administratoren wissen, was freizugeben ist.
 REQUIRED_DOMAINS = (
     "raw.githubusercontent.com (NIT-Bibliotheken)",
@@ -26,7 +26,7 @@ def friendly_network_error(err) -> str:
         domains = "\n".join(f"     • {d}" for d in REQUIRED_DOMAINS)
         return (
             "→ Der Internet-Proxy der Schule verlangt eine Anmeldung und lässt\n"
-            "   NIT_Code deshalb nicht ins Internet (der Browser meldet sich\n"
+            "   Koalino deshalb nicht ins Internet (der Browser meldet sich\n"
             "   automatisch mit der Windows-Anmeldung an, Programme können das nicht).\n"
             "   Bitte den Administrator, diese Adressen am Proxy freizugeben:\n"
             f"{domains}\n"
@@ -53,7 +53,7 @@ def friendly_network_error(err) -> str:
     if "certificate" in low or "ssl" in low:
         return (
             "→ Zertifikatsproblem – im Schulnetz prüft vermutlich ein Proxy den\n"
-            "   HTTPS-Verkehr (TLS-Inspektion). NIT_Code nutzt den Zertifikatspeicher\n"
+            "   HTTPS-Verkehr (TLS-Inspektion). Koalino nutzt den Zertifikatspeicher\n"
             "   des Betriebssystems; bitte den Administrator prüfen lassen, ob das\n"
             "   Proxy-Zertifikat auf diesem Rechner installiert ist."
         )
@@ -71,7 +71,7 @@ def git_network_hint(output: str) -> str:
     """Verständlicher Hinweis zu Git-Netzwerkfehlern (clone/pull/push) – oder "".
 
     Git bringt seine eigene Netzwerkschicht (libcurl) mit und nutzt – anders
-    als der Browser – den Windows-System-Proxy nicht automatisch. NIT_Code
+    als der Browser – den Windows-System-Proxy nicht automatisch. Koalino
     reicht den System-Proxy zwar an Git durch (siehe ``_git_network_env`` im
     Hauptfenster), aber bei PAC-Skripten oder Sonderkonfigurationen bleibt
     nur die manuelle Einrichtung – die erklärt dieser Hinweis.
@@ -83,7 +83,7 @@ def git_network_hint(output: str) -> str:
             or "connection timed out" in low or "operation timed out" in low):
         return (
             "→ Git konnte den Server nicht direkt erreichen. Im Schulnetz muss\n"
-            "   auch Git den Internet-Proxy verwenden – NIT_Code gibt dazu den in\n"
+            "   auch Git den Internet-Proxy verwenden – Koalino gibt dazu den in\n"
             "   Windows hinterlegten System-Proxy automatisch an Git weiter.\n"
             "   Wird der Proxy nur über ein Automatik-Skript (PAC) verteilt,\n"
             "   findet Git ihn nicht; dann einmalig einrichten (Proxy-Adresse\n"

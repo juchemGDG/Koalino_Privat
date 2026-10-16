@@ -1,4 +1,4 @@
-# NIT_Code – Kurzanleitung
+# Koalino – Kurzanleitung
 
 Python und MicroPython in einer Oberfläche. Download: <https://github.com/juchemGDG/NIT_Code/releases/latest>
 
@@ -112,7 +112,7 @@ Dann in der Werkzeugleiste **Serial Plotter** einschalten: Die Zahlen erscheinen
 
 ## 3. Block-Editor
 
-Programmieren mit Blöcken – NIT_Code erzeugt daraus lesbaren Python- bzw. MicroPython-Code.
+Programmieren mit Blöcken – Koalino erzeugt daraus lesbaren Python- bzw. MicroPython-Code.
 Öffnen: Menü **Blöcke → Block-Editor öffnen …**
 
 ![Block-Editor](img/blockeditor_annotiert.png)

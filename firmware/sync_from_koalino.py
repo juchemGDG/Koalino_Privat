@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Synchronisiert die iPad-Firmware-Oberflaeche mit NIT_Code.
+"""Synchronisiert die iPad-Firmware-Oberflaeche mit Koalino.
 
-Einzige Quelle der Wahrheit ist ``nit_code/assets/blockly/`` (derselbe
+Einzige Quelle der Wahrheit ist ``koalino/assets/blockly/`` (derselbe
 Block-Editor, den auch das Desktop-Programm nutzt). Dieses Skript
 
   * kopiert die Blockly-Binaries, die Blockdefinitionen (nit_blocks.js,
@@ -10,15 +10,15 @@ Block-Editor, den auch das Desktop-Programm nutzt). Dieses Skript
   * uebernimmt die Toolbox aus ``editor.html`` in ``firmware/www/index.html``
     (zwischen den TOOLBOX-Markern).
 
-Nach jeder Aenderung an Bloecken oder Toolbox in NIT_Code einmal ausfuehren:
+Nach jeder Aenderung an Bloecken oder Toolbox in Koalino einmal ausfuehren:
 
-    python firmware/sync_from_nit_code.py
+    python firmware/sync_from_koalino.py
 
 Dadurch ist jeder neue/geaenderte Block automatisch auch im iPad-Modus
 verfuegbar – ohne Doppelpflege.
 
 Mit ``--check`` wird nichts geschrieben, sondern nur geprueft, ob
-firmware/www/ noch synchron zu nit_code/assets/blockly/ ist (Exit-Code 1,
+firmware/www/ noch synchron zu koalino/assets/blockly/ ist (Exit-Code 1,
 wenn nicht). Gedacht fuer die Release-Skripte, damit ein vergessener Sync
 vor dem Build auffaellt.
 """
@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "nit_code" / "assets" / "blockly"
+SRC = ROOT / "koalino" / "assets" / "blockly"
 DST = ROOT / "firmware" / "www" / "blockly"
 INDEX = ROOT / "firmware" / "www" / "index.html"
 
@@ -43,7 +43,7 @@ FILES = [
 ]
 
 TOOLBOX_START = ("<!-- TOOLBOX:START (auto-generiert aus editor.html via "
-                 "sync_from_nit_code.py – nicht von Hand aendern) -->")
+                 "sync_from_koalino.py – nicht von Hand aendern) -->")
 TOOLBOX_END = "<!-- TOOLBOX:END -->"
 
 # Kategorien, die im iPad-Modus KEINEN Sinn ergeben und daher aus der Toolbox
@@ -66,11 +66,11 @@ def check() -> None:
         if not dst.exists() or not filecmp.cmp(src, dst, shallow=False):
             stale.append(str(dst.relative_to(ROOT)))
     if stale:
-        print("NICHT synchron – bitte 'python firmware/sync_from_nit_code.py' ausfuehren:")
+        print("NICHT synchron – bitte 'python firmware/sync_from_koalino.py' ausfuehren:")
         for s in stale:
             print("  ", s)
         sys.exit(1)
-    print("firmware/www/ ist synchron zu nit_code/assets/blockly/.")
+    print("firmware/www/ ist synchron zu koalino/assets/blockly/.")
 
 
 def main() -> None:
@@ -118,7 +118,7 @@ def main() -> None:
         sys.exit("TOOLBOX-Marker in index.html nicht gefunden")
     INDEX.write_text(new_index, encoding="utf-8")
     print("Toolbox in index.html aktualisiert")
-    print("\nFertig. firmware/www/ ist mit nit_code/assets/blockly/ synchron.")
+    print("\nFertig. firmware/www/ ist mit koalino/assets/blockly/ synchron.")
 
 
 if __name__ == "__main__":
