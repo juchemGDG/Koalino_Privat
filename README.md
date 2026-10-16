@@ -2,7 +2,7 @@
 
 **NIT_Code** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).
 
-GitHub-Repository: https://github.com/juchemGDG/NIT_Code
+Downloads & Releases: https://github.com/juchemGDG/NIT_Code
 
 ---
 

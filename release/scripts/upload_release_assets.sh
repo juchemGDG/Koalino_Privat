@@ -9,7 +9,9 @@ set -euo pipefail
 
 DIR="${1:?Ordner mit den Paketen fehlt}"
 TAG="${GITHUB_REF_NAME:?GITHUB_REF_NAME nicht gesetzt}"
-REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY nicht gesetzt}"
+# Releases liegen im oeffentlichen Release-Repo (RELEASE_REPO); der Quellcode
+# ist in einem privaten Repo. Ohne RELEASE_REPO wird das eigene Repo benutzt.
+REPO="${RELEASE_REPO:-${GITHUB_REPOSITORY:?GITHUB_REPOSITORY nicht gesetzt}}"
 
 shopt -s nullglob
 files=("$DIR"/*)
@@ -23,7 +25,7 @@ fi
 # anderen scheitern hier folgenlos und laden anschliessend nur noch hoch.
 if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   gh release create "$TAG" --repo "$REPO" --draft \
-     --title "$TAG" --generate-notes || true
+     --title "$TAG" --generate-notes --target main || true
 fi
 
 # Kurz warten, falls ein paralleler Job den Entwurf gerade erst anlegt.

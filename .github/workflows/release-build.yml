@@ -71,7 +71,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: bash release/scripts/upload_release_assets.sh release/downloads/linux
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/NIT_Code
 
       - name: Upload Linux artifact (Testbuild)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -118,7 +119,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: bash release/scripts/upload_release_assets.sh release/downloads/macos
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/NIT_Code
 
       - name: Upload macOS artifact (Testbuild)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -164,7 +166,8 @@ jobs:
         shell: bash
         run: bash release/scripts/upload_release_assets.sh release/downloads/windows
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/NIT_Code
 
       - name: Upload Windows artifact (Testbuild)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -188,4 +191,5 @@ jobs:
       - name: Release veröffentlichen
         run: bash release/scripts/publish_release.sh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/NIT_Code
