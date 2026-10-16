@@ -191,11 +191,15 @@ class FlashWorker(QThread):
     def run(self):
         import subprocess, sys
         self.log.emit(f"Flashe {self.board} auf {self.port} ...\n")
-        self.log.emit("Der gesamte Flash wird zuerst gelöscht – "
-                      "alle Dateien auf dem Board gehen dabei verloren.\n")
         self.progress.emit(10)
         board_info = SUPPORTED_BOARDS.get(self.board, {})
         flash_cmd = board_info.get("flash_cmd", "esp32")
+        if flash_cmd == "esp32":
+            self.log.emit("Der gesamte Flash wird zuerst gelöscht – "
+                          "alle Dateien auf dem Board gehen dabei verloren.\n")
+        else:
+            self.log.emit("Hinweis: Nur die Firmware wird ersetzt – Dateien und Bibliotheken "
+                          "auf dem Board bleiben erhalten.\n")
         baud = board_info.get("baud", 115200)
 
         # "-e" / --erase-all löscht vor dem Schreiben den kompletten Flash
