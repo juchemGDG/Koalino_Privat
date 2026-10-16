@@ -151,6 +151,22 @@ class ThemedComboBox(QComboBox):
     def hidePopup(self):
         pass
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        # Kleiner Pfeil rechts – das native ist durch das Stylesheet verschwunden.
+        from PyQt6.QtCore import Qt, QPointF
+        from PyQt6.QtGui import QColor, QPainter, QPen
+        from .config import THEME as t
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(t["text_dim"]), 1.6)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        x, y = self.width() - 16, self.height() / 2
+        p.drawPolyline([QPointF(x - 4, y - 2), QPointF(x, y + 2), QPointF(x + 4, y - 2)])
+        p.end()
+
 
 _tab_close_dir = None
 
