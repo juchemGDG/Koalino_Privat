@@ -1,6 +1,6 @@
 // app.js – iPad-Blockly: Blöcke + Live-Python-Editor + Konsole
 
-// Inject-Optionen identisch zu NIT_Codes editor.html (gleiche Optik im iPad-Modus).
+// Inject-Optionen identisch zu Koalinos editor.html (gleiche Optik im iPad-Modus).
 const workspace = Blockly.inject('blocklyDiv', {
   toolbox: document.getElementById('toolbox'),
   media: '/blockly/media/',

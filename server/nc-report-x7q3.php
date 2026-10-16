@@ -1,5 +1,5 @@
 <?php
-// nc-report-x7q3.php – Relay-Endpoint für NIT_Code-Fehlerberichte
+// nc-report-x7q3.php – Relay-Endpoint für Koalino-Fehlerberichte
 // ---------------------------------------------------------------------------
 // Empfängt den JSON-POST aus "Hilfe → Fehler melden" und leitet ihn als E-Mail
 // an $RECIPIENT weiter. Dadurch liegen KEINE Mail-Zugangsdaten im Programm.
@@ -8,7 +8,7 @@
 //   1. Diese Datei auf den Webspace von mint-checker.de legen, z. B. unter
 //      https://mint-checker.de/nitcode/nc-report-x7q3.php
 //      (bewusst unauffaelliger Name statt "bugreport.php")
-//   2. Dieselbe URL in nit_code/config.py als BUG_REPORT_URL eintragen.
+//   2. Dieselbe URL in koalino/config.py als BUG_REPORT_URL eintragen.
 //   3. Sicherstellen, dass PHP mail() (oder ein SMTP-Ersatz) funktioniert.
 // ---------------------------------------------------------------------------
 
@@ -122,7 +122,7 @@ $body .= "----- Konsole -----\n$console\n";
 
 // $ver kommt aus dem Request und geht in den Betreff (Header!) -> CR/LF entfernen.
 $verH = $hdr($ver);
-$subject = 'NIT_Code Fehlerbericht (' . ($verH !== '' ? $verH : '?') . ')';
+$subject = 'Koalino Fehlerbericht (' . ($verH !== '' ? $verH : '?') . ')';
 
 $headers  = "From: $FROM\r\n";
 if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {

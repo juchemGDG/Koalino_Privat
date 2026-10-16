@@ -1,10 +1,10 @@
-; Inno-Setup-Skript fuer NIT_Code (Windows-Installer, "Setup.exe").
+; Inno-Setup-Skript fuer Koalino (Windows-Installer, "Setup.exe").
 ;
-; Erzeugt aus dem PyInstaller-One-Folder-Build (dist\NIT_Code) ein klassisches
+; Erzeugt aus dem PyInstaller-One-Folder-Build (dist\Koalino) ein klassisches
 ; Setup, das pro Benutzer ohne Admin-Rechte installiert (wie Thonny).
 ;
 ; Kompiliert wird ueber release\scripts\build_windows.ps1, das die Versionsnummer
-; aus nit_code/config.py liest und hier als /DAppVersion uebergibt.
+; aus koalino/config.py liest und hier als /DAppVersion uebergibt.
 
 #ifndef AppVersionNumeric
   #define AppVersionNumeric "0.0.0.0"
@@ -13,9 +13,9 @@
   #define AppVersion "0.0.0"
 #endif
 
-#define AppName "NIT_Code"
+#define AppName "Koalino"
 #define AppPublisher "NIT"
-#define AppExeName "NIT_Code.exe"
+#define AppExeName "Koalino.exe"
 
 [Setup]
 ; AppId fix lassen, damit Updates die alte Version sauber ersetzen.
@@ -35,8 +35,8 @@ UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName} {#AppVersion}
 
 OutputDir=downloads\windows
-OutputBaseFilename=NIT_Code-Setup
-SetupIconFile=NIT_Code.ico
+OutputBaseFilename=Koalino-Setup
+SetupIconFile=Koalino.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

@@ -1,6 +1,6 @@
-# NIT_Code für die Debugging-Landkarte – Umsetzungskonzept
+# Koalino für die Debugging-Landkarte – Umsetzungskonzept
 
-*Bezug: „Debugging-Landkarte – Konzept Version 2.1“, vor allem Abschnitt 7 (Anforderungen an NIT_Code)*
+*Bezug: „Debugging-Landkarte – Konzept Version 2.1“, vor allem Abschnitt 7 (Anforderungen an Koalino)*
 Stand: 2026-10-08 · A–H umgesetzt in `feature_sj/debugging` (1.11.0-beta.1), siehe Abschnitt 16
 Branch für die Umsetzung: `feature_sj/debugging` · Release als Beta `1.11.0-beta.N`
 
@@ -8,9 +8,9 @@ Branch für die Umsetzung: `feature_sj/debugging` · Release als Beta `1.11.0-be
 
 ## 0. Leitlinien
 
-1. **Gleiche Begriffe wie im Material.** NIT_Code spricht von *Fehlerebenen* (0, 1a, 1b, 2, 3), von den *Karten* PAP und IBD, vom *Zyklus* und von *Verdächtigen*. Kein eigenes Vokabular.
-2. **Die Meldung grenzt ein, die Karte lokalisiert.** NIT_Code liefert Hinweise und Verdächtigenlisten, **nie die fertige Lösung**. Das gilt für die festen Hinweise genauso wie für Infi.
-3. **Das Material funktioniert ohne NIT_Code-Erweiterung.** Jede Funktion hat eine Entsprechung auf Papier (Rückfallebene aus Abschnitt 7). Wo es geht, ist das Werkzeug *dieselbe* Vorlage wie auf dem AB (z. B. der I2C-Scan als einfügbares Skript).
+1. **Gleiche Begriffe wie im Material.** Koalino spricht von *Fehlerebenen* (0, 1a, 1b, 2, 3), von den *Karten* PAP und IBD, vom *Zyklus* und von *Verdächtigen*. Kein eigenes Vokabular.
+2. **Die Meldung grenzt ein, die Karte lokalisiert.** Koalino liefert Hinweise und Verdächtigenlisten, **nie die fertige Lösung**. Das gilt für die festen Hinweise genauso wie für Infi.
+3. **Das Material funktioniert ohne Koalino-Erweiterung.** Jede Funktion hat eine Entsprechung auf Papier (Rückfallebene aus Abschnitt 7). Wo es geht, ist das Werkzeug *dieselbe* Vorlage wie auf dem AB (z. B. der I2C-Scan als einfügbares Skript).
 4. **Offline und deterministisch.** Alles außer Infi läuft ohne Netz und ohne KI.
 5. **Belegstand ehrlich halten.** Die Lesarten für `ENODEV`/`ETIMEDOUT` sind Arbeitshypothesen. Sie stehen in einer austauschbaren Tabelle und werden nach der Messreihe (Konzept, Abschnitt 11.1) ersetzt.
 
@@ -20,7 +20,7 @@ Branch für die Umsetzung: `feature_sj/debugging` · Release als Beta `1.11.0-be
 
 | Bereich | Vorhanden | Lücke für das Konzept |
 |---|---|---|
-| Fehlererklärung | [error_hints.py](../nit_code/error_hints.py): fester Hinweis je Fehlertyp, Infi-Knopf „Fehler erklären“ | Nur nach **Typ** unterschieden. `OSError` hat einen Sammeltext („Pin/Bus richtig verkabelt? … Beim Dateizugriff …“), keine Unterscheidung nach Fehlercode, keine Ebene, kein Bezug zum IBD. `RuntimeError` aus `nitbw_bme280` bekommt nur den allgemeinen Text. |
+| Fehlererklärung | [error_hints.py](../koalino/error_hints.py): fester Hinweis je Fehlertyp, Infi-Knopf „Fehler erklären“ | Nur nach **Typ** unterschieden. `OSError` hat einen Sammeltext („Pin/Bus richtig verkabelt? … Beim Dateizugriff …“), keine Unterscheidung nach Fehlercode, keine Ebene, kein Bezug zum IBD. `RuntimeError` aus `nitbw_bme280` bekommt nur den allgemeinen Text. |
 | Traceback | Fehlerzeile im Editor markiert, `<stdin>` wird auf die aktive Datei abgebildet | Kein Hinweis „Hier beginnt deine Suche“ (letzte Zeile der **eigenen** Datei) im Unterschied zur Zeile in der Bibliothek. |
 | Klickbare Fehlerlinks | in `OutputConsole.append_error` angelegt, funktionieren | – (Korrektur: ein zunächst vermuteter Fehler beim Löschen der Links besteht nicht) |
 | I2C-Scan | – | fehlt |
@@ -69,7 +69,7 @@ Wichtig ist ENOENT: Heute bekommt ein fehlender Dateipfad denselben „Pin/Bus�
 
 ### 3.2 Die Lesetabelle als Daten
 
-Die Hardware-Regeln stehen nicht im Code, sondern in einer Datei `nit_code/assets/debug/lesetabelle.json`. Je Eintrag:
+Die Hardware-Regeln stehen nicht im Code, sondern in einer Datei `koalino/assets/debug/lesetabelle.json`. Je Eintrag:
 
 ```json
 {
@@ -116,7 +116,7 @@ Bei Ebene 1b wird zusätzlich die IBD-Kette aus Konzept 3.3 mitgeschickt.
 
 ## 4. Baustein B – „Hier beginnt deine Suche“
 
-Nach einem Absturz wertet NIT_Code alle `File "…", line N`-Zeilen aus und unterscheidet:
+Nach einem Absturz wertet Koalino alle `File "…", line N`-Zeilen aus und unterscheidet:
 
 - **eigene Datei** (aktive Datei bzw. `<stdin>` bei MicroPython),
 - **Bibliothek** (`nitbw_*.py`, alles unter `lib/`, Standardbibliothek).
@@ -176,7 +176,7 @@ Ziel: Schritt 6 des Zyklus („zurück zum letzten funktionierenden Stand“) un
 
 ### 6.1 Automatische Lauf-Stände
 
-- Bei **jedem Programmstart** legt NIT_Code einen Stand der Datei an, zusammen mit dem Ergebnis des Laufs: ✓ (Ende ohne Fehler), ✗ (mit Fehlermeldung, erste Zeile der Meldung wird gespeichert) oder ■ (vom Nutzer gestoppt).
+- Bei **jedem Programmstart** legt Koalino einen Stand der Datei an, zusammen mit dem Ergebnis des Laufs: ✓ (Ende ohne Fehler), ✗ (mit Fehlermeldung, erste Zeile der Meldung wird gespeichert) oder ■ (vom Nutzer gestoppt).
 - Gespeichert wird im Projekt in einem versteckten Ordner `.nit_staende/<dateiname>/` (Zeitstempel + kleine JSON-Datei). Höchstens 50 Stände je Datei, ältere werden gelöscht. Gleiche Inhalte werden nicht doppelt gespeichert.
 - Gilt auch für Controller-Dateien, die direkt bearbeitet werden (📟), dann im lokalen Einstellungsordner.
 
@@ -200,9 +200,9 @@ Ziel: Schritt 6 des Zyklus („zurück zum letzten funktionierenden Stand“) un
 
 ## 7. Baustein E – Schritt 0 bei Gefahrenanzeichen
 
-NIT_Code kann einen Kurzschluss nicht erkennen. Es sieht aber **Folgen**, die zu den Anzeichen aus Konzept 3.6 passen:
+Koalino kann einen Kurzschluss nicht erkennen. Es sieht aber **Folgen**, die zu den Anzeichen aus Konzept 3.6 passen:
 
-| Beobachtung in NIT_Code | Erkennung |
+| Beobachtung in Koalino | Erkennung |
 |---|---|
 | USB-Verbindung bricht während des Laufs ab | bestehende Meldung „Verbindung zum Controller verloren“ |
 | Board startet neu | Boot-Text des ESP32 in der Ausgabe (`rst:0x…`, `ets …`, `boot:`) |
@@ -245,9 +245,9 @@ Das Protokoll aus Konzept Abschnitt 5 als Seitenleiste (neben Infi und AIS-Chat 
 - **Vollform** (Kl. 10/KS): alle acht Spalten.
 - Umschaltbar in den Einstellungen und im Panel.
 
-### 9.2 Was NIT_Code einträgt – und was nicht
+### 9.2 Was Koalino einträgt – und was nicht
 
-| Spalte | Von NIT_Code vorbelegt | Von SuS |
+| Spalte | Von Koalino vorbelegt | Von SuS |
 |---|---|---|
 | Nr., Zeit | ✓ | |
 | Ist | letzte Meldung (letzte Traceback-Zeile) als Vorschlag | präzisieren |
@@ -258,7 +258,7 @@ Das Protokoll aus Konzept Abschnitt 5 als Seitenleiste (neben Infi und AIS-Chat 
 | Zurück nötig? | Knopf „Zurück zum letzten funktionierenden Stand“ | ✓ |
 | Lösung und Lerneffekt | | ✓ |
 
-Grundsatz: NIT_Code trägt nur **Fakten** ein (Zeit, Meldung, Änderung, Laufergebnis). Alles, was Denken zeigt und bewertet wird (Ebene, Hypothese, Lerneffekt), schreiben die SuS.
+Grundsatz: Koalino trägt nur **Fakten** ein (Zeit, Meldung, Änderung, Laufergebnis). Alles, was Denken zeigt und bewertet wird (Ebene, Hypothese, Lerneffekt), schreiben die SuS.
 
 ### 9.3 Sabotage-Runde
 
@@ -274,7 +274,7 @@ Grundsatz: NIT_Code trägt nur **Fakten** ein (Zeit, Meldung, Änderung, Lauferg
 ## 10. Baustein H – Debugging-Landkarte als Hilfeseite
 
 - **Hilfe → 🗺 Debugging-Landkarte** öffnet eine Seite in der Arbeitsblatt-Vorschau mit Zyklus (Schritt 0–6), Fehlerebenen-Tabelle, den beiden Karten, der IBD-Kette BME280 und der Lesetabelle (aus `lesetabelle.json` erzeugt).
-- Gleicher Wortlaut wie Poster/Folie. Die Markdown-Quelle liegt unter `nit_code/assets/debug/landkarte.md` und kann für das Material wiederverwendet werden.
+- Gleicher Wortlaut wie Poster/Folie. Die Markdown-Quelle liegt unter `koalino/assets/debug/landkarte.md` und kann für das Material wiederverwendet werden.
 
 ---
 
@@ -354,7 +354,7 @@ Tests: Einheitstests für Regel-Erkennung (echte MicroPython-Tracebacks aus der 
 - A–G werden umgesetzt; die verdeckte Notiz von Partner B (9.3) entfällt.
 - Die Landkarte (H) sind die beiden Poster als Bild (`assets/debug/landkarte_kl89.png`, `landkarte_kl10.png`) statt einer Markdown-Seite.
 - Die Begriffe folgen den Postern: Kl. 8/9 kennt die Ebenen 0, 1a, 2, 3 und die Karten STOPP, PAP, Checkliste; Kl. 10/KS zusätzlich 1b, IBD und „PAP + IBD“. Kontrollpunkte heißen wie auf dem Poster `print("K3")`.
-- Stände liegen im Benutzerprofil (`<Konfig>/nit_code/staende/`), nicht im Projektordner.
+- Stände liegen im Benutzerprofil (`<Konfig>/koalino/staende/`), nicht im Projektordner.
 - Die Pins für den I2C-Scan werden aus dem eigenen Code übernommen (sonst zuletzt genutzte Werte, Voreinstellung 21/22).
 
 **Umgesetzt in 1.11.0-beta.1**
@@ -378,11 +378,11 @@ Einstellungen → DEBUGGING: Stufe (Kl. 8/9 / Kl. 10/KS), Fehlerhilfe in Stufen,
 
 ## 17. Version 2: Anpassung an das Cheatsheet „Fehler finden: Schritt für Schritt“ (Branch `feature_sj/debugging_v2`)
 
-Auslöser: zweite Fassung des Cheatsheets (je ein Blatt für Klasse 9 und Klasse 10). Sie ersetzt die Poster der ersten Fassung. **Ebenen und Karten gibt es nicht mehr**; stattdessen **Schritte 0 bis 6**, in Schritt 3 **vier Fälle** (Klasse 8/9: drei) und ein **Protokoll mit sechs Spalten, eine Zeile pro Runde**. NIT_Code übernimmt genau diese Wörter.
+Auslöser: zweite Fassung des Cheatsheets (je ein Blatt für Klasse 9 und Klasse 10). Sie ersetzt die Poster der ersten Fassung. **Ebenen und Karten gibt es nicht mehr**; stattdessen **Schritte 0 bis 6**, in Schritt 3 **vier Fälle** (Klasse 8/9: drei) und ein **Protokoll mit sechs Spalten, eine Zeile pro Runde**. Koalino übernimmt genau diese Wörter.
 
-**Eine Textquelle:** `nit_code/debug_guide.py` enthält Schritte, Fälle, Protokollspalten und Hinweistexte. Konsole, Fehlerprotokoll und Anleitungsseite lesen daraus, damit alles wortgleich zum Cheatsheet bleibt. Wird das Cheatsheet geändert, genügt eine Änderung an dieser Stelle.
+**Eine Textquelle:** `koalino/debug_guide.py` enthält Schritte, Fälle, Protokollspalten und Hinweistexte. Konsole, Fehlerprotokoll und Anleitungsseite lesen daraus, damit alles wortgleich zum Cheatsheet bleibt. Wird das Cheatsheet geändert, genügt eine Änderung an dieser Stelle.
 
-| Cheatsheet | In NIT_Code |
+| Cheatsheet | In Koalino |
 |---|---|
 | Schritt 0 Stopp? | roter Banner oben im Fehlerprotokoll; Kasten in der Konsole bei Brownout, Neustart, USB-Abbruch |
 | Schritt 1 Läuft schon was? | Konsolenhinweis, wenn das Board den Programmstart nicht bestätigt („busy“, Raw-REPL), auch im I2C-Scan |
@@ -394,9 +394,9 @@ Auslöser: zweite Fassung des Cheatsheets (je ein Blatt für Klasse 9 und Klasse
 | Protokolltabelle | Nr. · Soll / Ist · Eingrenzen · Vermutung · Änderung · Ergebnis, Markdown neben dem Programm, PDF-Export |
 
 **Entscheidungen**
-- Die Anleitungsseite (Hilfe und Menü Debuggen) zeigt das Cheatsheet **ohne Beispiel**, je Stufe ein Reiter, plus Kasten „So hilft dir NIT_Code“. Die alten Poster-Bilder sind entfernt (in Beta 1/2 nachlesbar).
+- Die Anleitungsseite (Hilfe und Menü Debuggen) zeigt das Cheatsheet **ohne Beispiel**, je Stufe ein Reiter, plus Kasten „So hilft dir Koalino“. Die alten Poster-Bilder sind entfernt (in Beta 1/2 nachlesbar).
 - Eine neue Runde nach einem „Nein“ übernimmt Soll/Ist und Eingrenzen („zurück zu 4“). Kommt sie aus der Konsole (neue Meldung), beginnt sie frisch.
-- Fall, Vermutung und Ergebnis bleiben Sache der SuS; NIT_Code trägt nur Fakten ein.
+- Fall, Vermutung und Ergebnis bleiben Sache der SuS; Koalino trägt nur Fakten ein.
 - Der I2C-Scan zeigt `i2c.scan()` so, wie es auf dem Blatt steht (dezimal, z. B. `[119]`), und daneben Hex (`0x77`).
 - Protokolle aus Beta 1/2 (Ebene, Karte, Hypothese, Test) werden beim Laden übernommen.
 - Die Lesetabelle (`assets/debug/lesetabelle.json`) führt statt Ebene/Karte nur noch den Fall (`code`, `hardware`).

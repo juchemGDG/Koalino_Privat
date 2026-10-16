@@ -1,8 +1,10 @@
-# NIT_Code
+<p align="center"><img src="koalino/assets/brand/koalino-wortbild-hell.svg" alt="Koalino – Editor für Python und MicroPython auf dem ESP32" width="560"></p>
 
-**NIT_Code** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).
+# Koalino
 
-Downloads & Releases: https://github.com/juchemGDG/NIT_Code
+**Koalino** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).
+
+Downloads & Releases: https://github.com/juchemGDG/Koalino
 
 ---
 
@@ -15,11 +17,11 @@ Downloads & Releases: https://github.com/juchemGDG/NIT_Code
 | **Firmware flashen** | MicroPython-Firmware von lokaler Datei oder micropython.org flashen |
 | **Bibliotheks-Manager** | Bibliotheken aus [NIT_Bibliotheken](https://github.com/juchemGDG/NIT_Bibliotheken) direkt auf den Controller laden – online oder (in Schulnetzen ohne Internet) offline aus einem entpackten ZIP-Ordner |
 | **Block-Editor** | Blockbasiert programmieren (wie Snap!/Scratch) und automatisch in lesbaren Python-/MicroPython-Code umwandeln – inkl. GPIO-, ADC-, DAC-, NeoPixel- und nitbw-Bibliotheks-Blöcken (u. a. OLED, LCD, Servo, Ultraschall, Wägezelle HX711, Beschleunigungssensor GY61, Strom-/Spannungssensor INA219, ADC ADS1015) |
-| **ESP32-Standalone-Blockly (Beta)** | Eigene Blockly-Oberfläche direkt auf dem ESP32 (WLAN-Accesspoint, kein Schulnetz nötig) – über „MicroPython → 📲 iPad-Blockly aufs Board spielen …" auf den Controller übertragen, ideal für iPads ohne NIT_Code-Installation |
+| **ESP32-Standalone-Blockly (Beta)** | Eigene Blockly-Oberfläche direkt auf dem ESP32 (WLAN-Accesspoint, kein Schulnetz nötig) – über „MicroPython → 📲 iPad-Blockly aufs Board spielen …" auf den Controller übertragen, ideal für iPads ohne Koalino-Installation |
 | **Serial Plotter** | Zahlenausgabe eines laufenden Programms live als Graph – ideal für Sensorwerte (Temperatur, Abstand, Helligkeit) und X-Y-Kennlinien (z. B. U-I-Kennlinie, optional mit Ausgleichsgerade und R²). Bei Bedarf über „Ausführen → 📈 Serial Plotter" einblendbar |
 | **Datenauswertung (CSV)** | Messreihen oder Umfragedaten aus einer CSV-Datei als Streu-, Linien-, Säulen-, Balken-, Kreisdiagramm, Histogramm oder Boxplot darstellen (auch je Kategorie), mit Kennwerten (Median, Quartile, Mittelwert, Spannweite …), Häufigkeitstabelle, Ausgleichsgerade mit R² und PNG-Export. Reiter „Statistik-Tests": Signifikanztest (Binomialtest mit Ablehnungsbereich), t-Test für eine und zwei Stichproben (Welch, gleiche Varianzen, verbunden) mit p-Wert, Konfidenzintervall und Effektstärke. „Als Python-Code" erzeugt ein lesbares Programm (csv + matplotlib), das dasselbe Diagramm zeichnet – direkt als neuer Editor-Tab. Export als PNG oder SVG, Beispieldaten zum Ausprobieren. Läuft offline; dieselbe App gibt es als [StatPlot](https://github.com/juchemGDG/StatPlot) auch im Browser (z. B. auf dem iPad) und als Desktop-Version. Über den Knopf **Datenauswertung** in der Seitenleiste oder „Visualisieren → 📊 Datenauswertung (CSV) …" |
 | **PAP-Editor** | Programmablaufpläne zeichnen – über den Knopf **PAP-Editor** rechts in der Menüleiste. Der fertige Plan landet mit „In Projekt übernehmen" als Bild in der Zwischenablage und kann direkt in Arbeitsblätter, Word oder LibreOffice eingefügt werden |
-| **Arbeitsblatt-Vorschau** | In Obsidian erstellte Markdown-Arbeitsblätter (Callouts, HTML-Layout-Vorlagen, Codeblöcke) direkt in NIT_Code korrekt formatiert anzeigen – Codeschnipsel lassen sich mit einem Klick kopieren oder an der Cursorposition in den Editor einfügen |
+| **Arbeitsblatt-Vorschau** | In Obsidian erstellte Markdown-Arbeitsblätter (Callouts, HTML-Layout-Vorlagen, Codeblöcke) direkt in Koalino korrekt formatiert anzeigen – Codeschnipsel lassen sich mit einem Klick kopieren oder an der Cursorposition in den Editor einfügen |
 | **KI-Codegenerator** | Schülerinnen und Schüler spezifizieren Eingabe/Ablauf/Ausgabe/Variablen, die KI setzt es in Code um (lokal via Ollama) |
 | **Git-Integration** | Repository klonen, Status, Commit, Push, Pull, Branch wechseln und Merge-Konflikte lösen – direkt aus dem Menü „Git" |
 | **Syntax-Highlighting** | Farbige Python-Syntax, Zeilennummern, Klammernabgleich, Auto-Vervollständigung (Jedi) |
@@ -43,16 +45,16 @@ Downloads & Releases: https://github.com/juchemGDG/NIT_Code
 
 Aktuelle Versionen stehen auf der GitHub-Release-Seite bereit:
 
-- Release-Übersicht: https://github.com/juchemGDG/NIT_Code/releases/latest
-- **Windows (.exe):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/NIT_Code.exe
-- **macOS (.dmg):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/NIT_Code-macos.dmg
-- **Linux (.tar.gz):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/NIT_Code-linux-x86_64.tar.gz
+- Release-Übersicht: https://github.com/juchemGDG/Koalino/releases/latest
+- **Windows (.exe):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino.exe
+- **macOS (.dmg):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino-macos.dmg
+- **Linux (.tar.gz):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino-linux-x86_64.tar.gz
 
 ### Schnellstart
 
-- **Windows:** `NIT_Code.exe` herunterladen und starten
-- **macOS:** `NIT_Code-macos.dmg` öffnen, App in Programme ziehen, dann starten
-- **Linux:** Archiv entpacken und die enthaltene Startdatei im Ordner `NIT_Code` ausführen
+- **Windows:** `Koalino.exe` herunterladen und starten
+- **macOS:** `Koalino-macos.dmg` öffnen, App in Programme ziehen, dann starten
+- **Linux:** Archiv entpacken und die enthaltene Startdatei im Ordner `Koalino` ausführen
 
 ### Linux: Zugriff auf den seriellen Port (MicroPython)
 
@@ -123,7 +125,7 @@ ollama pull llama3.2
 
 ### Infi aktivieren
 
-1. NIT_Code starten
+1. Koalino starten
 2. **Datei → Einstellungen** öffnen (oder `Strg+,`)
 3. Im Abschnitt **KI-TUTOR (INFI)** den Haken bei „Infi-Tutor aktivieren" setzen
 4. **Übernehmen** klicken – das Chat-Panel öffnet sich rechts
@@ -135,7 +137,7 @@ ollama pull llama3.2
 
 ## Fehler verstehen
 
-Stürzt ein Programm ab, zeigt NIT_Code unter der Fehlermeldung einen **verständlichen,
+Stürzt ein Programm ab, zeigt Koalino unter der Fehlermeldung einen **verständlichen,
 deutschen Hinweis** an: was der Fehler bedeutet und worauf zu achten ist (z. B. bei
 `NameError`, `IndentationError`, `IndexError`, `TypeError` …). Das funktioniert
 vollständig lokal, ganz ohne KI.
@@ -167,7 +169,7 @@ weil der Algorithmus im Vordergrund steht und keine Syntaxfehler entstehen.
 - Block-Programme lassen sich als `.nitblocks`-Datei speichern und laden
 
 > Wird ein bereits umgewandeltes Block-Programm erneut umgewandelt, aktualisiert
-> NIT_Code den bestehenden Tab, statt einen neuen zu öffnen.
+> Koalino den bestehenden Tab, statt einen neuen zu öffnen.
 
 ---
 
@@ -201,7 +203,7 @@ als gespeicherter Standard unter **Datei → Einstellungen → Serial Plotter**:
 
 ## Arbeitsblatt-Vorschau (Obsidian-Markdown)
 
-In Obsidian erstellte Arbeitsblätter lassen sich direkt in NIT_Code korrekt
+In Obsidian erstellte Arbeitsblätter lassen sich direkt in Koalino korrekt
 formatiert anzeigen – über Rechtsklick auf eine `.md`-Datei im Dateibaum →
 **„Als Arbeitsblatt-Vorschau öffnen"**. Die Vorschau öffnet sich im rechten
 Panel und rendert echtes HTML/CSS (kein reiner Textmodus):
@@ -215,7 +217,7 @@ Panel und rendert echtes HTML/CSS (kein reiner Textmodus):
   und **⬇ In Editor einfügen** landet der Code direkt in der Zwischenablage
   bzw. an der aktuellen Cursorposition im geöffneten Editor-Tab.
 - Die Vorschau bleibt bewusst immer hell („Papier-Look"), unabhängig vom
-  NIT_Code-Theme – wie in Obsidian bzw. beim Ausdruck.
+  Koalino-Theme – wie in Obsidian bzw. beim Ausdruck.
 
 > Setzt PyQt6-WebEngine sowie die Pakete `markdown`, `Pygments` und
 > `obsidian-callouts` voraus (in den Download-Versionen bereits enthalten).
@@ -236,11 +238,11 @@ Anweisung, Entscheidung, Schleife, Funktion) zusammengesetzt.
 - **💾 Bild speichern** legt das übernommene Diagramm als PNG-Datei ab – nötig für
   Seiten, die kein Einfügen aus der Zwischenablage erlauben und eine Datei zum
   Hochladen brauchen (z. B. der AIS-Chat). Wird das Fenster geschlossen, ohne dass
-  ein übernommenes Bild gespeichert wurde, fragt NIT_Code noch einmal nach.
+  ein übernommenes Bild gespeichert wurde, fragt Koalino noch einmal nach.
 - **Speichern** (als `.json`, später weiterbearbeitbar) und die Exporte
   (**PNG/JPG/SVG**) der Editor-Seite funktionieren ebenfalls; sie öffnen einen
   Speichern-Dialog, der im eingestellten **Sketchbook-Ordner** startet.
-- Das Fenster merkt sich den gezeichneten Plan, solange NIT_Code läuft: nach dem
+- Das Fenster merkt sich den gezeichneten Plan, solange Koalino läuft: nach dem
   Schließen lässt es sich erneut öffnen und der Plan weiterbearbeiten.
 
 > Benötigt eine Internetverbindung und PyQt6-WebEngine (in den Download-Versionen
@@ -280,11 +282,11 @@ Verteilen/Einsammeln von Aufgaben:
 
 Für diese Variante ist **Python 3.10+** erforderlich.
 
-NIT_Code nutzt dabei einen **Hybrid-Startmodus**:
+Koalino nutzt dabei einen **Hybrid-Startmodus**:
 
 - Wenn im Projektordner eine Runtime unter `python_runtime/` liegt, wird diese bevorzugt.
 - Andernfalls wird der vorhandene System-Interpreter verwendet.
-- Die eigentliche Laufumgebung wird als `.venv` angelegt (bei schreibgeschütztem Projektordner automatisch im Benutzerprofil unter `NIT_Code/.venv`).
+- Die eigentliche Laufumgebung wird als `.venv` angelegt (bei schreibgeschütztem Projektordner automatisch im Benutzerprofil unter `Koalino/.venv`).
 
 Optional kann das Verhalten per Umgebungsvariable gesteuert werden:
 
@@ -327,7 +329,7 @@ python start.py
 oder direkt:
 
 ```bash
-.venv/bin/python -m nit_code.main
+.venv/bin/python -m koalino.main
 ```
 
 ---
@@ -361,7 +363,7 @@ oder direkt:
 Viele Schulnetze leiten den Internetverkehr über einen Proxy, der eine
 Anmeldung verlangt. Downloads (Bibliotheken, Firmware, pip) schlagen dann mit
 `407 Proxy Authentication Required` fehl – der Browser meldet sich automatisch
-mit der Windows-Anmeldung an, Programme können das nicht. NIT_Code zeigt in dem
+mit der Windows-Anmeldung an, Programme können das nicht. Koalino zeigt in dem
 Fall einen erklärenden Hinweis statt eines kryptischen Fehlers.
 
 Zwei Lösungswege:
@@ -377,15 +379,15 @@ Zwei Lösungswege:
 
 > Software-Rendering für den Block-Editor auf Terminal-/RDP-Servern lässt sich
 > bei Grafikproblemen mit der Umgebungsvariable `NIT_SOFTWARE_RENDER=1`
-> erzwingen (in RDP-Sitzungen erkennt NIT_Code das automatisch).
+> erzwingen (in RDP-Sitzungen erkennt Koalino das automatisch).
 
 ---
 
 ## Projektstruktur
 
 ```
-NIT_Code/
-├── nit_code/
+Koalino/
+├── koalino/
 │   ├── main.py                 # Einstiegspunkt
 │   ├── main_window.py          # Hauptfenster (inkl. Git-Integration)
 │   ├── editor_widget.py        # Code-Editor (QScintilla)

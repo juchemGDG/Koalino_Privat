@@ -1,0 +1,4584 @@
+"""Haupt-Fenster von Koalino."""
+import os
+import re
+import shutil
+import subprocess
+import sys
+import traceback
+from pathlib import Path
+from urllib.parse import urlparse, urlunparse, quote as urlquote
+
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSettings, QSize
+from PyQt6.QtGui import (
+    QAction, QFont, QIcon, QKeySequence, QColor, QPalette, QShortcut,
+)
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QSplitter, QStackedWidget, QTabWidget, QLabel, QStatusBar, QToolBar, QToolButton,
+    QComboBox, QFileDialog, QMessageBox, QInputDialog, QMenu,
+    QDialog, QPushButton, QTextEdit, QLineEdit, QFormLayout, QGroupBox,
+    QListWidget, QListWidgetItem, QCheckBox, QPlainTextEdit, QSizePolicy,
+)
+
+try:   # Webansichten (KI-Fenster, Arbeitsblatt) – optional installiert
+    from PyQt6.QtWebEngineCore import QWebEnginePage
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+    _WEBVIEW_TYPES: tuple = (QWebEngineView,)
+    _WebAction = QWebEnginePage.WebAction
+except ImportError:
+    _WEBVIEW_TYPES = ()
+    _WebAction = None
+
+from .config import (
+    APP_NAME,
+    FOBIZZ_URL,
+    APP_VERSION,
+    THEME,
+    THEMES,
+    SUPPORTED_BOARDS,
+    embedded_python_executable,
+    preferred_python_interpreter,
+    python_executable,
+    tool_command,
+    set_mono_font,
+    set_theme,
+    set_code_scheme,
+    CODE_SCHEMES,
+    LEGACY_THEME_MIGRATION,
+)
+from .editor_widget import CodeEditor
+from .file_panel import FilePanel, DeviceFilePanel, DeviceListWorker
+from .console_panel import ConsolePanel, ProcessRunner, MicroPythonRunner
+from .icons import make_icon
+from .qt_utils import retain_thread, find_logo, UI_FONT_PT_DEFAULT
+from .block_panel import BlockEditorWindow
+from .parsons_panel import ParsonsWindow
+from .ais_chat_panel import AisChatPanel
+from .coder_panel import CoderPanel
+from .worksheet_panel import WorksheetPanel
+from .help_dialog import HelpDialog, guide_path
+from .pap_editor import IbdEditorWindow, PapEditorWindow, SchaltLabWindow
+from .statplot_window import StatPlotWindow
+from .settings_dialog import ACTIVITY_TOGGLEABLE, SettingsDialog
+from .terminal_panel import ClaudeTerminalPanel, find_claude_binary, pty_available
+from .toolbar_widgets import ModeSwitch, PortPicker
+from .tutor_panel import TutorPanel
+from .net_hints import git_network_hint
+
+
+
+def _note(msg: str) -> None:
+    from . import crash_log
+    crash_log.note(msg)
+
+def _git_network_env() -> dict | None:
+    """Umgebung für Git-Netzwerkbefehle: System-Proxy an Git durchreichen.
+
+    Im Schulnetz nutzt der Browser den in Windows hinterlegten Proxy
+    automatisch – Git (libcurl) dagegen NICHT. Ohne Proxy-Variablen versucht
+    Git eine Direktverbindung, die die Firewall blockiert ("Failed to connect
+    to …:443"), obwohl die Domain am Proxy freigegeben ist.
+
+    ``urllib.request.getproxies()`` liest unter Windows die System-Proxy-
+    Einstellungen aus der Registry. Sind Proxy-Variablen bereits gesetzt
+    (z. B. per Gruppenrichtlinie oder von Hand), wird nichts verändert.
+    Rückgabe: komplette Umgebung mit Proxy-Variablen – oder None
+    (= Umgebung unverändert erben, kein Proxy erkannt/nötig).
+    """
+    for key in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+        if os.environ.get(key):
+            return None
+    try:
+        import urllib.request
+        proxies = urllib.request.getproxies()
+    except Exception:
+        return None
+    http_p = proxies.get("http", "")
+    https_p = proxies.get("https", "") or http_p
+    if not https_p:
+        return None
+    # urllib meldet den Windows-Systemproxy "proxy:port" als
+    # "https://proxy:port" – gemeint ist aber fast immer ein normaler
+    # HTTP-Proxy (CONNECT). Mit https://-Schema würde git/curl TLS zum Proxy
+    # selbst aufbauen und scheitern, daher auf http:// zurückdrehen.
+    if https_p.startswith("https://"):
+        stripped = https_p[len("https://"):]
+        if not http_p or http_p.removeprefix("http://") == stripped:
+            https_p = "http://" + stripped
+    env = os.environ.copy()
+    env["HTTPS_PROXY"] = https_p
+    env["HTTP_PROXY"] = http_p or https_p
+    no = proxies.get("no")
+    if no:
+        env["NO_PROXY"] = no
+    return env
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Globales Stylesheet (als Funktion, damit Theme-Wechsel möglich ist)
+# ──────────────────────────────────────────────────────────────────────────────
+def build_global_style() -> str:
+    t = THEME
+    scroll = t.get("scroll", t["border"])
+    from .qt_utils import tab_close_icons
+    _close_n, _close_h = tab_close_icons(t["text"], "#ffffff")
+    return f"""
+QMainWindow, QWidget {{
+    background: {t['bg_dark']};
+    color: {t['text']};
+    font-family: Helvetica, Arial, system-ui, -apple-system, 'Segoe UI', 'Ubuntu', sans-serif;
+    font-size: 13px;
+}}
+QToolTip {{
+    background: {t['text']};
+    color: {t['bg_dark']};
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+}}
+QMenuBar {{
+    background: {t['bg_panel']};
+    color: {t['text']};
+    border-bottom: 1px solid {t['border']};
+    padding: 3px 8px;
+}}
+QMenuBar::item {{
+    padding: 5px 12px;
+    margin: 0 1px;
+    border-radius: 6px;
+    background: transparent;
+}}
+QMenuBar::item:selected {{
+    background: {t['selection']};
+    color: {t['accent']};
+}}
+/* Rechtsbündiger Knopf am rechten Ende der Toolbar */
+QPushButton#papToolButton {{
+    background: transparent;
+    color: {t['text']};
+    border: 1px solid {t['border']};
+    border-radius: 8px;
+    padding: 5px 14px;
+    margin: 2px 4px 2px 0;
+    font-weight: bold;
+}}
+QPushButton#papToolButton:hover {{
+    background: {t['accent']};
+    border-color: {t['accent']};
+    color: white;
+}}
+QMenu {{
+    background: {t['bg_panel']};
+    color: {t['text']};
+    border: 1px solid {t['border']};
+    border-radius: 10px;
+    padding: 6px;
+}}
+QMenu::item {{
+    padding: 6px 22px 6px 14px;
+    border-radius: 6px;
+}}
+QMenu::item:selected {{
+    background: {t['selection']};
+    color: {t['accent']};
+}}
+QMenu::item:disabled {{
+    color: {t['text_dim']};
+}}
+QMenu::separator {{
+    height: 1px;
+    background: {t['border']};
+    margin: 4px 8px;
+}}
+QTabWidget::pane {{
+    border: none;
+    background: {t['bg_editor']};
+}}
+QTabBar {{
+    background: {t['bg_dark']};
+}}
+QTabBar::tab {{
+    background: transparent;
+    color: {t['text_dim']};
+    padding: 8px 16px;
+    margin: 4px 2px 0 2px;
+    border: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    min-width: 80px;
+}}
+QTabBar::tab:selected {{
+    background: {t['bg_editor']};
+    color: {t['text']};
+    font-weight: bold;
+    border-bottom: 2px solid {t['accent']};
+}}
+QTabBar::tab:hover:!selected {{
+    background: {t['selection']};
+    color: {t['text']};
+}}
+QTabBar::close-button {{
+    subcontrol-position: right;
+    image: url({_close_n});
+    width: 16px;
+    height: 16px;
+    margin-left: 6px;
+}}
+QTabBar::close-button:hover {{
+    image: url({_close_h});
+}}
+QSplitter::handle {{
+    background: {t['border']};
+}}
+QSplitter::handle:hover {{
+    background: {t['accent']};
+}}
+QToolBar {{
+    background: {t['bg_panel']};
+    border: none;
+    border-bottom: 1px solid {t['border']};
+    spacing: 6px;
+    padding: 6px 10px;
+}}
+QToolBar::separator {{
+    background: {t['border']};
+    width: 1px;
+    margin: 4px 6px;
+}}
+QToolButton {{
+    background: transparent;
+    color: {t['text']};
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+}}
+QToolButton:hover {{
+    background: {t['selection']};
+    color: {t['accent']};
+}}
+QToolButton:pressed, QToolButton:checked {{
+    background: {t['selection']};
+    border-color: {t['accent']};
+    color: {t['accent']};
+}}
+/* Primäraktion „Starten“ – wie der Anmelden-Knopf der MINT-Checker-Seiten */
+QToolButton#runButton {{
+    background: {t['accent']};
+    color: white;
+    font-weight: bold;
+    padding: 6px 16px;
+}}
+QToolButton#runButton:hover {{
+    background: {t['accent_hover']};
+    color: white;
+}}
+QToolButton#stopButton {{
+    border: 1px solid {t['border']};
+}}
+QToolButton#stopButton:hover {{
+    background: {t['error']};
+    border-color: {t['error']};
+    color: white;
+}}
+/* Seitenleiste: wie die dunkle Sidebar der MINT-Checker-Seiten */
+QWidget#activityBar {{
+    background: {t.get('sidebar', '#0f172a')};
+    border-right: 1px solid {t['border']};
+}}
+QToolButton#activityButton {{
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 0;
+}}
+QToolButton#activityButton:hover {{
+    background: #1e293b;
+}}
+QToolButton#activityButton:checked {{
+    background: {t['accent']};
+}}
+QComboBox {{
+    background: {t['bg_dark']};
+    color: {t['text']};
+    border: 1px solid {t['border']};
+    border-radius: 8px;
+    padding: 5px 10px;
+}}
+QComboBox:hover {{
+    border-color: {t['accent']};
+}}
+QComboBox QAbstractItemView {{
+    background: {t['bg_panel']};
+    color: {t['text']};
+    border: 1px solid {t['border']};
+    selection-background-color: {t['selection']};
+    selection-color: {t['accent']};
+    outline: none;
+}}
+QStatusBar {{
+    background: {t['bg_panel']};
+    color: {t['text_dim']};
+    border-top: 1px solid {t['border']};
+    font-size: 11px;
+    padding: 2px 8px;
+}}
+QStatusBar::item {{
+    border: none;
+}}
+QScrollBar:vertical {{
+    background: transparent;
+    width: 10px;
+    margin: 2px;
+}}
+QScrollBar::handle:vertical {{
+    background: {scroll};
+    border-radius: 3px;
+    min-height: 28px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: {t['text_dim']};
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+    height: 0;
+    background: transparent;
+}}
+QScrollBar:horizontal {{
+    background: transparent;
+    height: 10px;
+    margin: 2px;
+}}
+QScrollBar::handle:horizontal {{
+    background: {scroll};
+    border-radius: 3px;
+    min-width: 28px;
+}}
+QScrollBar::handle:horizontal:hover {{
+    background: {t['text_dim']};
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+    width: 0;
+    background: transparent;
+}}
+"""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Sketchbook-Durchsuchung (Menü + Git-Repo-Suche)
+# ──────────────────────────────────────────────────────────────────────────────
+# Das Standard-Sketchbook ist das Home-Verzeichnis. Ohne Tiefen-/Ordner-Grenzen
+# würden Menüaufbau und Repo-Suche dort den UI-Thread minutenlang blockieren
+# (node_modules, Foto-Sammlungen, Caches …).
+_SKETCHBOOK_MAX_DEPTH = 3
+_SKETCHBOOK_SKIP_DIRS = {
+    "node_modules", "__pycache__", ".venv", "venv", "env",
+    "AppData", "Library", "site-packages",
+}
+
+
+def _skip_sketchbook_dir(name: str) -> bool:
+    """True für Ordner, die beim Durchsuchen des Sketchbooks ignoriert werden."""
+    return name.startswith(".") or name in _SKETCHBOOK_SKIP_DIRS
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Hell-Modus-Stile für Standard-Dialoge (gemeinsam genutzt)
+# ──────────────────────────────────────────────────────────────────────────────
+def _light_dialog_controls_qss(scope: str = "") -> str:
+    """Eingabefeld-/Button-Stile für Dialoge auf hellen System-Paletten.
+
+    ``scope`` schränkt die Selektoren optional ein (z. B. "QInputDialog"),
+    damit die Regeln nur innerhalb dieses Dialogtyps greifen.
+    """
+    s = f"{scope} " if scope else ""
+    return f"""
+        {s}QLineEdit, {s}QComboBox, {s}QListView {{
+            background: #ffffff;
+            color: #111827;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 4px 6px;
+        }}
+        {s}QPushButton {{
+            background: #e2e8f0;
+            color: #111827;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 6px 14px;
+        }}
+        {s}QPushButton:hover {{ background: #cbd5e1; }}
+    """
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Git-Clone-Dialog
+# ──────────────────────────────────────────────────────────────────────────────
+class GitCloneDialog(QDialog):
+    """Dialog zum Klonen eines Git-Repositories mit optionaler Credential-Eingabe."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Git: Repository klonen")
+        self.setMinimumWidth(520)
+        self._target_manually_edited = False
+        self._build_ui()
+        self._apply_light_style_if_needed()
+        self._update_auth_section("")
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self._url_edit = QLineEdit()
+        self._url_edit.setPlaceholderText("https://github.com/… oder git@github.com:…")
+        self._url_edit.textChanged.connect(self._on_url_changed)
+        form.addRow("Repository-URL:", self._url_edit)
+
+        self._target_edit = QLineEdit()
+        self._target_edit.setPlaceholderText("Ordnername im Sketchbook")
+        self._target_edit.textEdited.connect(self._on_target_edited)
+        form.addRow("Zielordner:", self._target_edit)
+
+        layout.addLayout(form)
+
+        # Anmeldedaten-Gruppe (nur bei HTTPS sichtbar)
+        self._auth_group = QGroupBox("Anmeldedaten (für private Repositories)")
+        auth_outer = QVBoxLayout(self._auth_group)
+        auth_outer.setSpacing(8)
+        auth_outer.setContentsMargins(8, 8, 8, 8)
+
+        auth_form = QFormLayout()
+        auth_form.setSpacing(8)
+
+        self._username_edit = QLineEdit()
+        self._username_edit.setPlaceholderText("Benutzername")
+        auth_form.addRow("Benutzername:", self._username_edit)
+
+        pw_widget = QWidget()
+        pw_layout = QHBoxLayout(pw_widget)
+        pw_layout.setContentsMargins(0, 0, 0, 0)
+        pw_layout.setSpacing(4)
+        self._password_edit = QLineEdit()
+        self._password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._password_edit.setPlaceholderText("Passwort oder Access Token")
+        self._pw_toggle = QPushButton("👁")
+        self._pw_toggle.setCheckable(True)
+        self._pw_toggle.setFixedSize(32, 28)
+        # Ohne padding:0 schneidet das Dialog-Stylesheet (padding: 6px 14px
+        # für alle QPushButton) das Auge bei der festen Größe ab.
+        self._pw_toggle.setStyleSheet("QPushButton { padding: 0px; }")
+        self._pw_toggle.setToolTip("Passwort anzeigen / verbergen")
+        self._pw_toggle.toggled.connect(
+            lambda checked: self._password_edit.setEchoMode(
+                QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
+            )
+        )
+        pw_layout.addWidget(self._password_edit)
+        pw_layout.addWidget(self._pw_toggle)
+        auth_form.addRow("Passwort / Token:", pw_widget)
+
+        auth_outer.addLayout(auth_form)
+
+        # Hinweis unterhalb der Felder, volle Breite
+        self._auth_hint = QLabel("")
+        self._auth_hint.setWordWrap(True)
+        self._auth_hint.setObjectName("hintLabel")
+        auth_outer.addWidget(self._auth_hint)
+
+        layout.addWidget(self._auth_group)
+
+        # SSH-Hinweis (nur bei SSH-URLs sichtbar)
+        self._ssh_hint = QLabel(
+            "SSH-Authentifizierung: SSH-Schlüssel müssen im System eingerichtet sein "
+            "(~/.ssh/id_rsa oder id_ed25519). Bei GitHub können Schlüssel unter "
+            "Einstellungen → SSH and GPG keys hinzugefügt werden."
+        )
+        self._ssh_hint.setWordWrap(True)
+        self._ssh_hint.setObjectName("hintLabel")
+        self._ssh_hint.setVisible(False)
+        layout.addWidget(self._ssh_hint)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        clone_btn = QPushButton("Klonen")
+        clone_btn.setDefault(True)
+        clone_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(clone_btn)
+        layout.addLayout(btn_layout)
+
+    def _apply_light_style_if_needed(self):
+        app = QApplication.instance()
+        if app is None:
+            return
+        if app.palette().color(QPalette.ColorRole.Window).lightness() < 128:
+            return
+        self.setStyleSheet(_light_dialog_controls_qss() + """
+            QDialog, QWidget { background: #f8fafc; color: #111827; }
+            QGroupBox {
+                background: #f1f5f9;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                padding-top: 8px;
+                margin-top: 8px;
+                font-weight: 600;
+                color: #374151;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 6px;
+            }
+            QLabel { color: #374151; }
+            QLabel#hintLabel { color: #6b7280; font-size: 11px; }
+            QPushButton:default {
+                background: #3b82f6;
+                color: white;
+                border-color: #2563eb;
+            }
+            QPushButton:default:hover { background: #2563eb; }
+        """)
+
+    @staticmethod
+    def _clean_url(text: str) -> str:
+        """Bereinigt versehentlich eingefügte 'git clone <url>'-Befehle zur reinen URL."""
+        text = text.strip()
+        # Nutzer kopieren oft den kompletten Befehl von GitHub/Doku
+        import re
+        text = re.sub(r"^git\s+clone\s+", "", text, flags=re.IGNORECASE).strip()
+        return text
+
+    def _on_url_changed(self, text: str):
+        url = self._clean_url(text)
+        if not self._target_manually_edited:
+            name = os.path.basename(url.rstrip("/")).removesuffix(".git")
+            if name:
+                self._target_edit.setText(name)
+        self._update_auth_section(url)
+
+    def _on_target_edited(self):
+        self._target_manually_edited = True
+
+    # Bekannte Hosts, bei denen ein Token statt Passwort erforderlich ist
+    _TOKEN_REQUIRED_HOSTS = {"github.com", "gitlab.com"}
+    # Bekannte Hosts, bei denen normales Passwort funktioniert
+    _PASSWORD_OK_HOSTS = {"codeberg.org"}
+
+    def _update_auth_section(self, url: str):
+        is_https = url.startswith(("https://", "http://"))
+        is_ssh = url.startswith("git@") or url.startswith("ssh://")
+        self._auth_group.setVisible(is_https)
+        self._ssh_hint.setVisible(is_ssh)
+
+        if is_https:
+            try:
+                host = urlparse(url).hostname or ""
+            except Exception:
+                host = ""
+
+            if host in self._TOKEN_REQUIRED_HOSTS:
+                self._auth_hint.setText(
+                    f"Tipp ({host}): Passwörter werden nicht mehr akzeptiert. "
+                    "Bitte einen Personal Access Token verwenden: "
+                    "Einstellungen → Developer settings → Personal access tokens (Scope: repo)."
+                )
+            elif host in self._PASSWORD_OK_HOSTS:
+                self._auth_hint.setText(
+                    f"Tipp ({host}): Normaler Benutzername und Passwort funktionieren hier direkt."
+                )
+            elif host:
+                self._auth_hint.setText(
+                    f"Tipp: Je nach Anbieter ({host}) funktioniert entweder das normale "
+                    "Passwort oder ein Access Token."
+                )
+            else:
+                self._auth_hint.setText("")
+
+        self.adjustSize()
+
+    def url(self) -> str:
+        return self._clean_url(self._url_edit.text())
+
+    def target_name(self) -> str:
+        return self._target_edit.text().strip()
+
+    def username(self) -> str:
+        return self._username_edit.text().strip()
+
+    def password(self) -> str:
+        return self._password_edit.text()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Git-Konflikt-Dialog
+# ──────────────────────────────────────────────────────────────────────────────
+class GitConflictDialog(QDialog):
+    """Löst Merge-Konflikte ohne Terminal: pro Datei eine Version wählen,
+    im Editor von Hand lösen, den Merge abschließen oder abbrechen."""
+
+    def __init__(self, main_window, repo: str):
+        super().__init__(main_window)
+        self._main = main_window
+        self._repo = repo
+
+        self.setWindowTitle("Git: Merge-Konflikte lösen")
+        self.resize(640, 460)
+
+        layout = QVBoxLayout(self)
+
+        intro = QLabel(
+            "Bei diesen Dateien wurde an beiden Stellen unterschiedlich geändert.\n"
+            "Wähle pro Datei eine Lösung – oder öffne sie zum Bearbeiten im Editor.",
+            self,
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        self._list = QListWidget(self)
+        self._list.currentItemChanged.connect(lambda *_: self._update_buttons())
+        layout.addWidget(self._list, 1)
+
+        # Aktionen pro Datei
+        file_row = QHBoxLayout()
+        self._btn_ours = QPushButton("Meine Version behalten", self)
+        self._btn_theirs = QPushButton("Andere Version übernehmen", self)
+        self._btn_open = QPushButton("Im Editor öffnen", self)
+        self._btn_mark = QPushButton("Als gelöst markieren", self)
+        self._btn_ours.clicked.connect(lambda: self._resolve_with_side("ours"))
+        self._btn_theirs.clicked.connect(lambda: self._resolve_with_side("theirs"))
+        self._btn_open.clicked.connect(self._open_in_editor)
+        self._btn_mark.clicked.connect(self._mark_resolved)
+        for b in (self._btn_ours, self._btn_theirs, self._btn_open, self._btn_mark):
+            file_row.addWidget(b)
+        layout.addLayout(file_row)
+
+        self._status = QLabel("", self)
+        self._status.setWordWrap(True)
+        layout.addWidget(self._status)
+
+        # Abschluss-Aktionen
+        bottom = QHBoxLayout()
+        self._btn_abort = QPushButton("Merge abbrechen", self)
+        self._btn_abort.clicked.connect(self._abort_merge)
+        bottom.addWidget(self._btn_abort)
+        bottom.addStretch()
+        self._btn_finish = QPushButton("Merge abschließen", self)
+        self._btn_finish.clicked.connect(self._finish_merge)
+        bottom.addWidget(self._btn_finish)
+        close_btn = QPushButton("Schließen", self)
+        close_btn.clicked.connect(self.reject)
+        bottom.addWidget(close_btn)
+        layout.addLayout(bottom)
+
+        self._refresh()
+
+    # ── Git-Hilfen ──────────────────────────────────────────────────────────
+    def _run(self, args: list[str], label: str) -> bool:
+        cmd = self._main._git_command("-C", self._repo, *args)
+        if cmd is None:
+            self._main._console.append_error("[Git] Git wurde auf diesem System nicht gefunden.\n")
+            return False
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self._main._console.append_info(f"[Git] {label}\n")
+        if res.stdout.strip():
+            self._main._console.append_output(res.stdout)
+        if res.returncode == 0:
+            return True
+        self._main._console.append_error(res.stderr or f"[Git] '{label}' fehlgeschlagen.\n")
+        return False
+
+    def _current_file(self) -> str | None:
+        item = self._list.currentItem()
+        return item.text() if item else None
+
+    def _refresh(self):
+        files = self._main._get_conflicted_files(self._repo)
+        self._list.clear()
+        for f in files:
+            self._list.addItem(QListWidgetItem(f))
+        if files:
+            self._list.setCurrentRow(0)
+
+        merge_open = self._main._merge_in_progress(self._repo)
+        if files:
+            self._status.setText(f"Noch {len(files)} Datei(en) mit Konflikten.")
+        elif merge_open:
+            self._status.setText(
+                "Alle Konflikte gelöst – jetzt kannst du den Merge abschließen."
+            )
+        else:
+            self._status.setText("Kein offener Merge – nichts zu tun.")
+
+        self._btn_finish.setEnabled(merge_open and not files)
+        self._btn_abort.setEnabled(merge_open)
+        self._update_buttons()
+
+    def _update_buttons(self):
+        has_file = self._current_file() is not None
+        for b in (self._btn_ours, self._btn_theirs, self._btn_open, self._btn_mark):
+            b.setEnabled(has_file)
+
+    # ── Aktionen ────────────────────────────────────────────────────────────
+    def _resolve_with_side(self, side: str):
+        rel = self._current_file()
+        if not rel:
+            return
+        label = "Meine Version" if side == "ours" else "Andere Version"
+        if self._run(["checkout", f"--{side}", "--", rel], f"{label} für '{rel}' wählen"):
+            self._run(["add", "--", rel], f"'{rel}' als gelöst markieren")
+        self._refresh()
+
+    def _mark_resolved(self):
+        rel = self._current_file()
+        if not rel:
+            return
+        # Sicherheitsnetz: Datei darf keine Konfliktmarker mehr enthalten.
+        abs_path = os.path.join(self._repo, rel)
+        try:
+            with open(abs_path, encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        except OSError:
+            content = ""
+        if any(marker in content for marker in ("<<<<<<<", "=======", ">>>>>>>")):
+            QMessageBox.warning(
+                self,
+                "Git",
+                f"In '{rel}' sind noch Konfliktmarker (<<<<<<<, =======, >>>>>>>) "
+                "enthalten.\nBitte zuerst im Editor entfernen und die Datei speichern.",
+            )
+            return
+        self._run(["add", "--", rel], f"'{rel}' als gelöst markieren")
+        self._refresh()
+
+    def _open_in_editor(self):
+        rel = self._current_file()
+        if not rel:
+            return
+        abs_path = os.path.join(self._repo, rel)
+        self._main._open_file_path(abs_path)
+        QMessageBox.information(
+            self,
+            "Git",
+            f"'{rel}' wurde im Editor geöffnet.\n\n"
+            "Entferne die Konfliktmarker (<<<<<<<, =======, >>>>>>>), speichere die "
+            "Datei und öffne dann wieder „Git → Merge-Konflikte lösen“, um sie als "
+            "gelöst zu markieren.",
+        )
+        self.reject()
+
+    def _abort_merge(self):
+        reply = QMessageBox.question(
+            self,
+            "Git: Merge abbrechen",
+            "Den laufenden Merge komplett abbrechen?\n"
+            "Der Zustand vor dem Merge wird wiederhergestellt.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        if self._run(["merge", "--abort"], "Merge abbrechen"):
+            self._main._console.append_success("[Git] Merge wurde abgebrochen.\n")
+            self.accept()
+
+    def _finish_merge(self):
+        if self._run(["commit", "--no-edit"], "Merge abschließen (Commit)"):
+            self._main._console.append_success("[Git] Merge erfolgreich abgeschlossen.\n")
+            self.accept()
+        else:
+            self._refresh()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tab-Daten
+# ──────────────────────────────────────────────────────────────────────────────
+class EditorTab:
+    def __init__(self, filepath: str | None = None):
+        self.filepath: str | None = filepath
+        self.editor = CodeEditor()
+        self.modified = False
+        # Datei liegt auf dem Controller: filepath ist dann nur die lokale
+        # Arbeitskopie, Strg+S schreibt zusätzlich nach device_path zurück.
+        self.device_port: str | None = None
+        self.device_path: str | None = None
+        # Lokal gespeichert, aber noch nicht auf den Controller übertragen
+        self.device_dirty = False
+
+    @property
+    def display_name(self) -> str:
+        if self.filepath:
+            return os.path.basename(self.filepath)
+        return "Unbenannt"
+
+
+class _PortScanWorker(QThread):
+    """Scannt serielle Ports in einem Hintergrund-Thread.
+
+    Der Port-Scan (``comports()``) liest unter Windows die SetupAPI/Registry und
+    kann gelegentlich zehntel Sekunden dauern. Da er alle paar Sekunden läuft,
+    würde er im UI-Thread ein regelmäßiges Ruckeln verursachen.
+    """
+    result = pyqtSignal(list)   # list[(device, description)]
+
+    def run(self):
+        try:
+            from . import crash_log
+            crash_log.note("Port-Scan: comports() startet")
+            import serial.tools.list_ports
+            ports = [(p.device, p.description) for p in serial.tools.list_ports.comports()]
+            if sys.platform == "darwin":
+                # Systemeigene Pseudo-Ports (Debug-Konsole, Bluetooth) sind keine Controller;
+                # USB-Geräte zuerst, damit beim ersten Befüllen nicht das falsche gewählt wird.
+                ports = [(d, t) for d, t in ports
+                         if "debug-console" not in d and "Bluetooth-Incoming" not in d]
+                ports.sort(key=lambda dt: 0 if ("usb" in dt[0].lower()) else 1)
+        except Exception:
+            ports = []
+        from . import crash_log
+        crash_log.note(f"Port-Scan: fertig ({len(ports)} Ports)")
+        self.result.emit(ports)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Haupt-Fenster
+# ──────────────────────────────────────────────────────────────────────────────
+class MainWindow(QMainWindow):
+    def __init__(self, initial_file: str | None = None):
+        super().__init__()
+        self._tabs: list[EditorTab] = []
+        self._mode = "python"       # "python" | "micropython"
+        self._board = "ESP32"
+        self._process: ProcessRunner | None = None
+        self._retired_threads: list = []   # hält QThread-Referenzen bis finished
+        self._aux_workers: list = []   # kurzlebige Hilfs-Threads (Port-Scan, Geräte-Listing)
+        self._port_scan_busy = False   # verhindert überlappende Port-Scans
+        self._run_stderr_buf: list[str] = []   # stderr des laufenden Programms (für Fehlerhinweis)
+        self._last_error_traceback = ""        # letzter Traceback (für „Infi erklärt")
+        self._last_run_file: str | None = None  # zuletzt gestartete Datei (für <stdin>-Tracebacks)
+        self._user_stopped = False             # True wenn Lauf per Stopp-Knopf beendet
+        self._port_busy = False     # verhindert gleichzeitige mpremote-Prozesse
+        self._settings_font_size: int = 14
+        self._settings_line_numbers: bool = True
+        self._settings_word_wrap: bool = False
+        self._settings_highlight_line: bool = True
+        self._settings_autosave_secs: int = 0
+        self._settings_python_exec: str = ""
+        self._settings_scrollback: int = 5000
+        self._settings_blocks_enabled: bool = True    # Block-Editor, Standard: an
+        self._settings_hidden_activity: set[str] = set()   # ausgeblendete Knöpfe der Seitenleiste
+        self._settings_tutor_mode: str = "none"
+        self._settings_tutor_url: str = ""
+        self._settings_tutor_model: str = ""
+        self._settings_sketchbook: str = str(Path.home())
+        self._settings_git_executable: str = ""
+        self._settings_git_repo: str = ""
+        self._settings_theme: str = "modern_light"
+        self._settings_code_scheme: str = "auto"
+        self._settings_editor_font: str = "default"
+        self._settings_ui_font_pt: int = UI_FONT_PT_DEFAULT
+        # Serial-Plotter-Achsen (Standardwerte; im Plotter live übersteuerbar)
+        self._settings_plot_y_mode: str = "auto"      # "auto" | "fixed"
+        self._settings_plot_y_min: float = 0.0
+        self._settings_plot_y_max: float = 100.0
+        self._settings_plot_x_mode: str = "sliding"   # "sliding" | "sweep" | "xy"
+        self._settings_plot_x_min: int = 0
+        self._settings_plot_x_max: int = 500
+        # Fehler finden (Cheatsheet)
+        self._settings_debug_level: str = "kl10"        # "kl89" | "kl10" (Begriffe, Protokollform)
+        self._settings_debug_stepped: bool = True       # Fehlerhilfe in Stufen
+        self._settings_debug_change_hint: bool = True   # „Seit dem letzten Lauf: n Stellen geändert"
+        self._snapshots = None                          # SnapshotStore (lazy)
+        self._run_snapshot: tuple[str, str] | None = None   # (Datei, Stand-ID) des laufenden Programms
+        self._run_change_text = ""                      # Änderung seit dem letzten Lauf (für Protokoll)
+        self._danger_shown = False                      # Schritt-0-Kasten in diesem Lauf schon gezeigt
+        self._busy_shown = False                        # Schritt-1-Hinweis in diesem Lauf schon gezeigt
+        self._last_own_line: int | None = None          # Zeile in der eigenen Datei (Schritt 2)
+        self._kp_partial = ""                           # unvollständige Ausgabezeile (Kontrollpunkte)
+        self._kp_reached: list[int] = []                # erreichte Kontrollpunkte in diesem Lauf
+        self._last_hint = None                          # ErrorHint des letzten Fehlers
+        self._hint_stage = 0                            # angezeigte Hilfestufe
+        self._settings_store = QSettings()
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.timeout.connect(self._autosave_all)
+        self._load_persistent_settings()
+        self._setup_window()
+        self._setup_menubar()
+        self._setup_toolbar()
+        self._setup_central()
+        self._setup_statusbar()
+        self._update_git_status_label()
+        self._new_tab()             # Startdatei
+        self._apply_settings()      # Standard-Einstellungen sofort anwenden
+        # currentIndexChanged feuerte beim addItem noch nicht (Signal erst danach verbunden)
+        # → Modus einmalig manuell initialisieren
+        QTimer.singleShot(0, lambda: self._on_mode_changed("python"))
+        # Beim Start übergebene Datei öffnen (z. B. Doppelklick auf .py in Windows).
+        if initial_file and os.path.isfile(initial_file):
+            self._open_file_path(initial_file)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Fenster
+    # ──────────────────────────────────────────────────────────────────────
+    def _setup_window(self):
+        self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
+        self.resize(1280, 780)
+        self.setStyleSheet(build_global_style())
+        # Window-Icon (falls Logo noch nicht per app.setWindowIcon gesetzt)
+        logo = find_logo()
+        if not logo.isNull():
+            self.setWindowIcon(logo)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Menüleiste
+    # ──────────────────────────────────────────────────────────────────────
+    def _setup_menubar(self):
+        mb = self.menuBar()
+
+        # ── Datei ──
+        m_file = mb.addMenu("Datei")
+        self._m_file = m_file
+        self._add_action(m_file, "Neu",          self._new_tab,       "Ctrl+N")
+        self._add_action(m_file, "Öffnen …",     self._open_file,     "Ctrl+O")
+        self._add_action(m_file, "Speichern",    self._save_file,     "Ctrl+S")
+        self._add_action(m_file, "Speichern als …", self._save_file_as, "Ctrl+Shift+S")
+        self._m_sketchbook = m_file.addMenu("Sketchbook")
+        self._m_sketchbook.aboutToShow.connect(self._rebuild_sketchbook_menu)
+        m_file.addSeparator()
+        self._add_action(m_file, "⚙  Einstellungen …", self._open_settings, "Ctrl+,")
+        m_file.addSeparator()
+        self._add_action(m_file, "Beenden",      self.close,          "Ctrl+Q")
+
+        # ── Bearbeiten ──
+        m_edit = mb.addMenu("Bearbeiten")
+        self._add_action(m_edit, "Rückgängig",   self._undo,  "Ctrl+Z")
+        self._add_action(m_edit, "Wiederholen",  self._redo,  "Ctrl+Y")
+        m_edit.addSeparator()
+        self._add_action(m_edit, "Ausschneiden", self._cut,   "Ctrl+X")
+        self._add_action(m_edit, "Kopieren",     self._copy,  "Ctrl+C")
+        self._add_action(m_edit, "Einfügen",     self._paste, "Ctrl+V")
+        m_edit.addSeparator()
+        self._add_action(m_edit, "Suchen …",            self._show_find,    "Ctrl+F")
+        self._add_action(m_edit, "Suchen und ersetzen …", self._show_replace, "Ctrl+H")
+        m_edit.addSeparator()
+        self._add_action(m_edit, "Auskommentieren",      self._comment_selection,   "Ctrl+Shift+C")
+        self._add_action(m_edit, "Einkommentieren",      self._uncomment_selection, "Ctrl+Shift+U")
+        self._add_action(m_edit, "Kommentar umschalten", self._toggle_comment,      "Ctrl+/")
+
+        # ── Ausführen ──
+        m_run = mb.addMenu("Ausführen")
+        self._add_action(m_run, "Programm starten",  self._run_program, "F5")
+        self._add_action(m_run, "Stoppen",           self._stop_program, "F6")
+        m_run.addSeparator()
+        self._act_upload = self._add_action(
+            m_run, "Auf Controller hochladen", self._upload_to_device, "F7"
+        )
+        self._act_upload.setVisible(False)
+
+        # ── Blöcke (in Einstellungen abschaltbar) ──
+        self._m_blocks = mb.addMenu("Blöcke")
+        self._add_action(self._m_blocks, "🧩  Block-Editor öffnen …", self._open_block_editor)
+        self._add_action(
+            self._m_blocks, "🔁  Code → Blöcke (aktuelle Datei)  (BETA)",
+            self._blocks_from_current_code,
+        )
+
+        # ── Visualisieren ──
+        m_viz = mb.addMenu("Visualisieren")
+        # Serial Plotter – checkbare Aktion, gemeinsam mit der Toolbar genutzt.
+        self._act_plotter = QAction("📈  Serial Plotter", self)
+        self._act_plotter.setCheckable(True)
+        self._act_plotter.setToolTip("Zahlenausgabe eines laufenden Programms live als Graph anzeigen")
+        self._act_plotter.toggled.connect(self._toggle_plotter)
+        m_viz.addAction(self._act_plotter)
+        self._add_action(m_viz, "📊  Datenauswertung (CSV) …", self._open_csv_plot)
+
+        # ── Debuggen (Fehler finden: Schritt für Schritt) ──
+        m_dbg = mb.addMenu("Debuggen")
+        self._add_action(m_dbg, "📝  Fehlerprotokoll", self._toggle_debug_log, "Ctrl+Shift+P")
+        m_dbg.addSeparator()
+        self._add_action(m_dbg, "📍  Kontrollpunkt einfügen", self._insert_checkpoint, "Ctrl+K")
+        self._add_action(m_dbg, "Alle Kontrollpunkte entfernen", self._remove_checkpoints, "Ctrl+Shift+K")
+        m_dbg.addSeparator()
+        self._add_action(m_dbg, "📌  Stand merken …", self._pin_snapshot, "Ctrl+Alt+S")
+        self._add_action(m_dbg, "⏪  Zurück zum letzten funktionierenden Stand",
+                         self._restore_last_good, "Ctrl+Alt+Z")
+        self._add_action(m_dbg, "🕘  Stände anzeigen …", self._show_snapshots)
+        m_dbg.addSeparator()
+        self._act_i2c_scan_dbg = self._add_action(m_dbg, "🔍  I2C-Scan …", self._open_i2c_scan)
+        m_dbg.addSeparator()
+        self._add_action(m_dbg, "🗺  Fehler finden: Schritt für Schritt", self._show_debug_map)
+
+        # ── Python ──
+        self._m_python = mb.addMenu("Python")
+        self._add_action(self._m_python, "📦  Pakete installieren (pip) …", self._open_pip_manager)
+        self._m_upy = mb.addMenu("MicroPython")
+        self._m_upy.setEnabled(False)
+
+        self._act_flash = self._add_action(
+            self._m_upy, "Firmware flashen …", self._flash_firmware
+        )
+        self._act_flash_ipad = self._add_action(
+            self._m_upy, "📲  iPad-Blockly aufs Board spielen …  (BETA)", self._deploy_ipad_firmware
+        )
+        self._act_libs = self._add_action(
+            self._m_upy, "Bibliotheken installieren …", self._open_library_manager
+        )
+        self._m_upy.addSeparator()
+        self._add_action(
+            self._m_upy, "ℹ️  Firmware-Version abfragen", self._query_firmware_version
+        )
+        self._add_action(
+            self._m_upy, "🔄  Controller neu starten", self._reset_controller
+        )
+        self._add_action(self._m_upy, "🔍  I2C-Scan …", self._open_i2c_scan)
+        self._m_upy.addSeparator()
+
+        # ── Git ──
+        self._m_git = mb.addMenu("Git")
+        self._add_action(self._m_git, "Repository klonen …", self._git_clone)
+        self._add_action(self._m_git, "Repository auswählen …", self._git_select_repo)
+        self._m_git.addSeparator()
+        self._add_action(self._m_git, "Status", self._git_status)
+        self._add_action(self._m_git, "Fetch", self._git_fetch)
+        self._add_action(self._m_git, "Pull", self._git_pull)
+        self._add_action(self._m_git, "Push", self._git_push)
+        self._m_git.addSeparator()
+        self._add_action(self._m_git, "Aktuellen Branch anzeigen", self._git_show_branch)
+        self._add_action(self._m_git, "Branch wechseln …", self._git_switch_branch)
+        self._add_action(self._m_git, "Neuen Branch anlegen …", self._git_create_branch)
+        self._add_action(self._m_git, "Branch mergen …", self._git_merge_branch)
+        self._add_action(self._m_git, "Merge-Konflikte lösen …", self._git_resolve_conflicts)
+        self._add_action(self._m_git, "Vergleichen (Diff) …", self._git_diff)
+        self._add_action(self._m_git, "Historie anzeigen …", self._git_show_history)
+        self._m_git.addSeparator()
+        self._add_action(self._m_git, "Commit …", self._git_commit)
+        self._update_git_menu_visibility()
+
+        # ── Hilfe ──
+        m_help = mb.addMenu("Hilfe")
+        self._add_action(m_help, "📖  Kurzanleitung", self._show_quickstart, "F1")
+        self._add_action(m_help, "🗺  Fehler finden: Schritt für Schritt", self._show_debug_map)
+        m_help.addSeparator()
+        self._add_action(m_help, "🤖  NiT_Coder (ais.chat) …", self._show_ais_prompt)
+        m_help.addSeparator()
+        self._add_action(m_help, "🐞  Fehler melden …", self._report_bug)
+        self._add_action(m_help, "🧯  Absturzprotokoll anzeigen …", self._show_crash_log)
+        m_help.addSeparator()
+        self._add_action(m_help, f"Über {APP_NAME}", self._show_about)
+
+    def _add_action(self, menu, label: str, slot, shortcut: str | None = None):
+        act = QAction(label, self)
+        if shortcut:
+            act.setShortcut(QKeySequence(shortcut))
+        act.triggered.connect(slot)
+        menu.addAction(act)
+        return act
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Toolbar
+    # ──────────────────────────────────────────────────────────────────────
+    def _setup_toolbar(self):
+        tb = self.addToolBar("Hauptleiste")
+        tb.setMovable(False)
+
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        tb.setIconSize(QSize(18, 18))
+        self._toolbar_icons: list[tuple[QAction, str, bool]] = []   # (Aktion, Icon, weiß?)
+
+        def tbtn(label, slot, tooltip="", icon=None, on_accent=False):
+            act = QAction(label, self)
+            act.setToolTip(tooltip)
+            act.triggered.connect(slot)
+            tb.addAction(act)
+            if icon:
+                self._toolbar_icons.append((act, icon, on_accent))
+            return act
+
+        run_act = tbtn("Starten", self._run_program, "Programm ausführen (F5)", "play", True)
+        stop_act = tbtn("Stoppen", self._stop_program, "Ausführung stoppen (F6)", "stop")
+        tb.widgetForAction(run_act).setObjectName("runButton")
+        tb.widgetForAction(stop_act).setObjectName("stopButton")
+        tb.addSeparator()
+
+        # Modus-Schalter (segmentiert) – ersetzt die frühere Combobox
+        self._mode_switch = ModeSwitch([
+            ("python", "Python", "Programme lokal auf diesem Computer ausführen"),
+            ("micropython", "MicroPython", "Programme auf einem angeschlossenen Controller ausführen"),
+        ])
+        self._mode_switch.set_mode("python")
+        self._mode_switch.modeChanged.connect(self._on_mode_changed)
+        tb.addWidget(self._mode_switch)
+
+        # Geräte-Auswahl (nur im MicroPython-Modus sichtbar)
+        self._port_sep_act = tb.addSeparator()
+        self._port_combo = PortPicker()
+        self._port_combo.apply_theme()
+        self._port_combo.currentIndexChanged.connect(self._on_port_selected)
+        self._port_combo_act = tb.addWidget(self._port_combo)
+
+        self._port_refresh_act = tbtn("", self._refresh_ports, "Geräte aktualisieren", "refresh")
+        self._port_sep_act.setVisible(False)
+        self._port_combo_act.setVisible(False)
+        self._port_refresh_act.setVisible(False)
+
+        tb.addSeparator()
+        self._upload_btn_act = tbtn("Hochladen", self._upload_to_device,
+                                     "Code auf Controller übertragen (F7)", "upload")
+        self._reset_btn_act = tbtn("Neustart", self._reset_controller,
+                                    "Controller neu starten", "reset")
+        self._upload_btn_act.setVisible(False)
+        self._reset_btn_act.setVisible(False)
+
+        self._apply_toolbar_icons()
+
+        # Timer für automatisches Port-Scanning im MicroPython-Modus
+        self._port_scan_timer = QTimer(self)
+        self._port_scan_timer.setInterval(3000)
+        self._port_scan_timer.timeout.connect(self._refresh_ports)
+
+    def _apply_toolbar_icons(self):
+        """Toolbar-Icons in den Farben des aktiven Themes (neu) rendern."""
+        for act, name, on_accent in getattr(self, "_toolbar_icons", []):
+            act.setIcon(make_icon(name, "#ffffff" if on_accent else THEME["text"],
+                                  disabled_color=THEME["text_dim"]))
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Seitenleiste (Activity-Bar) – Schnellzugriff wie die Sidebar der MINT-Checker-Seiten
+    # ──────────────────────────────────────────────────────────────────────
+    def _build_activity_bar(self) -> QWidget:
+        bar = QWidget()
+        bar.setObjectName("activityBar")
+        bar.setFixedWidth(56)
+        lay = QVBoxLayout(bar)
+        lay.setContentsMargins(6, 10, 6, 10)
+        lay.setSpacing(6)
+        self._activity_buttons: dict[str, QToolButton] = {}
+        self._files_width = 230
+
+        def add(key, icon, tip, slot, checkable=False, bottom=False):
+            btn = QToolButton()
+            btn.setObjectName("activityButton")
+            btn.setToolTip(tip)
+            btn.setCheckable(checkable)
+            btn.setIconSize(QSize(22, 22))
+            btn.setFixedSize(44, 44)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setProperty("icon_name", icon)
+            btn.clicked.connect(slot)
+            self._activity_buttons[key] = btn
+            lay.addWidget(btn)
+            return btn
+
+        add("files", "files", "Dateien ein-/ausblenden", self._toggle_file_panel, True)
+        add("ai", "ai", "KI-Assistent ein-/ausblenden", self._toggle_ai_panel, True)
+        add("debuglog", "log", "Fehlerprotokoll ein-/ausblenden (Strg+Umschalt+P)",
+            self._toggle_debug_log, True)
+        add("pysite", "web", "Lehrgang py.nitbw.de ein-/ausblenden", self._toggle_py_site, True)
+        add("blocks", "blocks", "Block-Editor öffnen …", self._open_block_editor)
+        add("plotter", "plotter", "Serial Plotter ein-/ausblenden",
+            lambda: self._act_plotter.setChecked(not self._act_plotter.isChecked()), True)
+        add("pap", "flow", "PAP-Editor – Programmablaufplan zeichnen", self._open_pap_editor)
+        add("ibd", "ibd", "IBD-Editor – Informationsfluss darstellen", self._open_ibd_editor)
+        add("schaltlab", "circuit", "SchaltLab – Schaltplan zeichnen", self._open_schaltlab)
+        add("stats", "stats", "Datenauswertung – CSV-Daten darstellen und statistisch testen",
+            self._open_csv_plot)
+        lay.addStretch(1)
+        add("help", "help", "Kurzanleitung (F1)", self._show_quickstart)
+        add("settings", "settings", "Einstellungen (Strg+,)", self._open_settings)
+
+        self._act_plotter.toggled.connect(
+            lambda on: self._activity_buttons["plotter"].setChecked(on)
+        )
+        self._refresh_activity_icons()
+        self._apply_activity_visibility()
+        return bar
+
+    def _refresh_activity_icons(self):
+        """Icons der Seitenleiste neu einfärben (ruhig, aktiv und deaktiviert)."""
+        for btn in getattr(self, "_activity_buttons", {}).values():
+            name = btn.property("icon_name")
+            icon = QIcon()
+            icon.addPixmap(make_icon(name, "#94a3b8", 22).pixmap(22, 22), QIcon.Mode.Normal, QIcon.State.Off)
+            icon.addPixmap(make_icon(name, "#ffffff", 22).pixmap(22, 22), QIcon.Mode.Normal, QIcon.State.On)
+            icon.addPixmap(make_icon(name, "#ffffff", 22).pixmap(22, 22), QIcon.Mode.Active, QIcon.State.Off)
+            icon.addPixmap(make_icon(name, "#ffffff", 22).pixmap(22, 22), QIcon.Mode.Active, QIcon.State.On)
+            btn.setIcon(icon)
+
+    def _sync_activity_bar(self):
+        """Hält die Schalter der Seitenleiste mit dem tatsächlichen Zustand synchron."""
+        if not hasattr(self, "_activity_buttons"):
+            return
+        self._activity_buttons["files"].setChecked(not self._left_splitter.isHidden())
+        # Rechts ist höchstens eins sichtbar: KI-Assistent oder Fehlerprotokoll
+        self._activity_buttons["ai"].setChecked(self._ai_page_visible())
+        self._activity_buttons["debuglog"].setChecked(self._debug_log_visible())
+        self._activity_buttons["pysite"].setChecked(self._py_site_visible())
+        self._activity_buttons["plotter"].setChecked(self._act_plotter.isChecked())
+        self._apply_activity_visibility()
+
+    def _apply_activity_visibility(self):
+        """Knöpfe gemäß Einstellung „Seitenleiste“ ein-/ausblenden. Hilfe und
+        Einstellungen bleiben immer sichtbar; der Block-Editor-Knopf folgt
+        zusätzlich der Block-Editor-Einstellung."""
+        for key, btn in getattr(self, "_activity_buttons", {}).items():
+            visible = key not in self._settings_hidden_activity
+            if key == "blocks" and hasattr(self, "_m_blocks"):
+                visible = visible and self._m_blocks.menuAction().isVisible()
+            btn.setVisible(visible)
+
+    def _toggle_file_panel(self):
+        if self._left_splitter.isHidden():
+            self._left_splitter.setVisible(True)
+            # Der Splitter merkt sich für ausgeblendete Bereiche Breite 0 –
+            # beim Einblenden die frühere Breite (mind. 230 px) wiederherstellen.
+            sizes = self._main_splitter.sizes()
+            width = max(self._files_width, 230)
+            if len(sizes) == 3 and sizes[0] < 100:
+                self._main_splitter.setSizes([width, max(0, sizes[1] - (width - sizes[0])), sizes[2]])
+        else:
+            self._files_width = self._main_splitter.sizes()[0]
+            self._left_splitter.setVisible(False)
+        self._sync_activity_bar()
+
+    def _ai_page_visible(self) -> bool:
+        """True, wenn rechts ein KI-Panel (Infi, AIS-Chat, Code-Generator) zu sehen ist."""
+        return (not self._ai_stack.isHidden()
+                and self._ai_stack.currentWidget() in (self._tutor_panel, self._aischat_panel,
+                                                       self._coder_panel, self._fobizz_panel))
+
+    def _py_site_visible(self) -> bool:
+        return (not self._ai_stack.isHidden()
+                and hasattr(self, "_py_site_panel")
+                and self._ai_stack.currentWidget() is self._py_site_panel)
+
+    def _debug_log_visible(self) -> bool:
+        return (not self._ai_stack.isHidden()
+                and hasattr(self, "_debug_log_panel")
+                and self._ai_stack.currentWidget() is self._debug_log_panel)
+
+    def _toggle_ai_panel(self):
+        """KI-Assistent ein/aus. Ist rechts gerade etwas anderes offen (z. B. das
+        Fehlerprotokoll oder py.nitbw.de), wird auf den KI-Assistenten umgeschaltet."""
+        if self._ai_page_visible():
+            self._ai_stack.setVisible(False)
+        elif self._settings_tutor_mode == "none":
+            QMessageBox.information(
+                self, "KI-Assistent",
+                "Es ist kein KI-Assistent aktiv.\n"
+                "Wähle unter Datei → Einstellungen → Chatbot ais.chat oder fobizz.com aus.",
+            )
+        else:
+            if self._debug_log_visible():
+                self._debug_log_panel.save()
+            self._show_tutor_panel()
+        self._sync_activity_bar()
+
+    def _toggle_py_site(self):
+        """py.nitbw.de ein/aus. Ist rechts etwas anderes offen, wird umgeschaltet."""
+        if self._py_site_visible():
+            self._ai_stack.setVisible(False)
+        else:
+            if self._debug_log_visible():
+                self._debug_log_panel.save()
+            self._open_py_site()
+        self._sync_activity_bar()
+
+    def _open_py_site(self):
+        self._main_splitter.setCollapsible(2, False)
+        self._ai_stack.setMinimumWidth(0)
+        self._ai_stack.setMaximumWidth(16777215)
+        self._ai_stack.setCurrentWidget(self._py_site_panel)
+        self._ai_stack.setVisible(True)
+        sizes = self._main_splitter.sizes()
+        if sizes[2] == 0:
+            total = sum(sizes)
+            self._main_splitter.setSizes([sizes[0], max(200, total - sizes[0] - 480), 480])
+        self._py_site_panel.ensure_loaded()
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Zentralbereich
+    # ──────────────────────────────────────────────────────────────────────
+    def _setup_central(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        root_layout = QHBoxLayout(central)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # Haupt-Splitter: Links (Dateien) | Rechts (Editor + Konsole)
+        self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._main_splitter.setHandleWidth(1)
+
+        # Linker Bereich: vertikaler Splitter (lokale Dateien + Controller-Dateien)
+        self._left_splitter = QSplitter(Qt.Orientation.Vertical)
+        self._left_splitter.setHandleWidth(1)
+        # Breit genug, damit der Aktualisieren-Button (↻) der Controller-
+        # Dateiansicht von Anfang an sichtbar ist.
+        self._left_splitter.setMinimumWidth(210)
+        self._left_splitter.setMaximumWidth(340)
+
+        self._file_panel = FilePanel()
+        self._file_panel.setMinimumWidth(0)
+        self._file_panel.setMaximumWidth(10000)
+        self._file_panel.file_open_requested.connect(self._open_file_path)
+        self._file_panel.save_to_device_requested.connect(self._upload_local_file_to_device)
+        self._file_panel.worksheet_preview_requested.connect(self._open_worksheet_preview)
+        self._file_panel.set_root(self._settings_sketchbook)
+        self._left_splitter.addWidget(self._file_panel)
+
+        self._device_panel = DeviceFilePanel()
+        self._device_panel.file_open_requested.connect(self._open_file_path)
+        self._device_panel.device_file_open_requested.connect(self._open_device_file)
+        self._device_panel.setVisible(False)
+        self._left_splitter.addWidget(self._device_panel)
+        # FilePanel wächst mit, DeviceFilePanel bleibt kompakt
+        self._left_splitter.setStretchFactor(0, 1)
+        self._left_splitter.setStretchFactor(1, 0)
+
+        self._main_splitter.addWidget(self._left_splitter)
+
+        # Rechter Bereich: vertikaler Splitter (Editor oben, Konsole unten)
+        self._right_splitter = QSplitter(Qt.Orientation.Vertical)
+        self._right_splitter.setHandleWidth(1)
+
+        # Editor-Tabs
+        self._tab_widget = QTabWidget()
+        self._tab_widget.setTabsClosable(True)
+        self._tab_widget.tabCloseRequested.connect(self._close_tab)
+        self._tab_widget.currentChanged.connect(self._on_tab_changed)
+        self._right_splitter.addWidget(self._tab_widget)
+
+        # Konsole
+        self._console = ConsolePanel()
+        self._console.error_link_clicked.connect(self._jump_to_error)
+        self._console.explain_requested.connect(self._explain_error_with_infi)
+        self._console.action_requested.connect(self._on_console_action)
+        self._device_panel.refresh_started.connect(self._on_device_refresh_start)
+        self._device_panel.refresh_done.connect(self._on_device_refresh_done)
+        self._device_panel.firmware_info.connect(
+            lambda info: self._console.append_success(f"✓  MicroPython {info}\n")
+        )
+        self._right_splitter.addWidget(self._console)
+
+        self._right_splitter.setSizes([520, 200])
+        self._main_splitter.addWidget(self._right_splitter)
+
+        # KI-Panel: TutorPanel (Ollama), AisChatPanel, CoderPanel im Stack
+        self._ai_stack = QStackedWidget()
+        self._tutor_panel    = TutorPanel()
+        self._tutor_panel.set_code_provider(self._current_editor_text)
+        self._aischat_panel  = AisChatPanel()
+        self._coder_panel    = CoderPanel()
+        self._fobizz_panel   = AisChatPanel(url=FOBIZZ_URL, title="🎓  fobizz", portal_fix=False, lazy=True)
+        self._claude_terminal_panel = ClaudeTerminalPanel()
+        self._worksheet_panel = WorksheetPanel()
+        self._ai_stack.addWidget(self._tutor_panel)          # Index 0 → Infi/Ollama
+        self._ai_stack.addWidget(self._aischat_panel)        # Index 1 → AIS-Chat
+        self._ai_stack.addWidget(self._coder_panel)          # Index 2 → Code-Generator
+        self._ai_stack.addWidget(self._claude_terminal_panel)  # Index 3 → Claude-Terminal (Easter Egg)
+        self._ai_stack.addWidget(self._worksheet_panel)        # Index 4 → Arbeitsblatt-Vorschau
+        from .debug_log_panel import DebugLogPanel
+        self._debug_log_panel = DebugLogPanel()
+        self._debug_log_panel.set_level(self._settings_debug_level)
+        self._coder_panel.set_level(self._settings_debug_level)
+        self._ai_stack.addWidget(self._debug_log_panel)        # Index 5 → Fehlerprotokoll
+        self._debug_log_panel.close_requested.connect(self._close_debug_log)
+        from .py_site_panel import PySitePanel
+        self._py_site_panel = PySitePanel()
+        self._ai_stack.addWidget(self._py_site_panel)          # Index 6 → py.nitbw.de
+        self._py_site_panel.close_requested.connect(self._toggle_py_site)
+        self._ai_stack.addWidget(self._fobizz_panel)           # Index 7 → fobizz.com
+        self._debug_log_panel.restore_requested.connect(self._restore_last_good)
+        self._debug_log_panel.pin_requested.connect(self._pin_snapshot)
+        self._coder_panel.insert_code_requested.connect(self._on_insert_generated_code)
+        self._coder_panel.open_as_blocks_requested.connect(self._open_blocks_from_code)
+        self._worksheet_panel.insert_into_editor_requested.connect(self._on_worksheet_insert_code)
+        self._worksheet_panel.close_requested.connect(self._close_worksheet_preview)
+        self._ai_stack.setVisible(False)
+        self._main_splitter.addWidget(self._ai_stack)
+
+        # Verstecktes Easter Egg: Terminal mit `claude` im Sketchbook-Ordner.
+        # Bewusst OHNE Menüpunkt/Einstellung – nur per Tastenkürzel erreichbar
+        # und nur wirksam, wenn die `claude`-CLI auf diesem Rechner tatsächlich
+        # installiert ist. SuS-Rechner haben sie nicht, daher taucht hier für
+        # sie nichts auf – nicht im Menü, nicht in den Einstellungen.
+        self._claude_terminal_shortcut = QShortcut(
+            QKeySequence("Ctrl+Alt+Shift+C"), self,
+        )
+        self._claude_terminal_shortcut.activated.connect(self._toggle_claude_terminal)
+
+        self._main_splitter.setSizes([230, 980, 0])
+        # Nur der Editor-Bereich wächst beim Vergrößern des Fensters
+        self._main_splitter.setStretchFactor(0, 0)  # Datei-Panel: feste Breite
+        self._main_splitter.setStretchFactor(1, 1)  # Editor: nimmt Extra-Platz
+        self._main_splitter.setStretchFactor(2, 0)  # KI-Panel: feste Breite
+
+        root_layout.addWidget(self._build_activity_bar())
+        root_layout.addWidget(self._main_splitter)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Statusleiste
+    # ──────────────────────────────────────────────────────────────────────
+    def _setup_statusbar(self):
+        sb = self.statusBar()
+        self._status_mode = QLabel("Python (lokal)")
+        self._status_mode.setStyleSheet(
+            f"background:transparent; color:{THEME['accent']}; font-weight:bold; padding:0 8px;"
+        )
+        sb.addPermanentWidget(self._status_mode)
+
+        self._status_git = QLabel("Git: —")
+        self._status_git.setStyleSheet(f"background:transparent; color:{THEME['text_dim']}; padding:0 8px;")
+        sb.addPermanentWidget(self._status_git)
+
+        self._status_board = QLabel("")
+        self._status_board.setStyleSheet(f"background:transparent; color:{THEME['text_dim']}; padding:0 8px;")
+        sb.addPermanentWidget(self._status_board)
+
+        self._status_file = QLabel("Bereit")
+        self._status_file.setStyleSheet("background:transparent; padding:0 6px;")
+        sb.addWidget(self._status_file)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Port-Busy-Verwaltung (verhindert parallele mpremote-Prozesse)
+    # ──────────────────────────────────────────────────────────────────────
+    def _acquire_port(self) -> bool:
+        """True wenn Port frei war und jetzt reserviert wird, sonst False."""
+        if self._port_busy:
+            self._console.append_error(
+                "⚠  Port wird gerade verwendet. Bitte kurz warten.\n"
+            )
+            return False
+        self._port_busy = True
+        return True
+
+    def _release_port(self):
+        self._port_busy = False
+
+    def _retire_process(self):
+        """Alten self._process sicher aufbewahren bis QThread.finished feuert.
+        Verhindert 'QThread destroyed while still running' → abort()."""
+        old = self._process
+        if old is None:
+            return
+        if old.isRunning():
+            old.terminate_process()
+            retain_thread(self._retired_threads, old)
+
+    def _on_device_refresh_start(self):
+        self._port_busy = True
+
+    def _on_device_refresh_done(self):
+        self._port_busy = False
+
+    def _new_tab(self, filepath: str | None = None):
+        tab = EditorTab(filepath)
+        tab.editor.set_filepath(filepath)
+        if filepath and os.path.isfile(filepath):
+            try:
+                with open(filepath, encoding="utf-8") as f:
+                    tab.editor.set_text(f.read())
+            except Exception as e:
+                self._console.append_error(f"Datei konnte nicht geladen werden: {e}\n")
+
+        tab.editor.set_context_actions(self._editor_context_actions())
+
+        self._tabs.append(tab)
+        idx = self._tab_widget.addTab(tab.editor, tab.display_name)
+        self._tab_widget.setCurrentIndex(idx)
+        return tab
+
+    def _editor_context_actions(self) -> list:
+        """Rechtsklick-Einträge für die Kontrollpunkte (einmal angelegt, von allen Tabs geteilt)."""
+        if not hasattr(self, "_ctx_actions"):
+            ins = QAction("📍  Kontrollpunkt hier einfügen  (Strg+K)", self)
+            ins.triggered.connect(self._insert_checkpoint)
+            rem = QAction("Alle Kontrollpunkte entfernen", self)
+            rem.triggered.connect(self._remove_checkpoints)
+            self._ctx_actions = [ins, rem]
+        return self._ctx_actions
+
+    def _close_tab(self, index: int):
+        tab = self._tabs[index]
+        if tab.editor.is_modified() or tab.device_dirty:
+            ort = " auf dem Controller" if tab.device_path else ""
+            reply = QMessageBox.question(
+                self, "Ungespeicherte Änderungen",
+                f'"{tab.display_name}" hat{ort} ungespeicherte Änderungen.\nTrotzdem schließen?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        self._tabs.pop(index)
+        self._tab_widget.removeTab(index)
+        if not self._tabs:
+            self._new_tab()
+
+    def _current_tab(self) -> EditorTab | None:
+        idx = self._tab_widget.currentIndex()
+        if 0 <= idx < len(self._tabs):
+            return self._tabs[idx]
+        return None
+
+    def _on_tab_changed(self, index: int):
+        tab = self._tabs[index] if 0 <= index < len(self._tabs) else None
+        if tab:
+            self._status_file.setText(self._tab_location(tab))
+        if hasattr(self, "_debug_log_panel"):
+            self._debug_log_panel.set_program(self._protocol_program(tab))
+
+    def _tab_location(self, tab: EditorTab) -> str:
+        """Pfad für die Statusleiste – bei Controller-Dateien der Pfad dort."""
+        if tab.device_path:
+            return f"📟  Controller ({tab.device_port}): /{tab.device_path}"
+        return tab.filepath or tab.display_name
+
+    def _update_tab_title(self, tab: EditorTab):
+        idx = self._tabs.index(tab)
+        dirty = tab.editor.is_modified() or tab.device_dirty
+        prefix = "📟 " if tab.device_path else ""
+        title = ("● " if dirty else "") + prefix + tab.display_name
+        self._tab_widget.setTabText(idx, title)
+        bar = self._tab_widget.tabBar()
+        if tab.device_path:
+            bar.setTabTextColor(idx, QColor(THEME["warning"]))
+            bar.setTabToolTip(
+                idx, f"Datei auf dem Controller ({tab.device_port}): /{tab.device_path}\n"
+                     "Strg+S speichert direkt auf den Controller."
+            )
+        else:
+            bar.setTabTextColor(idx, QColor())
+            bar.setTabToolTip(idx, tab.filepath or "")
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Dateioperationen
+    # ──────────────────────────────────────────────────────────────────────
+    def _open_file(self):
+        start_dir = self._settings_sketchbook if os.path.isdir(self._settings_sketchbook) else str(Path.home())
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Datei öffnen", start_dir,
+            "Python-Dateien (*.py);;Alle Dateien (*)"
+        )
+        if path:
+            self._open_file_path(path)
+
+    def _open_file_path(self, path: str):
+        # Prüfen ob bereits geöffnet
+        for i, tab in enumerate(self._tabs):
+            if tab.filepath == path:
+                self._tab_widget.setCurrentIndex(i)
+                return
+        self._new_tab(path)
+
+    def _open_device_file(self, local_path: str, port: str, remote_path: str):
+        """Öffnet eine vom Controller geladene Datei zum direkten Bearbeiten."""
+        for i, tab in enumerate(self._tabs):
+            if tab.filepath == local_path:
+                # Erneut geöffnet: unveränderten Tab mit dem frischen Stand
+                # vom Controller aktualisieren, Änderungen aber nie verwerfen.
+                if not tab.editor.is_modified() and not tab.device_dirty:
+                    try:
+                        with open(local_path, encoding="utf-8") as f:
+                            tab.editor.set_text(f.read())
+                        if hasattr(tab.editor, "sci"):
+                            tab.editor.sci.setModified(False)
+                    except Exception as e:
+                        self._console.append_error(f"Datei konnte nicht geladen werden: {e}\n")
+                tab.device_port = port
+                self._tab_widget.setCurrentIndex(i)
+                return
+        tab = self._new_tab(local_path)
+        if hasattr(tab.editor, "sci"):
+            tab.editor.sci.setModified(False)   # frisch geladen = unverändert
+        self._mark_device_tab(tab, port, remote_path)
+
+    def _mark_device_tab(self, tab: EditorTab, port: str | None, remote_path: str | None):
+        """Kennzeichnet einen Tab als Controller-Datei (oder hebt das auf)."""
+        tab.device_port = port if remote_path else None
+        tab.device_path = remote_path
+        tab.device_dirty = False
+        tab.editor.set_device_banner(
+            f"📟  Datei auf dem Controller ({port}): /{remote_path}"
+            "  –  Strg+S speichert direkt auf den Controller"
+            if remote_path else None
+        )
+        self._update_tab_title(tab)
+        if tab is self._current_tab():
+            self._status_file.setText(self._tab_location(tab))
+
+    def _save_file(self):
+        tab = self._current_tab()
+        if not tab:
+            return
+        if tab.filepath:
+            if tab.device_path:
+                self._do_save(tab, tab.filepath, silent=True)
+                self._save_tab_to_device(tab)
+            else:
+                self._do_save(tab, tab.filepath)
+        else:
+            self._save_file_as()
+
+    def _save_tab_to_device(self, tab: EditorTab):
+        """Schreibt die lokale Arbeitskopie zurück auf den Controller."""
+        if not self._acquire_port():
+            return
+        port, remote = tab.device_port, tab.device_path
+        self._console.append_info(f"↑  Speichere /{remote} auf dem Controller ({port}) …\n")
+        cmd = [*tool_command("mpremote"), "connect", port,
+               "cp", tab.filepath, f":{remote}"]
+        proc = ProcessRunner(cmd)
+
+        def _done(rc: int):
+            self._release_port()
+            if tab not in self._tabs:
+                return
+            if rc == 0:
+                # Nur als übertragen markieren, wenn seither nichts mehr
+                # lokal gespeichert wurde – sonst bleibt der Punkt stehen.
+                if not tab.editor.is_modified():
+                    tab.device_dirty = False
+                self._console.append_success(f"✓  Auf dem Controller gespeichert: /{remote}\n")
+                self._status_file.setText(f"💾  Auf dem Controller gespeichert: /{remote}")
+            else:
+                tab.device_dirty = True
+                self._console.append_error(
+                    "✗  Speichern auf dem Controller fehlgeschlagen – ist er noch "
+                    "angeschlossen und läuft gerade kein Programm?\n"
+                )
+            self._update_tab_title(tab)
+
+        proc.output.connect(
+            lambda text, kind: self._console.append_error(text) if kind != "stdout" else None
+        )
+        proc.finished_run.connect(_done)
+        self._retire_process()
+        proc.start()
+        self._process = proc
+
+    def _save_file_as(self):
+        tab = self._current_tab()
+        if not tab:
+            return
+        start_dir = self._settings_sketchbook if os.path.isdir(self._settings_sketchbook) else str(Path.home())
+        dlg = QFileDialog(
+            self,
+            "Speichern als",
+            start_dir,
+            "Python-Dateien (*.py);;Textdateien (*.txt);;"
+            "JSON-Dateien (*.json);;CSV-Dateien (*.csv);;Alle Dateien (*)",
+        )
+        dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dlg.setFileMode(QFileDialog.FileMode.AnyFile)
+        # Nicht-nativer Dialog verhindert Fullscreen-Verhalten auf manchen Linux-Setups.
+        dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        dlg.resize(900, 620)
+        dlg.setWindowState(dlg.windowState() & ~Qt.WindowState.WindowFullScreen)
+
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selectedFiles():
+            path = dlg.selectedFiles()[0]
+            # Der nicht-native Dialog hängt die Endung des gewählten Filters
+            # nicht selbst an – ohne Endung im Namen ergänzen wir sie hier.
+            m = re.search(r"\(\*(\.\w+)", dlg.selectedNameFilter())
+            if m and not os.path.splitext(path)[1]:
+                path += m.group(1)
+                if os.path.exists(path) and QMessageBox.question(
+                    self, "Überschreiben?",
+                    f'"{os.path.basename(path)}" existiert bereits. Ersetzen?',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                ) != QMessageBox.StandardButton.Yes:
+                    return
+            tab.filepath = path
+            tab.editor.set_filepath(path)
+            # „Speichern als“ legt eine Datei auf dem Rechner an – der Tab
+            # gehört ab jetzt nicht mehr zum Controller.
+            if tab.device_path:
+                self._mark_device_tab(tab, None, None)
+            self._do_save(tab, path)
+            self._update_tab_title(tab)
+
+    def _do_save(self, tab: EditorTab, path: str, silent: bool = False):
+        try:
+            # newline="\n": kein Umschreiben in \r\n auf Windows – die Datei
+            # bleibt beim Laden/Speichern-Zyklus byte-identisch.
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(tab.editor.get_text())
+            if hasattr(tab.editor, "sci"):
+                tab.editor.sci.setModified(False)
+            if tab.device_path:
+                # Nur die lokale Arbeitskopie ist aktuell; _save_tab_to_device
+                # setzt das nach erfolgreicher Übertragung wieder zurück.
+                tab.device_dirty = True
+            self._update_tab_title(tab)
+            self._status_file.setText(f"💾  Gespeichert: {os.path.basename(path)}")
+            # Statusmeldung nach 3 Sekunden zurücksetzen
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(3000, lambda: self._status_file.setText(path))
+            if not silent:
+                self._console.append_success(f"Gespeichert: {path}\n")
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler beim Speichern", str(e))
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Bearbeiten-Aktionen
+    # ──────────────────────────────────────────────────────────────────────
+    def _undo(self):
+        tab = self._current_tab()
+        if tab and hasattr(tab.editor, "sci"):
+            tab.editor.sci.undo()
+
+    def _redo(self):
+        tab = self._current_tab()
+        if tab and hasattr(tab.editor, "sci"):
+            tab.editor.sci.redo()
+
+    def _focus_target(self):
+        """Widget mit Tastaturfokus – aber nur, wenn es NICHT der Code-Editor ist.
+
+        Die Menü-Kürzel Strg/Cmd+X/C/V gelten fensterweit und würden sonst immer
+        den Editor ansprechen, selbst wenn Ausgabe, Shell, Eingabefelder oder das
+        KI-Fenster (Webansicht) den Fokus haben.
+        """
+        w = QApplication.focusWidget()
+        while w is not None:
+            if isinstance(w, (QTextEdit, QPlainTextEdit, QLineEdit)):
+                return w
+            if _WEBVIEW_TYPES and isinstance(w, _WEBVIEW_TYPES):
+                return w
+            if hasattr(w, "SCI_GETTEXT"):      # QsciScintilla → normaler Editor-Pfad
+                return None
+            w = w.parentWidget()
+        return None
+
+    def _edit_command(self, name: str):
+        """Führt cut/copy/paste im fokussierten Widget aus, sonst im Editor."""
+        target = self._focus_target()
+        if target is not None:
+            if _WEBVIEW_TYPES and isinstance(target, _WEBVIEW_TYPES):
+                action = {"cut": "Cut", "copy": "Copy", "paste": "Paste"}[name]
+                target.page().triggerAction(getattr(_WebAction, action))
+            else:
+                getattr(target, name)()
+            return
+        tab = self._current_tab()
+        if tab and hasattr(tab.editor, "sci"):
+            getattr(tab.editor.sci, name)()
+
+    def _cut(self):
+        self._edit_command("cut")
+
+    def _copy(self):
+        self._edit_command("copy")
+
+    def _paste(self):
+        self._edit_command("paste")
+
+    def _show_find(self):
+        tab = self._current_tab()
+        if tab and hasattr(tab.editor, "show_find"):
+            tab.editor.show_find()
+
+    def _show_replace(self):
+        tab = self._current_tab()
+        if tab and hasattr(tab.editor, "show_replace"):
+            tab.editor.show_replace()
+
+    def _comment_selection(self):
+        tab = self._current_tab()
+        if tab:
+            tab.editor.comment_selection()
+
+    def _uncomment_selection(self):
+        tab = self._current_tab()
+        if tab:
+            tab.editor.uncomment_selection()
+
+    def _toggle_comment(self):
+        tab = self._current_tab()
+        if tab:
+            tab.editor.toggle_comment()
+
+    # ────────────────────────────────────────────────────────────────────��─
+    # Modus & Board
+    # ──────────────────────────────────────────────────────────────────────
+    def _on_mode_changed(self, mode: str):
+        self._mode = mode
+        is_upy = self._mode == "micropython"
+        _note(f"Moduswechsel → {self._mode}")
+        self._m_upy.setEnabled(is_upy)
+        self._m_python.setEnabled(not is_upy)
+        self._port_sep_act.setVisible(is_upy)
+        self._port_combo_act.setVisible(is_upy)
+        self._port_refresh_act.setVisible(is_upy)
+        self._act_upload.setVisible(is_upy)
+        self._upload_btn_act.setVisible(is_upy)
+        self._reset_btn_act.setVisible(is_upy)
+        self._device_panel.setVisible(is_upy)
+        if is_upy:
+            port = self._get_serial_port(silent=True)
+            self._file_panel.set_device_connected(bool(port))
+            _note(f"Port im Modus: {port}")
+            if port:
+                # Beim Zurückwechseln ist die Port-Liste unverändert, der Scan löst dann
+                # nichts mehr aus – Dateiliste hier selbst neu aufbauen.
+                self._device_panel.refresh(port)
+                _note("Dateiliste angestoßen")
+            self._refresh_ports()
+            _note("Port-Scan angestoßen")
+            self._port_scan_timer.start()
+            self._status_mode.setText("MicroPython")
+            self._left_splitter.setSizes([300, 250])
+        else:
+            self._port_scan_timer.stop()
+            self._status_mode.setText("Python (lokal)")
+            self._file_panel.set_device_connected(False)
+            self._device_panel.refresh("")
+            self._left_splitter.setSizes([600, 0])
+
+    def _set_board(self, board_id: str):
+        self._board = board_id
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Programmausführung
+    # ──────────────────────────────────────────────────────────────────────
+    # ── Block-Editor ──────────────────────────────────────────────────────
+    def _open_block_editor(self):
+        """Öffnet das Blockly-Extrafenster (einmalig, dann nach vorne holen)."""
+        win = getattr(self, "_block_window", None)
+        if win is None:
+            win = BlockEditorWindow(self)
+            win.code_generated.connect(self._insert_block_code)
+            self._block_window = win
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    # ── PAP-Editor ────────────────────────────────────────────────────────
+    def _open_pap_editor(self):
+        """Öffnet den PAP-Editor im Extrafenster (einmalig, dann nach vorne holen).
+
+        Das Fenster bleibt beim Schließen erhalten, damit ein gezeichneter
+        Ablaufplan beim nächsten Öffnen noch da ist.
+        """
+        win = getattr(self, "_pap_window", None)
+        if win is None:
+            # Als Callable, damit ein spaeter geaenderter Sketchbook-Ordner
+            # beim Speichern automatisch greift.
+            win = PapEditorWindow(self, sketchbook_dir=lambda: self._settings_sketchbook)
+            self._pap_window = win
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    # ── IBD-Editor ────────────────────────────────────────────────────────
+    def _open_ibd_editor(self):
+        """Öffnet den IBD-Editor (Informationsfluss) im Extrafenster – wie der PAP-Editor."""
+        win = getattr(self, "_ibd_window", None)
+        if win is None:
+            win = IbdEditorWindow(self, sketchbook_dir=lambda: self._settings_sketchbook)
+            self._ibd_window = win
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    # ── SchaltLab (Schaltplan-Editor) ─────────────────────────────────────
+    def _open_schaltlab(self):
+        """Öffnet SchaltLab im Extrafenster – wie PAP- und IBD-Editor."""
+        win = getattr(self, "_schaltlab_window", None)
+        if win is None:
+            win = SchaltLabWindow(self, sketchbook_dir=self._schaltlab_start_dir)
+            self._schaltlab_window = win
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def _schaltlab_start_dir(self) -> str:
+        """Ordner des aktuellen Programms (Projekt), sonst der Sketchbook-Ordner."""
+        tab = self._current_tab()
+        if tab is not None and tab.filepath and not tab.device_path:
+            return os.path.dirname(os.path.abspath(tab.filepath))
+        return self._settings_sketchbook
+
+    # ── Lernen: Parsons-Puzzle ────────────────────────────────────────────
+    def _open_parsons(self):
+        """Öffnet das Parsons-Puzzle (Puzzle-Datei laden oder aus Code erstellen)."""
+        win = getattr(self, "_parsons_window", None)
+        if win is None:
+            win = ParsonsWindow(self)
+            win.set_code_provider(self._current_editor_text)
+            self._parsons_window = win
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def _open_csv_plot(self):
+        """Öffnet die Datenauswertung (StatPlot); die Datei lädt man im Fenster selbst."""
+        win = getattr(self, "_csv_window", None)
+        if win is None:
+            win = StatPlotWindow(self, sketchbook_dir=lambda: self._settings_sketchbook)
+            win.set_code_sink(self._open_code_in_new_tab)
+            self._csv_window = win
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def _open_code_in_new_tab(self, code: str):
+        """Erzeugten Code (z. B. aus der Datenauswertung) in einem neuen Tab öffnen."""
+        tab = self._new_tab()
+        tab.editor.set_text(code)
+        self.raise_()
+        self.activateWindow()
+
+    def _run_predict_mode(self):
+        """Vorhersage-Modus: erst Ausgabe vorhersagen, dann Programm starten."""
+        tab = self._current_tab()
+        if not tab:
+            return
+        from .predict_mode import PredictionDialog
+        dlg = PredictionDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._pending_prediction = dlg.prediction()
+        self._run_program()
+
+    def _apply_blocks_enabled(self):
+        """Blendet das Block-Editor-Feature je nach Einstellung ein/aus."""
+        enabled = self._settings_blocks_enabled
+        if hasattr(self, "_m_blocks"):
+            self._m_blocks.menuAction().setVisible(enabled)
+        if hasattr(self, "_coder_panel"):
+            self._coder_panel.set_blocks_feature_enabled(enabled)
+        # Falls deaktiviert und ein Block-Fenster offen ist: schließen.
+        if not enabled:
+            win = getattr(self, "_block_window", None)
+            if win is not None:
+                win.close()
+
+    def _blocks_from_current_code(self):
+        """Menü „Blöcke": Code des aktiven Editor-Tabs als Blöcke anzeigen.
+
+        Nutzt denselben deterministischen Python→Blockly-Umwandler wie
+        „Coder → Blockly" (py2blockly, AST-basiert – keine KI nötig). Nicht
+        abbildbare Zeilen landen in Roh-Python-Blöcken, das Programm bleibt
+        dadurch immer vollständig.
+        """
+        code = self._current_editor_text().strip()
+        if not code:
+            QMessageBox.information(
+                self,
+                "Code → Blöcke",
+                "Der aktuelle Editor-Tab ist leer.\n\n"
+                "Bitte zuerst eine Python-Datei öffnen oder Code schreiben.",
+            )
+            return
+        self._open_blocks_from_code(code)
+
+    def _open_blocks_from_code(self, code: str):
+        """Coder → Blockly: erzeugten Python-Code als Blöcke im Block-Editor zeigen."""
+        from .py2blockly import python_to_block_state
+        try:
+            state = python_to_block_state(code)
+        except Exception as exc:
+            self._console.append_error(f"Blöcke konnten nicht erzeugt werden: {exc}\n")
+            return
+        self._open_block_editor()
+        win = getattr(self, "_block_window", None)
+        if win is not None:
+            win.load_block_state(state)
+
+    def _insert_block_code(self, code: str):
+        """Erzeugten Block-Code in den Editor schreiben.
+
+        Wurde dasselbe Block-Programm bereits einmal umgewandelt, wird der
+        bestehende Tab aktualisiert statt ein neuer geöffnet. Konvention (wie
+        KI-Codegenerator): KEINE Kommentare im erzeugten Code – das Kommentieren
+        ist Aufgabe der Schülerinnen und Schüler.
+        """
+        existing = getattr(self, "_block_tab", None)
+        if existing is not None and existing in self._tabs:
+            existing.editor.set_text(code)
+            self._tab_widget.setCurrentWidget(existing.editor)
+            self._console.append_info("🧩  Block-Code aktualisiert.\n")
+        else:
+            tab = self._new_tab()
+            tab.editor.set_text(code)
+            self._block_tab = tab
+            self._console.append_info("🧩  Block-Code in neuen Tab übernommen.\n")
+        self.raise_()
+        self.activateWindow()
+
+    def _run_program(self):
+        # Vorhersage-Modus: am Anfang abgreifen, damit ein Abbruch (z. B.
+        # „Speichern als" verworfen) keine Vorhersage für den nächsten Lauf liegen lässt.
+        prediction = getattr(self, "_pending_prediction", None)
+        self._pending_prediction = None
+
+        tab = self._current_tab()
+        if not tab:
+            return
+        # Unbenannte Datei: einmal Speichern-Dialog zeigen
+        if not tab.filepath:
+            self._save_file_as()
+            if not tab.filepath:
+                return
+        else:
+            # Lautlos speichern – kein Popup, nur Statusleiste
+            self._do_save(tab, tab.filepath, silent=True)
+
+        tab.editor.clear_error_markers()
+        self._console.clear_output()
+        self._console.append_info(f"▶  Starte: {tab.filepath}\n")
+        self._last_run_file = tab.filepath
+        # Fehler-Zustand für diesen Lauf zurücksetzen
+        self._run_stderr_buf = []
+        self._last_error_traceback = ""
+        self._user_stopped = False
+        self._console.set_explain_visible(False)
+        self._debug_before_run(tab)
+
+        # Vorhersage-Modus für diesen Lauf aktivieren (Ausgabe sammeln + vergleichen)
+        self._prediction = prediction
+        self._predict_mode = prediction is not None
+        self._run_stdout_buf = []
+
+        self._retire_process()
+        if self._mode == "python":
+            python = self._get_python_executable()
+            cmd = [python, "-u", tab.filepath]
+            # Ungepufferte, UTF-8-Ausgabe erzwingen – greift auch für
+            # Subprozesse, die das Schüler-Programm selbst startet, sodass
+            # Ausgaben/Fehler sofort statt verzögert erscheinen.
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            env["PYTHONIOENCODING"] = "utf-8"
+            self._process = ProcessRunner(cmd, cwd=os.path.dirname(tab.filepath), env=env)
+        else:
+            # MicroPython: Raw-REPL über pyserial (stdin-Forwarding)
+            port = self._get_serial_port()
+            if not port:
+                return
+            self._process = MicroPythonRunner(port, tab.filepath)
+        self._process.output.connect(self._on_process_output)
+        self._process.finished_run.connect(self._on_process_done)
+        self._process.start()
+        self._console.set_active_runner(self._process)
+
+    def _stop_program(self):
+        if self._process and self._process.isRunning():
+            self._user_stopped = True   # kein Fehlerhinweis für bewussten Abbruch
+            self._process.terminate_process()
+            self._console.flush_now()
+            self._console.append_info("\n■  Abgebrochen.\n")
+        self._console.set_active_runner(None)
+
+    def _toggle_plotter(self, checked: bool):
+        """Blendet den Serial Plotter (Live-Graph der Zahlenausgabe) ein/aus."""
+        self._console.set_plotter_visible(checked)
+
+    def _toggle_claude_terminal(self):
+        """Verstecktes Easter Egg (Ctrl+Alt+Shift+C): Terminal mit `claude` im
+        Sketchbook-Ordner ein-/ausblenden.
+
+        Bewusst kein Fehlerdialog, wenn `claude` fehlt – ein Rechner ohne die
+        CLI (jeder SuS-Rechner) soll beim Drücken des Kürzels einfach gar
+        nichts tun, als gäbe es das Feature nicht.
+        """
+        if not pty_available() or not find_claude_binary():
+            return
+        currently_shown = (
+            self._ai_stack.isVisible()
+            and self._ai_stack.currentWidget() is self._claude_terminal_panel
+        )
+        if currently_shown:
+            self._apply_settings()   # zurück zum regulären KI-Panel-Zustand
+            return
+        self._main_splitter.setCollapsible(2, False)
+        self._ai_stack.setMinimumWidth(0)
+        self._ai_stack.setMaximumWidth(16777215)
+        self._ai_stack.setCurrentIndex(3)
+        self._ai_stack.setVisible(True)
+        sizes = self._main_splitter.sizes()
+        if sizes[2] == 0:
+            total = sum(sizes)
+            self._main_splitter.setSizes([sizes[0], total - sizes[0] - 520, 520])
+        self._claude_terminal_panel.start_claude(self._settings_sketchbook)
+        self._claude_terminal_panel.focus_terminal()
+
+    def _open_worksheet_preview(self, path: str):
+        """Arbeitsblatt-Vorschau öffnen – unabhängig vom eingestellten
+        KI-Tutor-Modus (Settings bleiben unverändert)."""
+        self._main_splitter.setCollapsible(2, False)
+        self._ai_stack.setMinimumWidth(0)
+        self._ai_stack.setMaximumWidth(16777215)
+        self._ai_stack.setCurrentIndex(4)
+        self._ai_stack.setVisible(True)
+        sizes = self._main_splitter.sizes()
+        if sizes[2] == 0:
+            total = sum(sizes)
+            self._main_splitter.setSizes([sizes[0], total - sizes[0] - 520, 520])
+        self._worksheet_panel.load_file(path)
+        self._sync_activity_bar()
+
+    def _close_worksheet_preview(self):
+        self._apply_settings()   # zurück zum regulären, Settings-gesteuerten KI-Panel
+
+    def _on_worksheet_insert_code(self, code: str):
+        tab = self._current_tab()
+        if tab is None:
+            self.statusBar().showMessage(
+                "Kein Editor-Tab geöffnet – Code konnte nicht eingefügt werden.", 4000
+            )
+            return
+        tab.editor.insert_at_cursor(code)
+        self._update_tab_title(tab)
+
+    def _current_editor_text(self) -> str:
+        """Liefert den Code des aktuell aktiven Editor-Tabs (für Infis „Code zeigen")."""
+        tab = self._current_tab()
+        return tab.editor.get_text() if tab else ""
+
+    def _explain_error_with_infi(self):
+        """Schickt den letzten Fehler mit dem Schülercode an den Tutor „Infi"."""
+        tb = self._last_error_traceback
+        if not tb.strip():
+            return
+        if self._settings_tutor_mode != "ollama":
+            QMessageBox.information(
+                self, "Infi",
+                "Der KI-Tutor „Infi“ ist nicht aktiv.\n"
+                "Aktiviere ihn unter Datei → Einstellungen → KI-Tutor (Infi).",
+            )
+            return
+        tab = self._current_tab()
+        code = tab.editor.get_text() if tab else ""
+        from .error_hints import build_infi_error_prompt
+        prompt = build_infi_error_prompt(code, tb, self._last_hint, self._settings_debug_level)
+        # Infi-Panel sicher einblenden (Index 0) – auch wenn der Splitter kollabiert war.
+        self._ai_stack.setCurrentIndex(0)
+        self._ai_stack.setVisible(True)
+        sizes = self._main_splitter.sizes()
+        if len(sizes) == 3 and sizes[2] == 0:
+            total = sum(sizes)
+            self._main_splitter.setSizes([sizes[0], max(200, total - sizes[0] - 320), 320])
+        self._tutor_panel.ask(prompt)
+        self._console.set_explain_visible(False)
+
+    def _on_process_output(self, text: str, kind: str):
+        self._debug_track_output(text, kind)
+        if kind == "stderr":
+            self._console.append_program_error(text)
+            self._run_stderr_buf.append(text)   # für Fehlerhinweis nach Programmende
+            # Fehlerzeilen im Editor markieren
+            import re
+            for m in re.finditer(r'File "([^"]+)", line (\d+)', text):
+                fp, ln = m.group(1), int(m.group(2))
+                resolved_fp = self._resolve_traceback_file(fp)
+                tab = self._current_tab()
+                if (
+                    tab
+                    and tab.filepath
+                    and resolved_fp
+                    and os.path.abspath(resolved_fp) == os.path.abspath(tab.filepath)
+                ):
+                    tab.editor.mark_error_line(ln)
+        else:
+            self._console.append_program_output(text)
+            if getattr(self, "_predict_mode", False):
+                self._run_stdout_buf.append(text)
+
+    def _on_process_done(self, code: int):
+        # Restpuffer leeren, damit die Abschlussmeldung wirklich zuletzt erscheint
+        self._console.flush_now()
+        self._console.set_active_runner(None)
+        if self._mode == "micropython":
+            # Nach Lauf/Stop im MicroPython-Modus Dateiliste automatisch aktualisieren.
+            QTimer.singleShot(250, self._refresh_device_files_after_run)
+        if code == 0:
+            self._console.append_success(f"\n✓  Programm beendet (Code {code})\n")
+        else:
+            self._console.append_error(f"\n✗  Programm beendet mit Code {code}\n")
+            self._handle_program_error()
+        self._debug_after_run(code)
+
+        # Vorhersage-Modus: Vorhersage mit tatsächlicher Ausgabe vergleichen
+        if getattr(self, "_predict_mode", False):
+            self._predict_mode = False
+            self._show_prediction_result()
+
+    def _show_prediction_result(self):
+        from .predict_mode import ResultDialog, compare_outputs
+        actual = "".join(getattr(self, "_run_stdout_buf", []))
+        matches, _, _ = compare_outputs(self._prediction or "", actual)
+        ResultDialog(self._prediction or "", actual, matches, self).exec()
+
+    def _handle_program_error(self):
+        """Nach einem Absturz: verständlichen Hinweis zeigen und (falls Infi aktiv)
+        den „Infi erklärt diesen Fehler"-Knopf anbieten."""
+        if self._user_stopped:
+            return   # vom Nutzer abgebrochen – kein echter Programmfehler
+        traceback_text = "".join(self._run_stderr_buf).strip()
+        if not traceback_text:
+            return
+        self._last_error_traceback = traceback_text
+        self._sync_debug_log()      # offene Runde gehört zur gerade gelaufenen Datei
+        self._console.flush_now()   # Traceback steht sicher vor den Hinweisen
+        from .error_hints import analyze, detect_busy, traceback_frames
+        hint = analyze(traceback_text, self._settings_debug_level)
+        if hint is None and not traceback_frames(traceback_text):
+            # Keine Python-Meldung, sondern ein Problem mit dem Board selbst (Start nicht
+            # bestätigt, Verbindung weg): Schritt 0 bzw. 1 sagen schon, was zu tun ist.
+            # Ein „Schritt 2 · Beobachten“ ohne Meldung wäre verwirrend.
+            if self._mode == "micropython" and detect_busy(traceback_text) and not self._busy_shown:
+                self._busy_shown = True
+                self._show_busy()
+            return
+        self._show_observation(traceback_text)
+        self._last_hint = hint
+        self._hint_stage = 0
+        if hint:
+            stepped = self._settings_debug_stepped
+            final = hint.final_stage
+            self._show_hint_stage(1, with_links=stepped or final == 1)
+            if not stepped:
+                for st in range(2, final + 1):
+                    self._show_hint_stage(st, with_links=(st == final))
+        # KI-Erklärung nur anbieten, wenn der Ollama-Tutor (Infi) eingerichtet ist.
+        if self._settings_tutor_mode == "ollama":
+            self._console.set_explain_visible(True)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Fehler finden (Fehlerhilfe, Stände, Kontrollpunkte, Protokoll)
+    # ──────────────────────────────────────────────────────────────────────
+    def _snapshot_store(self):
+        if self._snapshots is None:
+            from .snapshots import SnapshotStore
+            self._snapshots = SnapshotStore()
+        return self._snapshots
+
+    @staticmethod
+    def _protocol_program(tab) -> str | None:
+        """Programmdatei, neben der das Fehlerprotokoll liegt (nicht bei Controller-Dateien)."""
+        if tab is None or tab.device_path:
+            return None
+        return tab.filepath
+
+    def _sync_debug_log(self):
+        self._debug_log_panel.set_program(self._protocol_program(self._current_tab()))
+
+    def _run_tab(self):
+        """Tab der zuletzt gestarteten Datei (Fallback: aktueller Tab)."""
+        if self._last_run_file:
+            target = os.path.abspath(self._last_run_file)
+            cur = self._current_tab()
+            if cur and cur.filepath and os.path.abspath(cur.filepath) == target:
+                return cur   # gleiche Datei evtl. in mehreren Tabs – der aktive zählt
+            for tab in self._tabs:
+                if tab.filepath and os.path.abspath(tab.filepath) == target:
+                    return tab
+        return self._current_tab()
+
+    def _debug_before_run(self, tab):
+        """Lauf-Stand anlegen und Änderung seit dem letzten Lauf melden."""
+        self._danger_shown = False
+        self._busy_shown = False
+        self._danger_tail = ""
+        self._last_own_line = None
+        self._kp_partial = ""
+        self._kp_reached = []
+        self._last_hint = None
+        self._hint_stage = 0
+        self._run_snapshot = None
+        self._run_change_text = ""
+        if not tab or not tab.filepath:
+            return
+        from .snapshots import change_summary
+        text = tab.editor.get_text()
+        store = self._snapshot_store()
+        try:
+            prev = store.previous(tab.filepath)
+            prev_text = store.read(tab.filepath, prev.id) if prev else None
+            stand = store.add(tab.filepath, text)
+        except OSError:
+            return
+        self._run_snapshot = (tab.filepath, stand.id)
+        if prev_text is None:
+            return
+        lines = change_summary(prev_text, text)
+        n = len(lines)
+        zeilen = ", ".join(map(str, lines[:6])) + (" …" if n > 6 else "")
+        if n == 0:
+            self._run_change_text = "keine Änderung"
+            msg = "   Seit dem letzten Lauf: nichts geändert.\n"
+        elif n == 1:
+            self._run_change_text = f"1 Stelle, Zeile {lines[0]}"
+            msg = f"   Seit dem letzten Lauf: 1 Stelle geändert (Zeile {lines[0]}).\n"
+        else:
+            self._run_change_text = f"{n} Stellen, Zeilen {zeilen}"
+            msg = (f"   Seit dem letzten Lauf: {n} Stellen geändert (Zeilen {zeilen}) – "
+                   "im Zyklus testest du eine Änderung nach der anderen.\n")
+        if self._settings_debug_change_hint:
+            self._console.append_info(msg)
+
+    def _debug_track_output(self, text: str, kind: str):
+        """Ausgabe mitlesen: Kontrollpunkte (K1, K2 …) und Schritt-0-Anzeichen."""
+        if self._mode == "micropython" and not self._danger_shown:
+            from .error_hints import detect_danger
+            self._danger_tail = (getattr(self, "_danger_tail", "") + text)[-400:]
+            danger = detect_danger(self._danger_tail)
+            if danger:
+                self._danger_shown = True
+                QTimer.singleShot(0, lambda d=danger: self._show_danger(d))
+        if kind == "stdout":
+            parts = (self._kp_partial + text).split("\n")
+            self._kp_partial = parts.pop()[-200:]
+            self._collect_checkpoints(parts)
+
+    def _collect_checkpoints(self, lines):
+        from .checkpoints import reached_in_output
+        for ln in lines:
+            self._kp_reached.extend(reached_in_output(ln.strip()))
+
+    def _flush_kp_partial(self):
+        if self._kp_partial:
+            self._collect_checkpoints([self._kp_partial])
+            self._kp_partial = ""
+
+    def _show_busy(self):
+        """Schritt 1 · Läuft schon was? – das Board hat den Programmstart nicht bestätigt."""
+        from . import debug_guide as guide
+        self._console.flush_now()
+        self._console.append_info(guide.step1_text(self._settings_debug_level))
+
+    def _show_danger(self, kind: str):
+        from .error_hints import danger_text
+        self._console.flush_now()
+        self._console.append_warning(danger_text(kind, self._settings_debug_level))
+
+    def _checkpoint_line(self, error: bool) -> str | None:
+        """Satz zu den Kontrollpunkten dieses Laufs (None, wenn das Programm keine hat)."""
+        from .checkpoints import is_checkpoint, line_of
+        tab = self._run_tab()
+        code = tab.editor.get_text() if tab else ""
+        if not any(is_checkpoint(ln) for ln in code.split("\n")):
+            return None
+        from .error_hints import is_compile_error
+        if error and not self._kp_reached and is_compile_error(self._last_error_traceback):
+            # SyntaxError & Co.: Python hat die Datei gar nicht erst ausgeführt –
+            # „vor K1" wäre falsch, die Kontrollpunkte konnten nichts zeigen.
+            return ("📍  Kontrollpunkte helfen hier nicht: Bei diesem Fehler liest Python dein "
+                    "Programm gar nicht erst ein – keine Zeile läuft, auch K1 nicht.")
+        if self._kp_reached:
+            last = self._kp_reached[-1]
+            if error:
+                ln = line_of(code, last)
+                return (f"📍  Letzter erreichter Kontrollpunkt: K{last}"
+                        + (f" (Zeile {ln})" if ln else "") + " – der Fehler liegt dahinter.")
+            return "📍  Erreichte Kontrollpunkte: " + ", ".join(
+                f"K{n}" for n in dict.fromkeys(self._kp_reached))
+        return ("📍  Kein Kontrollpunkt erreicht – der Fehler liegt vor K1." if error
+                else "📍  Kein Kontrollpunkt erreicht.")
+
+    def _show_observation(self, traceback_text: str):
+        """Schritt 2 · Beobachten: „Hier beginnt deine Suche“ (eigene Datei vs. Bibliothek)
+        und die Kontrollpunkte des Laufs."""
+        from . import debug_guide as guide
+        from .error_hints import search_start, traceback_frames
+        self._flush_kp_partial()
+        target = os.path.abspath(self._last_run_file) if self._last_run_file else None
+
+        def is_own(fname: str) -> bool:
+            resolved = self._resolve_traceback_file(fname)
+            return bool(resolved and target and os.path.abspath(resolved) == target)
+
+        lvl = self._settings_debug_level
+        lines = [guide.step_header("beobachten", lvl),
+                 "   Lies die Meldung von unten und beachte die Zeilennummer." if lvl == "kl89"
+                 else "   Schreib die Meldung wörtlich ab – mit Zeilennummer."]
+        own, origin = search_start(traceback_frames(traceback_text), is_own)
+        self._last_own_line = own[1] if own else None
+        if own is not None:
+            tab = self._run_tab()
+            code_lines = tab.editor.get_text().split("\n") if tab else []
+            code_line = code_lines[own[1] - 1].strip() if 0 < own[1] <= len(code_lines) else ""
+            lines.append(f"   📍 Hier beginnt deine Suche: Zeile {own[1]} in deiner Datei"
+                         + (f":   {code_line}" if code_line else ""))
+            if origin:
+                name = os.path.basename(origin[0])
+                lib = (name.startswith("nitbw_") or "site-packages" in origin[0]
+                       or "/lib/" in origin[0].replace("\\", "/")
+                       or not os.path.isfile(self._resolve_traceback_file(origin[0]) or ""))
+                art = "Bibliothek – dort nichts ändern" if lib else "andere Datei"
+                lines.append(f"      Die Meldung entsteht in {name}, Zeile {origin[1]} ({art}).")
+        kp = self._checkpoint_line(error=True)
+        if kp:
+            lines.append("   " + kp)
+        self._console.append_hint("\n".join(lines) + "\n")
+
+    def _append_console_links(self, links: list[tuple[str, str]]):
+        """Klickbare Schritte unter einer Konsolenmeldung."""
+        if not links:
+            return
+        self._console.append_info("   ")
+        for label, action in links:
+            self._console.append_action_link(label, action)
+        self._console.append_info("\n")
+
+    def _show_hint_stage(self, stage: int, with_links: bool = True):
+        """Eine Hilfestufe von „Eingrenzen“ anzeigen (Stufen siehe ErrorHint.final_stage)."""
+        hint = self._last_hint
+        if hint is None or stage != self._hint_stage + 1:
+            return
+        self._hint_stage = stage
+        self._console.append_hint(hint.render(stage))
+        if not with_links:
+            return
+        links: list[tuple[str, str]] = []
+        final = hint.final_stage
+        if self._settings_debug_stepped and stage < final:
+            if hint.level == "kl89":
+                links.append(("▸ Was prüfe ich?", f"hint{stage + 1}"))
+            else:
+                links.append(("▸ Wo suche ich?" if stage == 1 else "▸ Verdächtige & erster Test",
+                              f"hint{stage + 1}"))
+        if stage == final and hint.aktion == "i2c_scan" and self._mode == "micropython":
+            links.append(("🔍 I2C-Scan starten", "i2c_scan"))
+        # Ist schon eine Runde offen, geht es dort weiter – kein neuer Eintrag.
+        if (stage == final or (hint.level != "kl89" and stage == 1)) \
+                and self._debug_log_panel.open_round() is None:
+            links.append(("📝 Neue Zeile im Protokoll" if hint.level == "kl89"
+                          else "📝 Neue Runde im Protokoll", "protokoll"))
+        self._append_console_links(links)
+
+    def _on_console_action(self, action: str):
+        if action == "hint2":
+            self._show_hint_stage(2)
+        elif action == "hint3":
+            self._show_hint_stage(3)
+        elif action == "i2c_scan":
+            self._open_i2c_scan()
+        elif action == "protokoll":
+            lines = [ln for ln in self._last_error_traceback.strip().splitlines() if ln.strip()]
+            ist = lines[-1].strip() if lines else ""
+            if ist and self._last_own_line:
+                ist += f", Zeile {self._last_own_line}"
+            self._open_debug_log()
+            self._debug_log_panel.new_round(ist=ist)
+        elif action == "ergebnis":
+            self._open_debug_log()
+            self._debug_log_panel.focus_result()
+        elif action == "zurueck":
+            self._restore_last_good()
+
+    def _debug_after_run(self, code: int):
+        """Ergebnis am Lauf-Stand eintragen, Lauf im Fehlerprotokoll vermerken und
+        bei offener Runde Schritt 6 („Geklappt?“) anstoßen."""
+        self._flush_kp_partial()
+        if self._user_stopped:
+            ergebnis = "stopped"
+        else:
+            ergebnis = "ok" if code == 0 else "error"
+        meldung = ""
+        if ergebnis == "error":
+            lines = [ln for ln in self._last_error_traceback.strip().splitlines() if ln.strip()]
+            meldung = lines[-1].strip()[:120] if lines else ""
+        if self._run_snapshot:
+            try:
+                self._snapshot_store().set_result(*self._run_snapshot, ergebnis, meldung)
+            except OSError:
+                pass
+        self._sync_debug_log()
+        panel = self._debug_log_panel
+        panel.record_run(ergebnis, self._run_change_text,
+                         kp=self._kp_reached[-1] if self._kp_reached else None)
+        if ergebnis == "ok":
+            kp = self._checkpoint_line(error=False)
+            if kp:
+                self._console.append_hint(kp + "\n")
+        if ergebnis in ("ok", "error") and panel.open_round() is not None:
+            from . import debug_guide as guide
+            ok = ergebnis == "ok"
+            self._console.append_info(guide.step6_text(ok, panel.failed_in_a_row() >= 3, self._settings_debug_level))
+            links = [("📝 Ergebnis eintragen", "ergebnis")]
+            if not ok:
+                links.insert(0, ("⏪ Zurück zum letzten funktionierenden Stand", "zurueck"))
+            self._append_console_links(links)
+
+    # ── Fehlerprotokoll-Panel ──────────────────────────────────────────────
+    def _open_debug_log(self):
+        self._sync_debug_log()
+        self._main_splitter.setCollapsible(2, False)
+        self._ai_stack.setMinimumWidth(0)
+        self._ai_stack.setMaximumWidth(16777215)
+        self._ai_stack.setCurrentIndex(5)
+        self._ai_stack.setVisible(True)
+        sizes = self._main_splitter.sizes()
+        if sizes[2] == 0:
+            total = sum(sizes)
+            self._main_splitter.setSizes([sizes[0], max(200, total - sizes[0] - 420), 420])
+        self._sync_activity_bar()
+
+    def _close_debug_log(self):
+        """Protokoll schließen – der rechte Bereich bleibt danach leer
+        (den KI-Assistenten blendet sein eigener Schalter ein)."""
+        self._debug_log_panel.save()
+        self._ai_stack.setVisible(False)
+        self._sync_activity_bar()
+
+    def _toggle_debug_log(self):
+        """Fehlerprotokoll ein/aus. Ist rechts der KI-Assistent offen, wird umgeschaltet."""
+        if self._debug_log_visible():
+            self._close_debug_log()
+        else:
+            self._open_debug_log()
+
+    # ── Kontrollpunkte ─────────────────────────────────────────────────────
+    def _insert_checkpoint(self):
+        tab = self._current_tab()
+        if not tab:
+            return
+        from .checkpoints import insert
+        sel = tab.editor.selected_text()
+        name = sel if sel and "\n" not in sel else ""
+        new_text, line_no = insert(tab.editor.get_text(), tab.editor.cursor_line(), name)
+        tab.editor.replace_text_undoable(new_text)
+        tab.editor.goto_line(line_no)
+        self._update_tab_title(tab)
+        self.statusBar().showMessage(
+            "📍 Kontrollpunkt eingefügt – die Nummern K1, K2 … folgen der Reihenfolge im Programm.",
+            5000)
+
+    def _remove_checkpoints(self):
+        tab = self._current_tab()
+        if not tab:
+            return
+        from .checkpoints import remove_all
+        new_text, n = remove_all(tab.editor.get_text())
+        if n:
+            tab.editor.replace_text_undoable(new_text)
+            self._update_tab_title(tab)
+        self.statusBar().showMessage(
+            f"{n} Kontrollpunkt(e) entfernt." if n else "Keine Kontrollpunkte im Programm.", 4000)
+
+    # ── Stände ─────────────────────────────────────────────────────────────
+    def _snapshot_tab(self):
+        """Aktueller Tab mit gespeicherter Datei (fragt sonst nach „Speichern als")."""
+        tab = self._current_tab()
+        if tab and not tab.filepath:
+            self._save_file_as()
+        return tab if (tab and tab.filepath) else None
+
+    def _pin_snapshot(self):
+        tab = self._snapshot_tab()
+        if not tab:
+            return
+        from PyQt6.QtWidgets import QInputDialog
+        notiz, ok = QInputDialog.getText(
+            self, "📌  Stand merken",
+            "Kurze Notiz zu diesem Stand (z. B. „läuft, Temperatur plausibel“):")
+        if not ok:
+            return
+        try:
+            self._snapshot_store().add(tab.filepath, tab.editor.get_text(),
+                                       gemerkt=True, notiz=notiz.strip())
+        except OSError as exc:
+            QMessageBox.warning(self, "Stand merken", f"Konnte den Stand nicht speichern:\n{exc}")
+            return
+        self.statusBar().showMessage("📌 Stand gemerkt – „Zurück“ kehrt zu ihm zurück.", 4000)
+
+    def _restore_last_good(self):
+        tab = self._snapshot_tab()
+        if not tab:
+            return
+        from .snapshots import change_summary, text_hash
+        store = self._snapshot_store()
+        current = tab.editor.get_text()
+        newest = store.last_good(tab.filepath)
+        if newest is None:
+            QMessageBox.information(
+                self, "Zurück",
+                "Es gibt noch keinen funktionierenden Stand.\n\n"
+                "Ein Stand gilt als funktionierend, wenn das Programm ohne Fehler "
+                "beendet wurde (✓) oder du ihn mit „📌 Stand merken“ gesichert hast.")
+            return
+        if newest.hash == text_hash(current):
+            QMessageBox.information(self, "Zurück",
+                                    "Dein Code entspricht schon dem letzten funktionierenden Stand.")
+            return
+        old = store.read(tab.filepath, newest.id)
+        if old is None:
+            return
+        n = len(change_summary(old, current))
+        reply = QMessageBox.question(
+            self, "⏪  Zurück zum letzten funktionierenden Stand",
+            f"Zurück zum Stand  {newest.label()} ?\n\n"
+            f"Dabei werden {n} geänderte Stelle(n) rückgängig gemacht.\n"
+            "Mit Strg+Z holst du den jetzigen Code wieder zurück.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        tab.editor.replace_text_undoable(old)
+        self._update_tab_title(tab)
+        self._console.append_info(f"\n⏪  Zurück zum Stand {newest.label()}\n")
+
+    def _show_snapshots(self):
+        tab = self._snapshot_tab()
+        if not tab:
+            return
+        from .snapshots import show_snapshot_dialog
+        text = show_snapshot_dialog(self, self._snapshot_store(), tab.filepath, tab.editor.get_text())
+        if text is not None:
+            tab.editor.replace_text_undoable(text)
+            self._update_tab_title(tab)
+            self._console.append_info("\n⏪  Gesicherter Stand wiederhergestellt (Strg+Z macht es rückgängig).\n")
+
+    # ── I2C-Scan, Landkarte ────────────────────────────────────────────────
+    def _open_i2c_scan(self):
+        if self._mode != "micropython":
+            QMessageBox.information(
+                self, "I2C-Scan",
+                "Der I2C-Scan braucht einen Controller.\n"
+                "Wechsle oben in der Werkzeugleiste auf den Modus MicroPython.")
+            return
+        if self._process and self._process.isRunning():
+            QMessageBox.information(self, "I2C-Scan", "Bitte zuerst das laufende Programm stoppen.")
+            return
+        port = self._get_serial_port()
+        if not port:
+            return
+        from .i2c_scan import I2CScanDialog
+        tab = self._current_tab()
+        dlg = I2CScanDialog(self, port, tab.editor.get_text() if tab else "",
+                            self._acquire_port, self._release_port)
+        dlg.insert_script.connect(self._insert_scan_script)
+        dlg.result_text.connect(self._console.append_info)
+        dlg.fact_text.connect(self._on_scan_fact)
+        dlg.exec()
+
+    def _on_scan_fact(self, text: str):
+        """Scan-Ergebnis als Fakt bei „Eingrenzen“ der offenen Runde eintragen."""
+        self._open_debug_log()
+        self._debug_log_panel.add_eingrenzen_fact(text)
+        self.statusBar().showMessage("📝 Scan-Ergebnis bei „Eingrenzen“ eingetragen.", 4000)
+
+    def _insert_scan_script(self, code: str):
+        tab = self._new_tab()
+        tab.editor.set_text(code)
+        self._update_tab_title(tab)
+
+    def _show_debug_map(self):
+        from .debug_map_dialog import DebugMapDialog
+        dlg = getattr(self, "_debug_map_dlg", None)
+        if dlg is None:
+            dlg = DebugMapDialog(self, self._settings_debug_level)
+            self._debug_map_dlg = dlg
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _refresh_device_files_after_run(self):
+        port = self._get_serial_port(silent=True)
+        if port and hasattr(self, "_device_panel") and self._mode == "micropython":
+            self._device_panel.refresh(port)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # MicroPython-Aktionen
+    # ──────────────────────────────────────────────────────────────────────
+    def _upload_to_device(self):
+        tab = self._current_tab()
+        if not tab or not tab.filepath:
+            self._save_file_as()
+            tab = self._current_tab()
+            if not tab or not tab.filepath:
+                return
+        else:
+            self._do_save(tab, tab.filepath, silent=True)
+
+        self._upload_local_file_to_device(tab.filepath)
+
+    def _upload_local_file_to_device(self, local_path: str):
+        if not local_path or not os.path.isfile(local_path):
+            QMessageBox.warning(
+                self, "Datei nicht gefunden",
+                "Die ausgewählte Datei konnte nicht gefunden werden."
+            )
+            return
+
+        port = self._get_serial_port()
+        if not port:
+            return
+
+        # Ordnerliste des Controllers im Hintergrund holen, dann Auswahl + Upload
+        # fortsetzen – so friert die Oberfläche während des Raw-REPL-Zugriffs nicht
+        # ein. Nutzt denselben Listing-Worker wie die Controller-Dateiansicht.
+        self._console.append_info("↑  Ermittle Zielordner auf dem Controller …\n")
+        worker = DeviceListWorker(port)
+        worker.result.connect(
+            lambda files: self._continue_upload(
+                local_path, port, [name for name, _size, is_dir in files if is_dir]
+            )
+        )
+        # Listing fehlgeschlagen → best effort mit leerer Ordnerliste fortfahren
+        worker.error.connect(lambda _msg: self._continue_upload(local_path, port, []))
+        self._track_aux_worker(worker)
+        worker.start()
+
+    def _continue_upload(self, local_path: str, port: str, dirs: list[str]):
+        """Zweiter Teil von :meth:`_upload_to_device` – läuft nach dem Geräte-Listing."""
+        folder = self._choose_device_folder(dirs)
+        if folder is None:   # abgebrochen
+            return
+
+        remote_name = os.path.basename(local_path)
+        remote_path = f"{folder}/{remote_name}" if folder else remote_name
+        ziel = f"{folder}/" if folder else "Hauptebene"
+        self._console.append_info(f"↑  Lade {remote_name} nach {ziel} auf {port} hoch ...\n")
+
+        def _start_copy(*_args):
+            cmd = [*tool_command("mpremote"), "connect", port,
+                   "cp", local_path, f":{remote_path}"]
+            self._retire_process()
+            self._process = ProcessRunner(cmd)
+            self._process.output.connect(self._on_process_output)
+            self._process.finished_run.connect(
+                lambda code: self._console.append_success("✓  Upload abgeschlossen.\n")
+                if code == 0 else self._console.append_error("✗  Upload fehlgeschlagen.\n")
+            )
+            # Nach erfolgreichem Upload die Controller-Dateiansicht im Zielordner zeigen
+            self._process.finished_run.connect(
+                lambda code: self._device_panel.show_folder(port, folder) if code == 0 else None
+            )
+            self._process.start()
+
+        if folder:
+            # Zielordner im Hintergrund anlegen (EEXIST-Fehler ist egal – der
+            # anschließende cp meldet echte Probleme), dann kopieren. Läuft als
+            # Worker, damit die Oberfläche nicht auf die Raw-REPL warten muss.
+            mkdir_proc = ProcessRunner(
+                [*tool_command("mpremote"), "connect", port, "mkdir", f":{folder}"]
+            )
+            mkdir_proc.finished_run.connect(_start_copy)
+            self._track_aux_worker(mkdir_proc)
+            mkdir_proc.start()
+        else:
+            _start_copy()
+
+    def _choose_device_folder(self, dirs: list[str]) -> str | None:
+        """Lässt den Zielordner für den Upload wählen.
+
+        ``dirs`` ist die zuvor (im Hintergrund) gelesene Ordnerliste des Controllers.
+        Rückgabe: "" für die Hauptebene, ein Ordnername, oder None bei Abbruch.
+        """
+        ROOT = "/ (Hauptebene)"
+        NEW = "➕ Neuer Ordner …"
+        items = [ROOT] + [f"📁 {d}" for d in sorted(dirs)] + [NEW]
+        choice, ok = self._ask_item_input(
+            "Zielordner wählen",
+            "In welchen Ordner auf dem Controller hochladen?",
+            items, 0, editable=False,
+        )
+        if not ok:
+            return None
+        if choice == ROOT:
+            return ""
+        if choice == NEW:
+            name, ok2 = self._ask_text_input("Neuer Ordner", "Name des neuen Ordners:")
+            name = name.strip().strip("/")
+            return name if (ok2 and name) else None
+        return choice[len("📁 "):]   # Emoji-Präfix entfernen
+
+    def _track_aux_worker(self, worker: QThread):
+        """Hält eine Referenz auf einen kurzlebigen Hilfs-Thread, bis er fertig ist."""
+        retain_thread(self._aux_workers, worker)
+
+    def _flash_firmware(self):
+        from .micropython_dialogs import FlashDialog
+        dlg = FlashDialog(self._board, self)
+        dlg.exec()
+
+    def _ipad_firmware_dir(self):
+        """Findet den 'firmware'-Ordner (Dev-Modus wie im PyInstaller-Bundle)."""
+        candidates = []
+        if getattr(sys, "frozen", False):
+            if hasattr(sys, "_MEIPASS"):
+                candidates.append(Path(sys._MEIPASS) / "firmware")
+            candidates.append(Path(sys.executable).resolve().parent / "firmware")
+        candidates.append(Path(__file__).resolve().parent.parent / "firmware")
+        for c in candidates:
+            if (c / "main.py").is_file() and (c / "www").is_dir():
+                return c
+        return None
+
+    def _deploy_ipad_firmware(self):
+        """Spielt die Standalone-Blockly-Oberfläche (firmware/) aufs Board.
+
+        Setzt ein bereits geflashtes MicroPython voraus; kopiert boot.py,
+        main.py und www/ per mpremote und startet den Controller neu.
+        """
+        port = self._get_serial_port()
+        if not port:
+            return
+        fw_dir = self._ipad_firmware_dir()
+        if fw_dir is None:
+            QMessageBox.warning(
+                self, "Dateien nicht gefunden",
+                "Die iPad-Blockly-Dateien (Ordner 'firmware') konnten nicht "
+                "gefunden werden."
+            )
+            return
+        # Board-Name/Nummer für die WLAN-SSID (eindeutig im Klassensatz).
+        board_name, ok = QInputDialog.getText(
+            self, "Board-Name",
+            "Nummer/Name für dieses Board (wird zur WLAN-SSID „NIT-ESP32-<Name>“).\n"
+            "Leer lassen = automatisch eindeutige SSID aus der Chip-Kennung:"
+        )
+        if not ok:
+            return
+        board_name = board_name.strip()
+
+        box = QMessageBox(self)
+        box.setWindowTitle("iPad-Blockly aufspielen")
+        box.setIcon(QMessageBox.Icon.Question)
+        ssid_hint = ("„NIT-ESP32-%s“" % board_name) if board_name else "automatisch (Chip-Kennung)"
+        box.setText(
+            "Auf dem angeschlossenen Controller werden boot.py, main.py und der "
+            "Ordner www/ mit der Blockly-Oberfläche angelegt bzw. überschrieben."
+        )
+        box.setInformativeText(
+            "WLAN-SSID dieses Boards: %s\n\n"
+            "Voraussetzung: Auf dem Board läuft bereits MicroPython – sonst zuerst "
+            "„Firmware flashen …“ ausführen.\n\nFortfahren?" % ssid_hint
+        )
+        cb = QCheckBox("Auch die Sensor-Bibliotheken (nitbw_) installieren – "
+                       "nötig für die Sensor-Blöcke, dauert einige Minuten")
+        cb.setChecked(True)
+        box.setCheckBox(cb)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return
+        install_libs = cb.isChecked()
+        if not self._acquire_port():
+            return
+        from .micropython_dialogs import IpadDeployWorker
+        self._console.append_info("📲  Spiele iPad-Blockly auf den Controller …\n")
+        worker = IpadDeployWorker(port, fw_dir, install_libs=install_libs,
+                                  board_name=board_name)
+        worker.log.connect(self._console.append_info)
+        worker.done.connect(self._on_ipad_deploy_done)
+        self._track_aux_worker(worker)
+        worker.start()
+
+    def _on_ipad_deploy_done(self, ok: bool, msg: str):
+        self._release_port()
+        if ok:
+            self._console.append_success(f"✓  {msg}\n")
+        else:
+            self._console.append_error(f"✗  {msg}\n")
+
+    def _query_firmware_version(self):
+        port = self._get_serial_port()
+        if not port:
+            return
+        if not self._acquire_port():
+            return
+        self._console.append_info(f"ℹ️  Lese Firmware-Version von {port} ...\n")
+        code = (
+            "import sys; "
+            "v = sys.implementation; "
+            "print('MicroPython', sys.version, 'auf', sys.platform); "
+            "print('Implementation:', v.name, v.version)"
+        )
+        cmd = [*tool_command("mpremote"), "connect", port, "exec", code]
+        proc = ProcessRunner(cmd)
+        proc.output.connect(
+            lambda text, kind: (
+                self._console.append_success(text)
+                if kind == "stdout"
+                else self._console.append_error(text)
+            )
+        )
+        proc.finished_run.connect(
+            lambda rc: self._console.append_error(
+                "✗  Konnte keine Verbindung herstellen.\n"
+                "Bitte Controller anschließen und erneut versuchen.\n"
+            ) if rc != 0 else None
+        )
+        proc.finished_run.connect(lambda _rc: self._release_port())
+        self._retire_process()
+        proc.start()
+        self._process = proc
+
+    def _reset_controller(self):
+        port = self._get_serial_port()
+        if not port:
+            return
+        if not self._acquire_port():
+            return
+        self._console.append_info(f"🔄  Starte Controller auf {port} neu ...\n")
+        cmd = [
+            *tool_command("mpremote"),
+            "connect", port, "reset",
+        ]
+        proc = ProcessRunner(cmd)
+        proc.finished_run.connect(
+            lambda rc: self._console.append_success("✓  Controller neu gestartet.\n")
+        )
+        proc.finished_run.connect(lambda _rc: self._release_port())
+        self._retire_process()
+        proc.start()
+        self._process = proc
+
+    def _open_library_manager(self):
+        from .micropython_dialogs import LibraryManagerDialog
+        port = self._get_serial_port(silent=True)
+        dlg = LibraryManagerDialog(port or "", self)
+        dlg.exec()
+        # Eventuell neu installierte Bibliotheken in der Dateiansicht zeigen
+        if port and self._mode == "micropython":
+            self._device_panel.refresh(port)
+
+    def _open_pip_manager(self):
+        from .micropython_dialogs import PipManagerDialog
+        dlg = PipManagerDialog(self, python_exec=self._get_python_executable())
+        dlg.exec()
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Git-Aktionen
+    # ──────────────────────────────────────────────────────────────────────
+    def _resolve_git_executable(self) -> str | None:
+        """Liefert ein nutzbares Git-Programm aus Einstellung oder PATH.
+
+        Das Ergebnis wird gecacht: Auf Schulservern (Git auf Netzlaufwerk,
+        Virenscanner) dauert der ``git --version``-Check sonst vor jeder
+        Git-Aktion mehrere Sekunden.
+        """
+        chosen = (self._settings_git_executable or "").strip()
+        cached = getattr(self, "_git_exec_cache", None)
+        if cached is not None and cached[0] == chosen and Path(cached[1]).is_file():
+            return cached[1]
+
+        candidates: list[str] = []
+        if chosen:
+            candidates.append(chosen)
+        path_git = shutil.which("git")
+        if path_git:
+            candidates.append(path_git)
+
+        seen: set[str] = set()
+        for candidate in candidates:
+            resolved = candidate
+            if not os.path.isabs(candidate):
+                maybe = shutil.which(candidate)
+                if maybe:
+                    resolved = maybe
+            try:
+                p = Path(resolved).resolve()
+            except OSError:
+                continue
+            key = str(p)
+            if key in seen:
+                continue
+            seen.add(key)
+            if not p.exists() or not p.is_file():
+                continue
+            try:
+                res = subprocess.run(
+                    [str(p), "--version"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=15,
+                )
+            except Exception:
+                continue
+            if res.returncode == 0:
+                self._git_exec_cache = (chosen, str(p))
+                return str(p)
+        return None
+
+    def _git_command(self, *args: str) -> list[str] | None:
+        git_exec = self._resolve_git_executable()
+        if not git_exec:
+            return None
+        return [git_exec, *args]
+
+    def _update_git_menu_visibility(self):
+        if hasattr(self, "_m_git"):
+            self._m_git.menuAction().setVisible(self._resolve_git_executable() is not None)
+
+    def _get_git_base_dir(self) -> str:
+        candidate = self._settings_sketchbook
+        if candidate and os.path.isdir(candidate):
+            return candidate
+        return str(Path.home())
+
+    def _detect_git_repo_root(self, start_dir: str) -> str | None:
+        cmd = self._git_command("-C", start_dir, "rev-parse", "--show-toplevel")
+        if cmd is None:
+            return None
+        try:
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res.returncode == 0:
+                return res.stdout.strip()
+        except Exception:
+            return None
+        return None
+
+    def _list_git_repos_in_sketchbook(self) -> list[str]:
+        base = self._get_git_base_dir()
+        repos: list[str] = []
+        seen: set[str] = set()
+
+        base_repo = self._detect_git_repo_root(base)
+        if base_repo:
+            normalized = str(Path(base_repo).resolve())
+            repos.append(normalized)
+            seen.add(normalized)
+
+        # Begrenzte Suche (Tiefe + Ignorier-Liste): das Sketchbook ist per
+        # Default das Home-Verzeichnis – ein voller os.walk würde die
+        # Oberfläche bei jeder Git-Aktion einfrieren.
+        for root, dirs, _files in os.walk(base):
+            if ".git" in dirs:
+                repo_root = str(Path(root).resolve())
+                if repo_root not in seen:
+                    repos.append(repo_root)
+                    seen.add(repo_root)
+            rel = os.path.relpath(root, base)
+            depth = 0 if rel == "." else rel.count(os.sep) + 1
+            if depth >= _SKETCHBOOK_MAX_DEPTH:
+                dirs[:] = []
+            else:
+                dirs[:] = [d for d in dirs if not _skip_sketchbook_dir(d)]
+
+        repos.sort(key=lambda p: p.casefold())
+        return repos
+
+    def _select_git_repo_from_list(self, repos: list[str], title: str) -> str | None:
+        if not repos:
+            return None
+
+        base = Path(self._get_git_base_dir())
+        labels = []
+        mapping: dict[str, str] = {}
+        for repo in repos:
+            repo_path = Path(repo)
+            try:
+                label = str(repo_path.relative_to(base))
+                if not label:
+                    label = "."
+            except ValueError:
+                label = repo
+            if label in mapping:
+                label = repo
+            labels.append(label)
+            mapping[label] = repo
+
+        labels.sort(key=lambda s: s.casefold())
+        default_idx = 0
+        if self._settings_git_repo and self._settings_git_repo in repos:
+            for i, lbl in enumerate(labels):
+                if mapping[lbl] == self._settings_git_repo:
+                    default_idx = i
+                    break
+
+        selected, ok = self._ask_item_input(
+            title,
+            "Repository:",
+            labels,
+            default_idx,
+            False,
+        )
+        if not ok or not selected:
+            return None
+        return mapping[selected]
+
+    def _resolve_git_repo(self, interactive: bool = True) -> str | None:
+        if self._settings_git_repo and os.path.isdir(self._settings_git_repo):
+            repo = self._detect_git_repo_root(self._settings_git_repo)
+            if repo:
+                normalized = str(Path(repo).resolve())
+                if normalized == str(Path(self._settings_git_repo).resolve()):
+                    self._settings_git_repo = normalized
+                    return normalized
+
+        repos = self._list_git_repos_in_sketchbook()
+        if not repos:
+            return None
+        if len(repos) == 1:
+            self._settings_git_repo = repos[0]
+            self._update_git_status_label()
+            return repos[0]
+        if not interactive:
+            return None
+
+        selected_repo = self._select_git_repo_from_list(repos, "Git: Repository auswählen")
+        if not selected_repo:
+            return None
+        self._settings_git_repo = selected_repo
+        self._save_persistent_settings()
+        self._update_git_status_label()
+        return selected_repo
+
+    def _require_git_repo(self) -> str | None:
+        repo = self._resolve_git_repo(interactive=True)
+        if repo:
+            return repo
+        QMessageBox.warning(
+            self,
+            "Git",
+            "Im Sketchbook-Ordner wurde kein Git-Repository gefunden.\n"
+            "Bitte zuerst ein Repository klonen oder initialisieren.",
+        )
+        return None
+
+    def _git_select_repo(self):
+        repos = self._list_git_repos_in_sketchbook()
+        if not repos:
+            QMessageBox.warning(
+                self,
+                "Git",
+                "Im Sketchbook-Ordner wurden keine Repositories gefunden.",
+            )
+            return
+        selected_repo = self._select_git_repo_from_list(repos, "Git: Repository auswählen")
+        if not selected_repo:
+            return
+        self._settings_git_repo = selected_repo
+        self._save_persistent_settings()
+        self._update_git_status_label()
+        self._console.append_info(f"[Git] Aktives Repository: {selected_repo}\n")
+
+    def _run_git_process(
+        self,
+        cmd: list[str],
+        cwd: str,
+        label: str,
+        on_success=None,
+        display_cmd: list[str] | None = None,
+        on_finish=None,
+    ):
+        git_exec = self._resolve_git_executable()
+        if git_exec is None:
+            QMessageBox.critical(self, "Git", "Git wurde auf diesem System nicht gefunden.")
+            return
+
+        effective_cmd = list(cmd)
+        if effective_cmd and effective_cmd[0] == "git":
+            effective_cmd[0] = git_exec
+
+        log_cmd = display_cmd if display_cmd is not None else cmd
+        self._console.append_info(f"\n[Git] {label}\n")
+        self._console.append_info(f"[Git] Arbeitsordner: {cwd}\n")
+        self._console.append_info(f"[Git] Befehl: {' '.join(log_cmd)}\n")
+
+        env = _git_network_env()
+        if env is not None:
+            self._console.append_info(
+                f"[Git] System-Proxy wird verwendet: {env['HTTPS_PROXY']}\n"
+            )
+        proc = ProcessRunner(effective_cmd, cwd=cwd, env=env)
+        # stderr puffern: Git schreibt Fortschritts-/Info-Meldungen auf stderr,
+        # auch bei Erfolg. Erst nach Prozessende entscheiden ob rot (Fehler) oder normal.
+        stderr_buf: list[str] = []
+        proc.output.connect(
+            lambda text, kind: self._console.append_output(text)
+            if kind == "stdout"
+            else stderr_buf.append(text)
+        )
+
+        def _on_finish(code: int):
+            for chunk in stderr_buf:
+                if code == 0:
+                    self._console.append_output(chunk)
+                else:
+                    self._console.append_error(chunk)
+            if code == 0:
+                self._console.append_success(f"[Git] Fertig (Code {code})\n")
+                if on_success is not None:
+                    on_success()
+            else:
+                self._console.append_error(f"[Git] Fehler (Code {code})\n")
+                hint = git_network_hint("".join(stderr_buf))
+                if hint:
+                    self._console.append_info(hint + "\n")
+            if on_finish is not None:
+                on_finish(code)
+
+        proc.finished_run.connect(_on_finish)
+        self._retire_process()
+        self._process = proc
+        proc.start()
+
+    def _is_light_system_palette(self) -> bool:
+        palette = QApplication.instance().palette() if QApplication.instance() else self.palette()
+        return palette.color(QPalette.ColorRole.Window).lightness() >= 128
+
+    def _style_input_dialog_for_light_mode(self, dlg: QInputDialog):
+        if not self._is_light_system_palette():
+            return
+        dlg.setStyleSheet(
+            "QInputDialog QLabel { color: #111827; }\n"
+            "QInputDialog QLineEdit::placeholder { color: #6b7280; }\n"
+            + _light_dialog_controls_qss("QInputDialog")
+        )
+
+    def _ask_text_input(self, title: str, label: str, default_text: str = "") -> tuple[str, bool]:
+        dlg = QInputDialog(self)
+        dlg.setInputMode(QInputDialog.InputMode.TextInput)
+        dlg.setWindowTitle(title)
+        dlg.setLabelText(label)
+        dlg.setTextValue(default_text)
+        self._style_input_dialog_for_light_mode(dlg)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        return dlg.textValue(), ok
+
+    def _ask_item_input(
+        self,
+        title: str,
+        label: str,
+        items: list[str],
+        current_index: int = 0,
+        editable: bool = False,
+    ) -> tuple[str, bool]:
+        if not items:
+            return "", False
+        dlg = QInputDialog(self)
+        dlg.setInputMode(QInputDialog.InputMode.TextInput)
+        dlg.setWindowTitle(title)
+        dlg.setLabelText(label)
+        dlg.setComboBoxItems(items)
+        dlg.setComboBoxEditable(editable)
+        if 0 <= current_index < len(items):
+            dlg.setTextValue(items[current_index])
+        self._style_input_dialog_for_light_mode(dlg)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        return dlg.textValue(), ok
+
+    def _git_clone(self):
+        dlg = GitCloneDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        url = dlg.url()
+        target_name = dlg.target_name()
+        username = dlg.username()
+        password = dlg.password()
+
+        if not url or not target_name:
+            QMessageBox.warning(self, "Git", "URL und Zielordner dürfen nicht leer sein.")
+            return
+
+        base = self._get_git_base_dir()
+        target = os.path.join(base, target_name)
+        if os.path.exists(target):
+            QMessageBox.warning(self, "Git", f"Zielordner existiert bereits:\n{target}")
+            return
+
+        # Für HTTPS mit Credentials: URL mit eingebetteten Zugangsdaten bauen
+        clone_url = url
+        display_url = url
+        if username and password and url.startswith(("https://", "http://")):
+            parsed = urlparse(url)
+            # Sonderzeichen (z. B. @ in E-Mail-Adressen) müssen URL-kodiert werden
+            enc_user = urlquote(username, safe="")
+            enc_pass = urlquote(password, safe="")
+            host = parsed.hostname
+            netloc = f"{enc_user}:{enc_pass}@{host}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            clone_url = urlunparse(parsed._replace(netloc=netloc))
+            display_url = urlunparse(parsed._replace(netloc=f"{enc_user}:***@{host}"))
+
+        clone_cmd = ["git", "clone", clone_url, target]
+        display_cmd = ["git", "clone", display_url, target]
+
+        def on_clone_success():
+            self._set_active_repo_after_clone(target)
+            if username and password and url.startswith(("https://", "http://")):
+                # WICHTIG: git speichert die Clone-URL unverändert in
+                # .git/config (remote.origin.url) – inklusive eingebettetem
+                # Passwort/Token im Klartext. Deshalb die Remote-URL sofort
+                # auf die Variante OHNE Zugangsdaten zurücksetzen; für
+                # Pull/Push übernimmt der Credential-Helper (s. u.).
+                cmd = self._git_command("-C", target, "remote", "set-url", "origin", url)
+                if cmd is not None:
+                    subprocess.run(cmd, capture_output=True, check=False)
+                self._store_git_credentials(target, url, username, password)
+
+        self._run_git_process(
+            clone_cmd,
+            cwd=base,
+            label="Repository klonen",
+            on_success=on_clone_success,
+            display_cmd=display_cmd,
+        )
+
+    def _secure_credential_helper(self) -> str:
+        """Plattformabhängiger, sicherer git-credential-Helper.
+
+        Speichert Zugangsdaten verschlüsselt im Betriebssystem (Windows Credential
+        Manager / macOS Keychain / GNOME-Keyring via libsecret) statt im Klartext.
+        Wo libsecret fehlt, wird der eingebaute, nur im Arbeitsspeicher gehaltene
+        ``cache``-Helper genutzt (besser als Klartext auf der Platte).
+        """
+        if sys.platform == "win32":
+            return "manager"
+        if sys.platform == "darwin":
+            return "osxkeychain"
+        if shutil.which("git-credential-libsecret"):
+            return "libsecret"
+        # Fallback: 8 h im RAM-Cache – kein Klartext auf der Platte
+        return "cache --timeout=28800"
+
+    def _store_git_credentials(self, repo_path: str, url: str, username: str, password: str):
+        """Speichert HTTPS-Credentials verschlüsselt über den OS-Credential-Manager.
+
+        Es wird KEIN Klartext mehr in ``~/.git-credentials`` geschrieben. Ein evtl.
+        vorhandener alter Klartext-Eintrag für denselben Host wird entfernt.
+        """
+        parsed = urlparse(url)
+        helper = self._secure_credential_helper()
+        # Lokalen credential.helper auf den sicheren Helper setzen
+        cmd = self._git_command("-C", repo_path, "config", "credential.helper", helper)
+        if cmd is not None:
+            subprocess.run(cmd, capture_output=True, check=False)
+        # Zugangsdaten über 'git credential approve' an den Helper übergeben –
+        # dieser legt sie verschlüsselt im OS-Schlüsselspeicher ab.
+        approve_input = (
+            f"protocol={parsed.scheme}\n"
+            f"host={parsed.hostname}\n"
+            f"username={username}\n"
+            f"password={password}\n\n"
+        )
+        try:
+            cmd = self._git_command("-C", repo_path, "credential", "approve")
+            if cmd is None:
+                self._console.append_info(
+                    "[Git] Zugangsdaten konnten nicht im Schlüsselspeicher abgelegt "
+                    "werden – Git fragt beim nächsten Zugriff erneut nach.\n")
+                return
+            res = subprocess.run(
+                cmd,
+                input=approve_input, text=True,
+                capture_output=True, check=False,
+            )
+            if res.returncode == 0:
+                self._console.append_success(
+                    "[Git] Zugangsdaten sicher im System-Schlüsselspeicher abgelegt.\n")
+            else:
+                self._console.append_info(
+                    "[Git] Zugangsdaten konnten nicht im Schlüsselspeicher abgelegt "
+                    "werden – Git fragt beim nächsten Zugriff erneut nach.\n")
+        except OSError as exc:
+            self._console.append_error(
+                f"[Git] Zugangsdaten konnten nicht gespeichert werden: {exc}\n")
+
+        # Migration/Bereinigung: evtl. früher gespeicherten Klartext-Eintrag löschen
+        self._purge_plaintext_credentials(parsed.scheme, parsed.hostname, username)
+
+    def _purge_plaintext_credentials(self, scheme: str, hostname: str | None, username: str):
+        """Entfernt einen alten Klartext-Eintrag aus ~/.git-credentials (falls vorhanden)."""
+        creds_file = Path.home() / ".git-credentials"
+        if not hostname or not creds_file.exists():
+            return
+        try:
+            enc_user = urlquote(username, safe="")
+            host_prefix = f"{scheme}://{enc_user}:"
+            host_suffix = f"@{hostname}"
+            existing = creds_file.read_text(encoding="utf-8").splitlines(keepends=True)
+            kept = [
+                ln for ln in existing
+                if not (ln.startswith(host_prefix) and host_suffix in ln)
+            ]
+            if len(kept) != len(existing):
+                creds_file.write_text("".join(kept), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _set_active_repo_after_clone(self, repo_path: str):
+        normalized = str(Path(repo_path).resolve())
+        self._settings_git_repo = normalized
+        self._save_persistent_settings()
+        self._update_git_status_label()
+        self._console.append_success(f"[Git] Aktives Repository gesetzt: {normalized}\n")
+
+    def _git_show_branch(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+        branch = self._get_current_branch(repo)
+        if not branch:
+            QMessageBox.warning(self, "Git", "Aktueller Branch konnte nicht ermittelt werden.")
+            return
+        self._console.append_info(f"[Git] Aktueller Branch: {branch}\n")
+        QMessageBox.information(self, "Git", f"Aktueller Branch:\n{branch}")
+
+    def _get_current_branch(self, repo: str) -> str | None:
+        cmd = self._git_command("-C", repo, "rev-parse", "--abbrev-ref", "HEAD")
+        if cmd is None:
+            return None
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            return None
+        branch = res.stdout.strip()
+        return branch or None
+
+    def _git_switch_branch(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+
+        branches = self._get_local_branches(repo)
+        if not branches:
+            QMessageBox.warning(self, "Git", "Keine lokalen Branches gefunden.")
+            return
+
+        current = self._get_current_branch(repo) or ""
+        try:
+            default_idx = branches.index(current)
+        except ValueError:
+            default_idx = 0
+
+        target, ok = self._ask_item_input(
+            "Git: Branch wechseln",
+            "Branch:",
+            branches,
+            default_idx,
+            True,
+        )
+        if not ok or not target.strip():
+            return
+        target = target.strip()
+        if target == current:
+            self._console.append_info(f"[Git] Bereits auf Branch '{target}'.\n")
+            return
+
+        self._run_git_process(["git", "switch", target], cwd=repo, label=f"Branch wechseln zu {target}")
+
+    def _get_local_branches(self, repo: str) -> list[str]:
+        cmd = self._git_command("-C", repo, "branch", "--format", "%(refname:short)")
+        if cmd is None:
+            return []
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            return []
+        return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+    def _git_create_branch(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+
+        current = self._get_current_branch(repo) or "HEAD"
+        name, ok = self._ask_text_input(
+            "Git: Neuen Branch anlegen",
+            f"Name des neuen Branches\n(wird ausgehend von '{current}' erstellt):",
+        )
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+
+        if name in self._get_local_branches(repo):
+            QMessageBox.warning(self, "Git", f"Ein Branch mit dem Namen '{name}' existiert bereits.")
+            return
+
+        # git switch -c legt den Branch an und wechselt direkt dorthin.
+        self._run_git_process(
+            ["git", "switch", "-c", name],
+            cwd=repo,
+            label=f"Neuen Branch '{name}' anlegen",
+        )
+
+    def _git_fetch_then(self, repo: str, on_done):
+        """Holt den Remote-Stand (``fetch --all --prune``) im Hintergrund-Thread
+        und ruft danach ``on_done()`` im UI-Thread auf – ohne die Oberfläche
+        einzufrieren. Schlägt der Fetch fehl (z. B. offline), wird trotzdem mit
+        dem lokalen Stand fortgefahren.
+        """
+        cmd = self._git_command("-C", repo, "fetch", "--all", "--prune")
+        if cmd is None:
+            on_done()
+            return
+        self._console.append_info("[Git] Hole Remote-Stand …\n")
+        proc = ProcessRunner(cmd, cwd=repo, env=_git_network_env())
+        # on_done erst nach Rückkehr aus dem finished-Slot starten (sauberer Dialog).
+        proc.finished_run.connect(lambda code: QTimer.singleShot(0, on_done))
+        self._retire_process()
+        self._process = proc
+        proc.start()
+
+    def _git_merge_branch(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+
+        current = self._get_current_branch(repo)
+        if not current or current == "HEAD":
+            QMessageBox.warning(
+                self,
+                "Git",
+                "Es ist kein Branch aktiv (losgelöster HEAD). Bitte zuerst einen Branch auswählen.",
+            )
+            return
+
+        # Remote-Stand im Hintergrund aktualisieren, dann die Auswahl zeigen.
+        self._git_fetch_then(repo, lambda: self._merge_branch_choose(repo, current))
+
+    def _merge_branch_choose(self, repo: str, current: str):
+        """Zeigt nach dem Hintergrund-Fetch die Branch-Auswahl und startet den Merge."""
+        local = [b for b in self._get_local_branches(repo) if b != current]
+        remote = self._get_remote_origin_branches(repo)
+        candidates = local + remote
+        if not candidates:
+            QMessageBox.warning(self, "Git", "Es wurde kein anderer Branch zum Mergen gefunden.")
+            return
+
+        # Upstream (z. B. origin/<current>) als Vorauswahl, falls vorhanden –
+        # das ist der typische Fall „den Remote-Stand in meinen Branch holen".
+        upstream = self._get_upstream_branch(repo)
+        default_idx = candidates.index(upstream) if upstream in candidates else 0
+
+        source, ok = self._ask_item_input(
+            "Git: Branch mergen",
+            f"Welcher Branch soll in '{current}' gemergt werden?",
+            candidates,
+            default_idx,
+            False,
+        )
+        if not ok or not source.strip():
+            return
+        source = source.strip()
+
+        self._run_git_process(
+            ["git", "merge", source],
+            cwd=repo,
+            label=f"'{source}' in '{current}' mergen",
+            on_finish=lambda code: self._offer_conflict_resolution(repo),
+        )
+
+    def _get_conflicted_files(self, repo: str) -> list[str]:
+        cmd = self._git_command("-C", repo, "diff", "--name-only", "--diff-filter=U")
+        if cmd is None:
+            return []
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            return []
+        return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+    def _merge_in_progress(self, repo: str) -> bool:
+        cmd = self._git_command("-C", repo, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+        if cmd is None:
+            return False
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return res.returncode == 0
+
+    def _offer_conflict_resolution(self, repo: str):
+        """Nach einem Merge/Pull mit Konflikten anbieten, den Konflikt-Dialog zu öffnen."""
+        if not self._get_conflicted_files(repo):
+            return
+        reply = QMessageBox.warning(
+            self,
+            "Git: Merge-Konflikt",
+            "Beim Mergen sind Konflikte aufgetreten – derselbe Code wurde an beiden "
+            "Stellen unterschiedlich geändert.\n\n"
+            "Möchtest du sie jetzt im Konflikt-Helfer lösen?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._git_resolve_conflicts()
+
+    def _git_resolve_conflicts(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+
+        if not self._merge_in_progress(repo) and not self._get_conflicted_files(repo):
+            QMessageBox.information(
+                self,
+                "Git",
+                "Aktuell ist kein Merge mit Konflikten offen – es gibt nichts zu lösen.",
+            )
+            return
+
+        dlg = GitConflictDialog(self, repo)
+        dlg.exec()
+        self._update_git_status_label()
+
+    def _git_diff(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+        # Remote-Stand im Hintergrund holen, dann die Vergleichsauswahl zeigen.
+        self._git_fetch_then(repo, lambda: self._git_diff_choose(repo))
+
+    def _git_diff_choose(self, repo: str):
+        """Zeigt nach dem Hintergrund-Fetch die Vergleichsauswahl und erzeugt den Diff."""
+        current = self._get_current_branch(repo)
+        working = "Eigene Änderungen (noch nicht committet)"
+        options = [working]
+
+        upstream = self._get_upstream_branch(repo)
+        remote = self._get_remote_origin_branches(repo)
+        local = [b for b in self._get_local_branches(repo) if b != current]
+
+        # Upstream nach vorne ziehen – der häufigste Vergleich.
+        ordered_remote = []
+        if upstream and upstream in remote:
+            ordered_remote.append(upstream)
+        ordered_remote += [b for b in remote if b != upstream]
+
+        ref_map: dict[str, list[str]] = {working: ["git", "-C", repo, "--no-pager", "diff"]}
+        for ref in ordered_remote + local:
+            label = f"Aktueller Branch  ↔  {ref}"
+            options.append(label)
+            # HEAD..ref zeigt, was auf 'ref' enthalten ist, das hier (noch) fehlt.
+            ref_map[label] = ["git", "-C", repo, "--no-pager", "diff", f"HEAD..{ref}"]
+
+        choice, ok = self._ask_item_input(
+            "Git: Vergleichen (Diff)",
+            "Was soll verglichen werden?",
+            options,
+            0,
+            False,
+        )
+        if not ok or not choice:
+            return
+
+        git_exec = self._resolve_git_executable()
+        if git_exec is None:
+            self._console.append_error("[Git] Git wurde auf diesem System nicht gefunden.\n")
+            return
+
+        res = subprocess.run(
+            [git_exec, *ref_map[choice][1:]],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            self._console.append_error(res.stderr or "[Git] Vergleich konnte nicht erstellt werden.\n")
+            return
+
+        self._show_git_diff_dialog(f"Git: Vergleich – {choice}", res.stdout)
+
+    def _show_git_diff_dialog(self, title: str, diff_text: str):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(820, 560)
+
+        layout = QVBoxLayout(dialog)
+        view = QTextEdit(dialog)
+        view.setReadOnly(True)
+        view.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        view.setFont(QFont("JetBrains Mono, Fira Code, Consolas, monospace", 10))
+
+        if not diff_text.strip():
+            view.setPlainText("(Keine Unterschiede – alles auf dem gleichen Stand.)")
+        else:
+            view.setHtml(self._diff_to_html(diff_text))
+        layout.addWidget(view)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QPushButton("Schließen")
+        close_btn.clicked.connect(dialog.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        dialog.exec()
+
+    def _diff_to_html(self, diff_text: str) -> str:
+        from html import escape
+
+        add_color = "#22c55e"   # hinzugefügte Zeilen
+        del_color = "#ef4444"   # entfernte Zeilen
+        meta_color = "#60a5fa"  # Datei-/Hunk-Köpfe
+        lines = []
+        for raw in diff_text.splitlines():
+            safe = escape(raw)
+            if raw.startswith(("+++", "---", "@@", "diff ", "index ")):
+                color = meta_color
+            elif raw.startswith("+"):
+                color = add_color
+            elif raw.startswith("-"):
+                color = del_color
+            else:
+                color = None
+            if color:
+                lines.append(f'<span style="color:{color};">{safe}</span>')
+            else:
+                lines.append(safe)
+        # Innerhalb von <pre> bleiben Zeilenumbrüche und Einrückungen erhalten.
+        body = "\n".join(lines)
+        return f'<pre style="margin:0; white-space:pre; font-family:inherit;">{body}</pre>'
+
+    def _git_show_history(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+
+        cmd = self._git_command("-C", repo, "--no-pager", "log", "--oneline", "--decorate", "-n", "50")
+        if cmd is None:
+            self._console.append_error("[Git] Git wurde auf diesem System nicht gefunden.\n")
+            return
+
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            self._console.append_error(res.stderr or "[Git] Historie konnte nicht gelesen werden.\n")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Git: Historie")
+        dialog.resize(760, 520)
+
+        layout = QVBoxLayout(dialog)
+        history_view = QTextEdit(dialog)
+        history_view.setReadOnly(True)
+        history_view.setFont(QFont("JetBrains Mono, Fira Code, Consolas, monospace", 10))
+        history_view.setPlainText(res.stdout.strip() or "(Keine Commits gefunden)")
+        layout.addWidget(history_view)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QPushButton("Schließen")
+        close_btn.clicked.connect(dialog.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        dialog.exec()
+
+    def _git_status(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+        self._run_git_process(["git", "status", "--short", "--branch"], cwd=repo, label="Status")
+
+    def _git_fetch(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+        self._run_git_process(["git", "fetch", "--all", "--prune"], cwd=repo, label="Fetch")
+
+    def _git_pull(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+        branch = self._get_current_branch(repo)
+        if branch and branch != "HEAD":
+            self._run_git_process(
+                ["git", "pull", "origin", branch],
+                cwd=repo,
+                label="Pull",
+                on_finish=lambda code: self._offer_conflict_resolution(repo),
+            )
+        else:
+            self._run_git_process(
+                ["git", "pull"],
+                cwd=repo,
+                label="Pull",
+                on_finish=lambda code: self._offer_conflict_resolution(repo),
+            )
+
+    def _get_upstream_branch(self, repo: str) -> str | None:
+        cmd = self._git_command("-C", repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+        if cmd is None:
+            return None
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            return None
+        value = res.stdout.strip()
+        return value or None
+
+    def _get_remote_origin_branches(self, repo: str) -> list[str]:
+        cmd = self._git_command(
+            "-C", repo, "for-each-ref", "--format", "%(refname:short)", "refs/remotes/origin"
+        )
+        if cmd is None:
+            return []
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            return []
+        branches = []
+        for line in res.stdout.splitlines():
+            branch = line.strip()
+            if not branch or branch == "origin/HEAD":
+                continue
+            branches.append(branch)
+        branches.sort(key=lambda b: b.casefold())
+        return branches
+
+    def _git_push(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+        self._run_git_process(["git", "push"], cwd=repo, label="Push")
+
+    def _git_commit(self):
+        repo = self._require_git_repo()
+        if not repo:
+            return
+        msg, ok = self._ask_text_input(
+            "Git: Commit",
+            "Commit-Nachricht:",
+        )
+        if not ok or not msg.strip():
+            return
+        self._run_git_process(
+            ["git", "add", "-A"],
+            cwd=repo,
+            label="Änderungen stagen",
+            on_success=lambda: self._run_git_process(
+                ["git", "commit", "-m", msg.strip()],
+                cwd=repo,
+                label="Commit erstellen",
+            ),
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Fehlernavigation
+    # ──────────────────────────────────────────────────────────────────────
+    def _resolve_traceback_file(self, filepath: str) -> str | None:
+        """Ordnet Traceback-Dateiangaben einer realen Editor-Datei zu.
+
+        MicroPython meldet Laufzeitfehler oft als ``File "<stdin>", line N``.
+        In diesem Fall wird die zuletzt gestartete Datei verwendet.
+        """
+        raw = (filepath or "").strip()
+        if not raw:
+            return None
+
+        pseudo_names = {
+            "<stdin>",
+            "<std>",
+            "<string>",
+            "<module>",
+        }
+        if raw in pseudo_names:
+            if self._last_run_file:
+                return self._last_run_file
+            tab = self._current_tab()
+            return tab.filepath if (tab and tab.filepath) else None
+
+        if os.path.isabs(raw):
+            return raw
+
+        candidates: list[str] = []
+        if self._last_run_file:
+            candidates.append(os.path.join(os.path.dirname(self._last_run_file), raw))
+        tab = self._current_tab()
+        if tab and tab.filepath:
+            candidates.append(os.path.join(os.path.dirname(tab.filepath), raw))
+
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return os.path.abspath(candidate)
+
+        return raw
+
+    def _jump_to_error(self, filepath: str, lineno: int):
+        resolved = self._resolve_traceback_file(filepath)
+        if resolved:
+            self._open_file_path(resolved)
+        tab = self._current_tab()
+        if tab:
+            tab.editor.goto_line(lineno)
+            tab.editor.mark_error_line(lineno)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Code-Generator: generierten Code in neuen Tab einfügen
+    # ──────────────────────────────────────────────────────────────────────
+    def _on_insert_generated_code(self, code: str):
+        tab = self._new_tab()
+        tab.editor.set_text(code)
+        self._update_tab_title(tab)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Hilfsfunktionen
+    # ──────────────────────────────────────────────────────────────────────
+    def _get_python_executable(self) -> str:
+        # In den Einstellungen gewählter Interpreter hat Vorrang – sofern er
+        # existiert und nicht die App selbst ist (Fork-Bomb-Schutz im Frozen-Modus).
+        chosen = (self._settings_python_exec or "").strip()
+        if chosen:
+            # Wurde nur ein Name statt eines Pfads gewählt (z. B. "python3.14"),
+            # über PATH auflösen – sonst würde fälschlich der System-Python
+            # verwendet (z. B. ein Python ohne tkinter/pyserial).
+            if not os.path.isfile(chosen):
+                resolved = shutil.which(chosen)
+                if resolved:
+                    chosen = resolved
+            if os.path.isfile(chosen):
+                if getattr(sys, "frozen", False):
+                    try:
+                        if os.path.realpath(chosen) == os.path.realpath(sys.executable):
+                            return python_executable()
+                    except OSError:
+                        pass
+                return chosen
+        # Sonst automatische Ermittlung (Frozen: System-Python; Dev: venv).
+        return python_executable()
+
+    def _refresh_ports(self):
+        """Stößt einen Port-Scan im Hintergrund-Thread an (kein I/O im UI-Thread).
+
+        Der Worker wird wiederverwendet (QThread ist nach ``finished`` erneut
+        startbar) – so entsteht beim 3-Sekunden-Polling nicht alle paar
+        Sekunden ein neues QThread-Objekt.
+        """
+        if self._port_scan_busy:
+            return   # vorheriger Scan läuft noch – Ergebnis abwarten
+        worker = getattr(self, "_port_scan_worker", None)
+        if worker is None:
+            worker = _PortScanWorker()
+            worker.result.connect(self._apply_port_scan)
+            worker.finished.connect(lambda: setattr(self, "_port_scan_busy", False))
+            self._port_scan_worker = worker
+        if worker.isRunning():
+            return
+        self._port_scan_busy = True
+        worker.start()
+
+    def _apply_port_scan(self, ports: list):
+        """Übernimmt das Ergebnis eines Port-Scans in die Toolbar-Combo.
+
+        Baut die Liste nur neu auf, wenn sich die erkannten Geräte tatsächlich
+        geändert haben – das vermeidet unnötige UI-Arbeit beim Sekunden-Polling.
+        """
+        _note(f"Port-Scan ausgewertet: {[d for d, _ in ports]}")
+        current = self._port_combo.currentData()
+        existing = [self._port_combo.itemData(i) for i in range(self._port_combo.count())]
+        new_devices = [d for d, _ in ports] if ports else [None]
+        if existing == new_devices:
+            # Geräteliste unverändert – nur Trennungs-Status nachziehen.
+            if current and current not in new_devices:
+                self._status_mode.setText("MicroPython  –  ⚠ Gerät getrennt")
+                self._file_panel.set_device_connected(False)
+            return
+
+        self._port_combo.blockSignals(True)
+        self._port_combo.clear()
+        if not ports:
+            self._port_combo.addItem("— Kein Gerät —", None)
+        else:
+            for device, desc in ports:
+                label = f"{device}  ({desc})" if desc and desc != device else device
+                self._port_combo.addItem(label, device)
+        self._port_combo.blockSignals(False)
+
+        if current:
+            idx = self._port_combo.findData(current)
+            if idx >= 0:
+                self._port_combo.blockSignals(True)
+                self._port_combo.setCurrentIndex(idx)
+                self._port_combo.blockSignals(False)
+                self._file_panel.set_device_connected(True)
+            else:
+                self._status_mode.setText("MicroPython  –  ⚠ Gerät getrennt")
+                self._file_panel.set_device_connected(False)
+        elif ports:
+            # Erstmalige Befüllung: ersten Port auswählen und Firmware-Version lesen
+            self._on_port_selected(0)
+        else:
+            self._file_panel.set_device_connected(False)
+
+    def _on_port_selected(self, index: int):
+        """Wird aufgerufen wenn der Nutzer ein Gerät auswählt – liest Firmware-Version."""
+        port = self._port_combo.itemData(index)
+        if not port:
+            self._status_mode.setText("MicroPython")
+            self._file_panel.set_device_connected(False)
+            return
+        self._status_mode.setText(f"MicroPython  –  {port}")
+        self._file_panel.set_device_connected(True)
+        self._device_panel.refresh(port)
+
+    def _get_serial_port(self, silent: bool = False) -> str | None:
+        """Gibt den aktuell in der Toolbar gewählten Port zurück."""
+        port = self._port_combo.currentData() if hasattr(self, "_port_combo") else None
+        if not port and not silent:
+            QMessageBox.warning(
+                self, "Kein Gerät",
+                "Kein serielles Gerät ausgewählt.\n"
+                "Bitte Controller anschließen und in der Toolbar auswählen."
+            )
+        return port
+
+    def _show_crash_log(self):
+        from . import crash_log
+        crash_log.show_dialog(self)
+
+    def _report_bug(self):
+        """Öffnet den Fehlerbericht-Dialog (Code + letzte Konsolenausgabe werden angehängt)."""
+        from .bug_report import BugReportDialog
+        code = ""
+        tab = self._current_tab()
+        if tab is not None:
+            try:
+                code = tab.editor.get_text()
+            except Exception:
+                code = ""
+        console = ""
+        try:
+            console = self._console.output_console.toPlainText()
+        except Exception:
+            console = ""
+        # Nur die letzten ~4000 Zeichen – der letzte Fehler steht meist am Ende.
+        if len(console) > 4000:
+            console = "… (gekürzt) …\n" + console[-4000:]
+        # Die letzten Einträge des Absturzprotokolls gehören zum Bericht (sichtbar in der Vorschau,
+        # nur mit gesetztem Haken „Code und Konsole anhängen“).
+        from . import crash_log
+        crash = crash_log.read_tail(3000).strip()
+        if crash:
+            console += "\n\n--- Absturzprotokoll (Ende) ---\n" + crash
+        dlg = BugReportDialog(code=code, console=console, parent=self)
+        dlg.exec()
+
+    def _show_ais_prompt(self):
+        """Zeigt die Vorlage, um den NiT_Coder als Dialogpartner auf ais.chat anzulegen."""
+        from .ais_prompt_dialog import AisChatPromptDialog
+        AisChatPromptDialog(parent=self, level=self._settings_debug_level).exec()
+
+    def _show_quickstart(self):
+        """Kurzanleitung (mitgelieferte .md) in einem eigenen Fenster anzeigen."""
+        dlg = getattr(self, "_help_dialog", None)
+        if dlg is None:
+            guide = guide_path()
+            if guide is None:
+                QMessageBox.warning(self, "Kurzanleitung", "Die Kurzanleitung wurde nicht gefunden.")
+                return
+            dlg = HelpDialog(guide, self)
+            dlg.panel.insert_into_editor_requested.connect(self._on_worksheet_insert_code)
+            self._help_dialog = dlg
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _show_about(self):
+        box = QMessageBox(self)
+        box.setIconPixmap(find_logo().pixmap(96, 96))
+        box.setWindowTitle(f"Über {APP_NAME}")
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(
+            f"<h2>{APP_NAME} {APP_VERSION}</h2>"
+            f"<p>Ein Python- und MicroPython-Editor für den Schulunterricht.</p>"
+            f"<p>Unterstützte Controller:<br>"
+            + "<br>".join(b["label"] for b in SUPPORTED_BOARDS.values())
+            + "</p>")
+        box.exec()
+
+    def _open_settings(self):
+        dlg = SettingsDialog(
+            self,
+            font_size=self._settings_font_size,
+            editor_font=self._settings_editor_font,
+            line_numbers=self._settings_line_numbers,
+            word_wrap=self._settings_word_wrap,
+            highlight_line=self._settings_highlight_line,
+            autosave_secs=self._settings_autosave_secs,
+            python_exec=self._settings_python_exec,
+            scrollback=self._settings_scrollback,
+            tutor_mode=self._settings_tutor_mode,
+            sketchbook_dir=self._settings_sketchbook,
+            git_exec=self._settings_git_executable,
+            theme=self._settings_theme,
+            code_scheme=self._settings_code_scheme,
+            blocks_enabled=self._settings_blocks_enabled,
+            plot_y_mode=self._settings_plot_y_mode,
+            plot_y_min=self._settings_plot_y_min,
+            plot_y_max=self._settings_plot_y_max,
+            plot_x_mode=self._settings_plot_x_mode,
+            plot_x_min=self._settings_plot_x_min,
+            plot_x_max=self._settings_plot_x_max,
+            ui_font_pt=self._settings_ui_font_pt,
+            debug_level=self._settings_debug_level,
+            debug_stepped=self._settings_debug_stepped,
+            debug_change_hint=self._settings_debug_change_hint,
+            hidden_activity=self._settings_hidden_activity,
+        )
+        if dlg.exec() == SettingsDialog.DialogCode.Accepted:
+            self._settings_debug_level = dlg.debug_level
+            self._settings_debug_stepped = dlg.debug_stepped
+            self._settings_debug_change_hint = dlg.debug_change_hint
+            self._debug_log_panel.set_level(self._settings_debug_level)
+            self._coder_panel.set_level(self._settings_debug_level)
+            if getattr(self, "_debug_map_dlg", None) is not None:
+                self._debug_map_dlg.set_level(self._settings_debug_level)
+            ui_font_changed = dlg.ui_font_pt != self._settings_ui_font_pt
+            self._settings_ui_font_pt = dlg.ui_font_pt
+            self._settings_font_size = dlg.font_size
+            self._settings_editor_font = dlg.editor_font
+            set_mono_font(self._settings_editor_font)
+            self._settings_line_numbers = dlg.line_numbers
+            self._settings_word_wrap = dlg.word_wrap
+            self._settings_highlight_line = dlg.highlight_line
+            self._settings_autosave_secs = dlg.autosave_secs
+            self._settings_python_exec = dlg.python_exec
+            self._settings_scrollback = dlg.scrollback_lines
+            self._settings_tutor_mode = dlg.tutor_mode
+            self._settings_sketchbook = self._normalize_sketchbook_dir(dlg.sketchbook_dir)
+            self._settings_git_executable = dlg.git_exec
+            self._settings_theme = dlg.theme
+            self._settings_code_scheme = dlg.code_scheme
+            self._settings_blocks_enabled = dlg.blocks_enabled
+            self._settings_hidden_activity = dlg.hidden_activity
+            self._settings_plot_y_mode = dlg.plot_y_mode
+            self._settings_plot_y_min = dlg.plot_y_min
+            self._settings_plot_y_max = dlg.plot_y_max
+            self._settings_plot_x_mode = dlg.plot_x_mode
+            self._settings_plot_x_min = dlg.plot_x_min
+            self._settings_plot_x_max = dlg.plot_x_max
+            try:
+                self._apply_settings()
+                self._apply_sketchbook_root()
+                self._update_git_menu_visibility()
+                self._save_persistent_settings()
+            except Exception as exc:
+                traceback.print_exc()
+                QMessageBox.critical(
+                    self,
+                    "Einstellungen",
+                    f"Einstellungen konnten nicht angewendet werden:\n{exc}",
+                )
+            if ui_font_changed:
+                QMessageBox.information(
+                    self,
+                    "Einstellungen",
+                    "Die neue Schriftgröße der Oberfläche wird nach einem Neustart "
+                    "von Koalino wirksam.",
+                )
+
+    def _settings_bool(self, key: str, default: bool) -> bool:
+        raw = self._settings_store.value(key, default)
+        if isinstance(raw, bool):
+            return raw
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _settings_int(self, key: str, default: int) -> int:
+        raw = self._settings_store.value(key, default)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return default
+
+    def _settings_float(self, key: str, default: float) -> float:
+        raw = self._settings_store.value(key, default)
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return default
+
+    def _normalize_sketchbook_dir(self, path: str) -> str:
+        candidate = Path(path).expanduser() if path else Path.home()
+        if not candidate.exists() or not candidate.is_dir():
+            return str(Path.home())
+        return str(candidate.resolve())
+
+    def _load_persistent_settings(self):
+        self._settings_font_size = self._settings_int("editor/font_size", self._settings_font_size)
+        self._settings_editor_font = str(self._settings_store.value("editor/font_family", "default") or "default")
+        set_mono_font(self._settings_editor_font)
+        self._settings_line_numbers = self._settings_bool("editor/line_numbers", self._settings_line_numbers)
+        self._settings_word_wrap = self._settings_bool("editor/word_wrap", self._settings_word_wrap)
+        self._settings_highlight_line = self._settings_bool("editor/highlight_line", self._settings_highlight_line)
+        self._settings_autosave_secs = self._settings_int("editor/autosave_secs", self._settings_autosave_secs)
+        self._settings_python_exec = str(self._settings_store.value("python/executable", self._settings_python_exec) or "")
+        embedded_py = embedded_python_executable()
+
+        # Einmalige Migration: wenn eine mitgelieferte Runtime vorhanden ist,
+        # soll sie standardmäßig gewählt werden (auch bei Alt-Settings).
+        migrated_embedded = self._settings_bool("python/prefer_embedded_migrated", False)
+        if embedded_py and not migrated_embedded:
+            self._settings_python_exec = embedded_py
+            self._settings_store.setValue("python/executable", self._settings_python_exec)
+            self._settings_store.setValue("python/prefer_embedded_migrated", True)
+        else:
+            chosen = (self._settings_python_exec or "").strip()
+            usable = False
+            if chosen:
+                if os.path.isfile(chosen):
+                    usable = True
+                elif shutil.which(chosen):
+                    usable = True
+
+            if not usable:
+                fallback = embedded_py or preferred_python_interpreter() or ""
+                self._settings_python_exec = fallback
+                if fallback:
+                    self._settings_store.setValue("python/executable", fallback)
+        self._settings_scrollback = self._settings_int("console/scrollback", self._settings_scrollback)
+        # Block-Editor ist seit dem Ende der BETA standardmäßig an. Bestehende
+        # Installationen haben durch den früheren Standard („aus") ein
+        # blocks/enabled=False persistiert (closeEvent speichert alle Settings).
+        # Darum einmalig auf an setzen; eine spätere bewusste Abwahl bleibt erhalten.
+        if self._settings_bool("blocks/default_on_migrated", False):
+            self._settings_blocks_enabled = self._settings_bool("blocks/enabled", self._settings_blocks_enabled)
+        else:
+            self._settings_blocks_enabled = True
+            self._settings_store.setValue("blocks/enabled", True)
+            self._settings_store.setValue("blocks/default_on_migrated", True)
+        self._settings_tutor_mode = str(self._settings_store.value("tutor/mode", self._settings_tutor_mode) or "none")
+        if self._settings_tutor_mode not in ("none", "aischat", "fobizz"):
+            self._settings_tutor_mode = "none"   # Ollama-Modi (Infi, Code-Generator) gibt es nicht mehr
+        self._settings_tutor_url = str(self._settings_store.value("tutor/url", self._settings_tutor_url) or "")
+        self._settings_tutor_model = str(self._settings_store.value("tutor/model", self._settings_tutor_model) or "")
+        self._settings_sketchbook = self._normalize_sketchbook_dir(
+            str(self._settings_store.value("files/sketchbook_dir", self._settings_sketchbook) or "")
+        )
+        self._settings_git_executable = str(
+            self._settings_store.value("git/executable", self._settings_git_executable) or ""
+        )
+        self._settings_git_repo = str(self._settings_store.value("git/repo_dir", self._settings_git_repo) or "")
+        self._settings_theme = str(self._settings_store.value("ui/theme", self._settings_theme) or "modern_light")
+        # Einmalige Migration: das bisherige Standard-Design (Eclipse) wird beim
+        # ersten Start mit dem neuen Layout auf das moderne Hell-Design gesetzt.
+        if not self._settings_store.value("ui/layout_v2", False, type=bool):
+            if self._settings_theme == "classic_light":
+                self._settings_theme = "modern_light"
+            self._settings_store.setValue("ui/layout_v2", True)
+        # Solarized/Dracula gibt es nur noch als Code-Farbschema.
+        self._settings_code_scheme = str(
+            self._settings_store.value("ui/code_scheme", "") or "")
+        if self._settings_theme in LEGACY_THEME_MIGRATION:
+            self._settings_theme, legacy_scheme = LEGACY_THEME_MIGRATION[self._settings_theme]
+            if not self._settings_code_scheme:
+                self._settings_code_scheme = legacy_scheme
+        if self._settings_code_scheme not in CODE_SCHEMES:
+            self._settings_code_scheme = "auto"
+        self._settings_ui_font_pt = self._settings_int("ui/font_pt", self._settings_ui_font_pt)
+        # Serial-Plotter-Achsen
+        self._settings_plot_y_mode = str(self._settings_store.value("plot/y_mode", self._settings_plot_y_mode) or "auto")
+        self._settings_plot_y_min = self._settings_float("plot/y_min", self._settings_plot_y_min)
+        self._settings_plot_y_max = self._settings_float("plot/y_max", self._settings_plot_y_max)
+        self._settings_plot_x_mode = str(self._settings_store.value("plot/x_mode", self._settings_plot_x_mode) or "sliding")
+        self._settings_plot_x_min = self._settings_int("plot/x_min", self._settings_plot_x_min)
+        self._settings_plot_x_max = self._settings_int("plot/x_max", self._settings_plot_x_max)
+        level = str(self._settings_store.value("debug/level", self._settings_debug_level) or "kl10")
+        self._settings_debug_level = level if level in ("kl89", "kl10") else "kl10"
+        raw_hidden = str(self._settings_store.value("ui/hidden_activity", "") or "")
+        self._settings_hidden_activity = {
+            k for k in raw_hidden.split(",") if k in ACTIVITY_TOGGLEABLE}
+        self._settings_debug_stepped = self._settings_bool("debug/stepped", self._settings_debug_stepped)
+        self._settings_debug_change_hint = self._settings_bool("debug/change_hint", self._settings_debug_change_hint)
+        # Theme sofort anwenden, damit alle nachfolgenden UI-Elemente korrekte Farben erhalten
+        set_theme(self._settings_theme)
+        set_code_scheme(self._settings_code_scheme)
+
+    def _save_persistent_settings(self):
+        self._settings_store.setValue("editor/font_size", self._settings_font_size)
+        self._settings_store.setValue("editor/font_family", self._settings_editor_font)
+        self._settings_store.setValue("editor/line_numbers", self._settings_line_numbers)
+        self._settings_store.setValue("editor/word_wrap", self._settings_word_wrap)
+        self._settings_store.setValue("editor/highlight_line", self._settings_highlight_line)
+        self._settings_store.setValue("editor/autosave_secs", self._settings_autosave_secs)
+        self._settings_store.setValue("blocks/enabled", self._settings_blocks_enabled)
+        self._settings_store.setValue("python/executable", self._settings_python_exec)
+        self._settings_store.setValue("console/scrollback", self._settings_scrollback)
+        self._settings_store.setValue("tutor/mode", self._settings_tutor_mode)
+        self._settings_store.setValue("tutor/url", self._settings_tutor_url)
+        self._settings_store.setValue("tutor/model", self._settings_tutor_model)
+        self._settings_store.setValue("files/sketchbook_dir", self._settings_sketchbook)
+        self._settings_store.setValue("git/executable", self._settings_git_executable)
+        self._settings_store.setValue("git/repo_dir", self._settings_git_repo)
+        self._settings_store.setValue("ui/theme", self._settings_theme)
+        self._settings_store.setValue("ui/code_scheme", self._settings_code_scheme)
+        self._settings_store.setValue("ui/font_pt", self._settings_ui_font_pt)
+        self._settings_store.setValue("plot/y_mode", self._settings_plot_y_mode)
+        self._settings_store.setValue("plot/y_min", self._settings_plot_y_min)
+        self._settings_store.setValue("plot/y_max", self._settings_plot_y_max)
+        self._settings_store.setValue("plot/x_mode", self._settings_plot_x_mode)
+        self._settings_store.setValue("plot/x_min", self._settings_plot_x_min)
+        self._settings_store.setValue("plot/x_max", self._settings_plot_x_max)
+        self._settings_store.setValue(
+            "ui/hidden_activity", ",".join(sorted(self._settings_hidden_activity)))
+        self._settings_store.setValue("debug/level", self._settings_debug_level)
+        self._settings_store.setValue("debug/stepped", self._settings_debug_stepped)
+        self._settings_store.setValue("debug/change_hint", self._settings_debug_change_hint)
+        self._settings_store.sync()
+
+    def _choose_sketchbook_dir(self):
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Sketchbook-Ordner wählen",
+            self._settings_sketchbook,
+        )
+        if folder:
+            self._settings_sketchbook = self._normalize_sketchbook_dir(folder)
+            self._settings_git_repo = ""
+            self._apply_sketchbook_root()
+            self._save_persistent_settings()
+            self._update_git_status_label()
+
+    def _update_git_status_label(self):
+        if not hasattr(self, "_status_git"):
+            return
+        repo = self._settings_git_repo
+        if not repo or not os.path.isdir(repo):
+            self._status_git.setText("Git: —")
+            return
+
+        try:
+            rel = Path(repo).resolve().relative_to(Path(self._settings_sketchbook).resolve())
+            label = "." if str(rel) == "." else str(rel)
+        except Exception:
+            label = Path(repo).name or repo
+
+        self._status_git.setText(f"Git: {label}")
+
+    def _apply_sketchbook_root(self):
+        if hasattr(self, "_file_panel"):
+            self._file_panel.set_root(self._settings_sketchbook)
+
+    def _rebuild_sketchbook_menu(self):
+        self._m_sketchbook.clear()
+        self._add_action(self._m_sketchbook, "Sketchbook-Ordner wählen …", self._choose_sketchbook_dir)
+        self._m_sketchbook.addSeparator()
+
+        root = Path(self._settings_sketchbook)
+        if not root.exists() or not root.is_dir():
+            info = self._m_sketchbook.addAction("(Sketchbook-Ordner nicht gefunden)")
+            info.setEnabled(False)
+            return
+
+        has_entries = self._populate_sketchbook_menu(self._m_sketchbook, root)
+        if not has_entries:
+            info = self._m_sketchbook.addAction("(Keine .py-Dateien gefunden)")
+            info.setEnabled(False)
+
+    # Obergrenze an Einträgen pro Menüebene – schützt vor riesigen Ordnern.
+    _MENU_MAX_ENTRIES = 60
+
+    def _populate_sketchbook_menu(self, menu: QMenu, directory: Path, depth: int = 0) -> bool:
+        """Baut das Sketchbook-Menü mit Tiefen- und Mengen-Begrenzung auf.
+
+        Das Sketchbook ist per Default das Home-Verzeichnis – unbegrenzte
+        Rekursion beim Menü-Öffnen würde die Oberfläche dort einfrieren.
+        """
+        has_entries = False
+        try:
+            children = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        except OSError:
+            return False
+
+        shown = 0
+        for child in children:
+            if shown >= self._MENU_MAX_ENTRIES:
+                info = menu.addAction("… (weitere Einträge ausgeblendet)")
+                info.setEnabled(False)
+                break
+            if child.is_dir():
+                if _skip_sketchbook_dir(child.name) or depth + 1 >= _SKETCHBOOK_MAX_DEPTH:
+                    continue
+                sub_menu = menu.addMenu(child.name)
+                if not self._populate_sketchbook_menu(sub_menu, child, depth + 1):
+                    sub_menu.setEnabled(False)
+                else:
+                    has_entries = True
+                    shown += 1
+            elif child.is_file() and child.suffix.lower() == ".py":
+                action = menu.addAction(child.name)
+                action.triggered.connect(lambda _checked=False, p=str(child): self._open_file_path(p))
+                has_entries = True
+                shown += 1
+
+        return has_entries
+
+    def _update_widget_styles(self):
+        """Inline-Stylesheets von Toolbar-Widgets und Statusleiste nach Theme-Wechsel neu setzen."""
+        t = THEME
+        if hasattr(self, "_mode_switch"):
+            self._mode_switch.apply_theme()
+        if hasattr(self, "_port_combo"):
+            self._port_combo.apply_theme()
+        if hasattr(self, "_status_mode"):
+            self._status_mode.setStyleSheet(f"background:transparent; color:{t['accent']}; font-weight:bold; padding:0 8px;")
+        if hasattr(self, "_status_git"):
+            self._status_git.setStyleSheet(f"background:transparent; color:{t['text_dim']}; padding:0 8px;")
+        if hasattr(self, "_status_board"):
+            self._status_board.setStyleSheet(f"background:transparent; color:{t['text_dim']}; padding:0 8px;")
+
+    def _apply_settings(self):
+        """Einstellungen auf alle offenen Tabs + Konsole anwenden."""
+        # Theme zuerst anwenden, damit alle Farben stimmen
+        set_theme(self._settings_theme)
+        set_code_scheme(self._settings_code_scheme)
+        self.setStyleSheet(build_global_style())
+        self._update_widget_styles()
+        self._apply_toolbar_icons()
+        self._refresh_activity_icons()
+
+        for tab in self._tabs:
+            tab.editor.set_font_size(self._settings_font_size)
+            tab.editor.set_line_numbers_visible(self._settings_line_numbers)
+            tab.editor.set_word_wrap(self._settings_word_wrap)
+            tab.editor.set_highlight_current_line(self._settings_highlight_line)
+            tab.editor.refresh_theme()
+        self._file_panel.refresh_theme()
+        self._device_panel.refresh_theme()
+        self._console.refresh_theme()
+        self._tutor_panel.refresh_theme()
+        self._coder_panel.refresh_theme()
+        self._aischat_panel.refresh_theme()
+        self._fobizz_panel.refresh_theme()
+        self._claude_terminal_panel.refresh_theme()
+        self._worksheet_panel.refresh_theme()
+        self._debug_log_panel.refresh_theme()
+        for attr in ("_parsons_window", "_csv_window", "_pap_window", "_ibd_window",
+                     "_schaltlab_window"):
+            win = getattr(self, attr, None)
+            if win is not None:
+                win.apply_theme()
+        self._console.set_font_size(self._settings_font_size)
+        self._console.set_scrollback_limit(self._settings_scrollback)
+        self._console.set_plot_defaults({
+            "y_mode": self._settings_plot_y_mode,
+            "y_min":  self._settings_plot_y_min,
+            "y_max":  self._settings_plot_y_max,
+            "x_mode": self._settings_plot_x_mode,
+            "x_min":  self._settings_plot_x_min,
+            "x_max":  self._settings_plot_x_max,
+        })
+        # Block-Editor ein-/ausblenden
+        self._apply_blocks_enabled()
+        # Auto-Save-Timer
+        self._autosave_timer.stop()
+        if self._settings_autosave_secs > 0:
+            self._autosave_timer.start(self._settings_autosave_secs * 1000)
+        # Chatbot (3 Modi: none / aischat / fobizz). Ein offenes Fehlerprotokoll bleibt offen.
+        keep_log = self._debug_log_visible()
+        keep_site = self._py_site_visible()
+        self._show_tutor_panel()
+        if keep_log:
+            self._open_debug_log()
+        elif keep_site:
+            self._open_py_site()
+        self._sync_activity_bar()
+
+    def _show_tutor_panel(self):
+        """Rechten Bereich gemäß Einstellung „KI-Tutor“ zeigen (bzw. bei „none“ ausblenden)."""
+        from .ais_chat_panel import (
+            PANEL_DEFAULT_WIDTH,
+            PANEL_MAX_WIDTH,
+            PANEL_MIN_WIDTH,
+        )
+        mode = self._settings_tutor_mode
+        if mode == "none":
+            self._main_splitter.setCollapsible(2, True)
+            self._ai_stack.setMinimumWidth(0)
+            self._ai_stack.setMaximumWidth(16777215)
+            self._ai_stack.setVisible(False)
+            sizes = self._main_splitter.sizes()
+            self._main_splitter.setSizes([sizes[0], sizes[1] + sizes[2], 0])
+        elif mode in ("aischat", "fobizz"):
+            self._main_splitter.setCollapsible(2, False)
+            self._ai_stack.setMinimumWidth(PANEL_MIN_WIDTH)
+            self._ai_stack.setMaximumWidth(PANEL_MAX_WIDTH)
+            self._ai_stack.setCurrentWidget(
+                self._fobizz_panel if mode == "fobizz" else self._aischat_panel)
+            self._ai_stack.setVisible(True)
+            sizes = self._main_splitter.sizes()
+            total = sum(sizes)
+            desired = sizes[2] if sizes[2] > 0 else PANEL_DEFAULT_WIDTH
+            desired = max(PANEL_MIN_WIDTH, min(PANEL_MAX_WIDTH, desired))
+            self._main_splitter.setSizes([
+                sizes[0],
+                max(0, total - sizes[0] - desired),
+                desired,
+            ])
+        self._sync_activity_bar()
+
+    def _autosave_all(self):
+        """Alle geänderten, bereits gespeicherten Tabs automatisch speichern."""
+        for tab in self._tabs:
+            if tab.filepath and tab.editor.is_modified():
+                try:
+                    self._do_save(tab, tab.filepath, silent=True)
+                except Exception:
+                    pass
+
+    def closeEvent(self, event):
+        for tab in self._tabs:
+            if tab.editor.is_modified() or tab.device_dirty:
+                reply = QMessageBox.question(
+                    self, "Ungespeicherte Änderungen",
+                    "Es gibt ungespeicherte Änderungen.\nTrotzdem beenden?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+                break
+        # Laufende QThreads synchron beenden bevor Python-GC greift
+        if self._process and self._process.isRunning():
+            self._process.terminate_process()
+            self._process.wait(2000)
+        for t in list(self._retired_threads):
+            if t.isRunning():
+                t.wait(1000)
+        for t in list(self._aux_workers):
+            if t.isRunning():
+                t.wait(1000)
+        scan = getattr(self, "_port_scan_worker", None)
+        if scan is not None and scan.isRunning():
+            scan.wait(1000)
+        self._claude_terminal_panel.stop()   # sonst bleibt `claude` als Waisenprozess hängen
+        self._debug_log_panel.save()
+        self._save_persistent_settings()
+        event.accept()

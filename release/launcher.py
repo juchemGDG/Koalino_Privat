@@ -33,12 +33,12 @@ if getattr(sys, "frozen", False) and len(sys.argv) >= 3 and sys.argv[1] == "-m":
 # ──────────────────────────────────────────────────────────────────────────────
 if getattr(sys, "frozen", False) and len(sys.argv) > 1 and sys.argv[1] in ("-i", "-m", "-c"):
     sys.stderr.write(
-        "NIT_Code wurde fälschlich als Python-Interpreter aufgerufen "
+        "Koalino wurde fälschlich als Python-Interpreter aufgerufen "
         f"({' '.join(sys.argv[1:])}). Beende, um eine Endlosschleife zu verhindern.\n"
     )
     sys.exit(0)
 
-from nit_code.main import main
+from koalino.main import main
 
 
 if __name__ == "__main__":

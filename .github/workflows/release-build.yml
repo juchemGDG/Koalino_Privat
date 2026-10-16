@@ -22,7 +22,7 @@ on:
 # sichtbar. Artefakte gibt es nur noch bei Nicht-Tag-Builds (zum Testen), mit
 # einem Tag Aufbewahrung.
 #
-# Die Datenauswertung (StatPlot) lädt NIT_Code online; für den Offline-Fall
+# Die Datenauswertung (StatPlot) lädt Koalino online; für den Offline-Fall
 # holt jeder Build den aktuellen StatPlot-Stand von GitHub (sync_statplot.sh).
 permissions:
   contents: write
@@ -72,14 +72,14 @@ jobs:
         run: bash release/scripts/upload_release_assets.sh release/downloads/linux
         env:
           GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
-          RELEASE_REPO: juchemGDG/NIT_Code
+          RELEASE_REPO: juchemGDG/Koalino
 
       - name: Upload Linux artifact (Testbuild)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: nit-code-linux-${{ matrix.arch }}
+          name: koalino-linux-${{ matrix.arch }}
           path: release/downloads/linux/*
           retention-days: 1
 
@@ -120,14 +120,14 @@ jobs:
         run: bash release/scripts/upload_release_assets.sh release/downloads/macos
         env:
           GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
-          RELEASE_REPO: juchemGDG/NIT_Code
+          RELEASE_REPO: juchemGDG/Koalino
 
       - name: Upload macOS artifact (Testbuild)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: nit-code-macos
+          name: koalino-macos
           path: release/downloads/macos/*
           retention-days: 1
 
@@ -167,14 +167,14 @@ jobs:
         run: bash release/scripts/upload_release_assets.sh release/downloads/windows
         env:
           GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
-          RELEASE_REPO: juchemGDG/NIT_Code
+          RELEASE_REPO: juchemGDG/Koalino
 
       - name: Upload Windows artifact (Testbuild)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: nit-code-windows
+          name: koalino-windows
           path: release/downloads/windows/*
           retention-days: 1
 
@@ -192,4 +192,4 @@ jobs:
         run: bash release/scripts/publish_release.sh
         env:
           GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
-          RELEASE_REPO: juchemGDG/NIT_Code
+          RELEASE_REPO: juchemGDG/Koalino
