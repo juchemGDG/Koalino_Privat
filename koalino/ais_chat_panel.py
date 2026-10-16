@@ -213,7 +213,7 @@ class AisChatPanel(QWidget):
                 // sich, schmaler als ihr Inhalt zu werden – ein breiter Code-Block
                 // bläht so ALLE Eltern-Container auf. 'min-width:0' erlaubt ihnen
                 // zu schrumpfen; der Code-Block scrollt dann nur in sich selbst.
-                var STYLE_ID = 'nit-code-overflow-fix';
+                var STYLE_ID = 'koalino-overflow-fix';
                 var CSS = [
                     'html, body {{ max-width: 100% !important; overflow-x: hidden !important; }}',
                     '* {{ min-width: 0 !important; }}',

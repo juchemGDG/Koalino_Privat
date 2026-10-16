@@ -36,7 +36,7 @@ def _strip_quote_prefix(line: str, depth: int) -> str:
     return line
 
 
-class _NitCodeBlockPreprocessor(Preprocessor if HAS_MARKDOWN else object):
+class _KoalinoBlockPreprocessor(Preprocessor if HAS_MARKDOWN else object):
     """Ersetzt ```lang ...``` selbst (statt fenced_code/codehilite), damit wir
     volle Kontrolle über Markup + IDs für die Kopieren-/Einfügen-Toolbar behalten.
 
@@ -98,9 +98,9 @@ class _NitCodeBlockPreprocessor(Preprocessor if HAS_MARKDOWN else object):
         formatter = HtmlFormatter(cssclass="codehilite", style=self._style_name, wrapcode=True)
         highlighted = pygments.highlight(code, lexer, formatter)
         return (
-            f'<div class="nit-codeblock" data-id="{block_id}">'
-            f'<div class="nit-code-toolbar">'
-            f'<span class="nit-code-lang">{html.escape(lang)}</span>'
+            f'<div class="koalino-codeblock" data-id="{block_id}">'
+            f'<div class="koalino-toolbar">'
+            f'<span class="koalino-lang">{html.escape(lang)}</span>'
             f'<a href="#" class="nit-btn nit-btn-copy" '
             f"onclick=\"nitCopyBlock('{block_id}', this); return false;\">📋 Kopieren</a>"
             f'<a href="koalino://insert?id={block_id}" '
@@ -109,7 +109,7 @@ class _NitCodeBlockPreprocessor(Preprocessor if HAS_MARKDOWN else object):
         )
 
 
-class _NitCodeBlockExtension(Extension if HAS_MARKDOWN else object):
+class _KoalinoBlockExtension(Extension if HAS_MARKDOWN else object):
     def __init__(self, blocks: dict, style_name: str):
         self._blocks = blocks
         self._style_name = style_name
@@ -117,7 +117,7 @@ class _NitCodeBlockExtension(Extension if HAS_MARKDOWN else object):
 
     def extendMarkdown(self, md):
         md.preprocessors.register(
-            _NitCodeBlockPreprocessor(md, self._blocks, self._style_name), "nit_codeblocks", 25
+            _KoalinoBlockPreprocessor(md, self._blocks, self._style_name), "koalino_codeblocks", 25
         )
 
 
@@ -137,7 +137,7 @@ def render_worksheet(markdown_text: str, dark: bool):
             "nl2br",
             "md_in_html",
             ObsidianCalloutsExtension(),
-            _NitCodeBlockExtension(blocks, style_name),
+            _KoalinoBlockExtension(blocks, style_name),
         ],
         output_format="html",
     )

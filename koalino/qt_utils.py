@@ -178,7 +178,7 @@ def tab_close_icons(normal: str, hover: str) -> tuple[str, str]:
     from PyQt6.QtCore import Qt, QPointF
     from PyQt6.QtGui import QColor, QPainter, QPen
     if _tab_close_dir is None:
-        _tab_close_dir = tempfile.mkdtemp(prefix="nitcode_icons_")
+        _tab_close_dir = tempfile.mkdtemp(prefix="koalino_icons_")
     paths = []
     for name, color, bg in (("normal", normal, None), ("hover", hover, "#ef4444")):
         pm = QPixmap(48, 48)

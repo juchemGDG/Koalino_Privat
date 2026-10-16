@@ -25,7 +25,7 @@ _DOWNLOAD_DIR: str | None = None
 def _download_dir() -> str:
     global _DOWNLOAD_DIR
     if _DOWNLOAD_DIR is None or not os.path.isdir(_DOWNLOAD_DIR):
-        _DOWNLOAD_DIR = tempfile.mkdtemp(prefix="nitcode_controller_")
+        _DOWNLOAD_DIR = tempfile.mkdtemp(prefix="koalino_controller_")
     return _DOWNLOAD_DIR
 
 

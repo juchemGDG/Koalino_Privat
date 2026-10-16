@@ -286,9 +286,9 @@ h2 {{ font-size:11px; letter-spacing:1px; color:#5b6478; margin:18px 0 6px 0; }}
 table.prot {{ width:100%; border-collapse:collapse; }}
 table.prot th {{ background:#eef1f7; text-align:left; padding:6px 8px; border:1px solid #c9cfdd; }}
 table.prot td {{ padding:14px 8px; border:1px solid #c9cfdd; }}
-div.nitcode {{ margin-top:16px; padding:10px 14px; background:{CREAM}; color:{CREAM_TEXT};
+div.koalino {{ margin-top:16px; padding:10px 14px; background:{CREAM}; color:{CREAM_TEXT};
                border:1px solid #e0c96a; border-radius:8px; }}
-div.nitcode b.h {{ color:{CREAM_TEXT}; }}
+div.koalino b.h {{ color:{CREAM_TEXT}; }}
 """
 
 
@@ -331,7 +331,7 @@ def cheat_sheet_html(level: str) -> str:
     empty = "".join("<td>&nbsp;</td>" for _ in cols)
     kl89 = level == LEVEL_KL89
     nit = (
-        "<div class='nitcode'><b class='h'>So hilft dir Koalino</b><br>"
+        "<div class='koalino'><b class='h'>So hilft dir Koalino</b><br>"
         "• <b>Strg+K</b> setzt einen Kontrollpunkt <code>print(\"K1\")</code>, die Nummern "
         "folgen dem Programm. Nach einem Absturz zeigt die Konsole den letzten erreichten.<br>"
         "• <b>Konsole</b>: Nach einer Fehlermeldung begleitet sie dich durch Schritt "

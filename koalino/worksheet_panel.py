@@ -71,12 +71,12 @@ th, td { border: 1px solid var(--ab-rand); padding: 4px 8px; }
 details.admonition > summary { cursor: pointer; list-style: none; }
 details.admonition > summary::-webkit-details-marker { display: none; }
 
-.nit-codeblock { margin: 1em 0; border: 1px solid var(--ab-rand); border-radius: 6px; overflow: hidden; }
-.nit-code-toolbar {
+.koalino-codeblock { margin: 1em 0; border: 1px solid var(--ab-rand); border-radius: 6px; overflow: hidden; }
+.koalino-toolbar {
   display: flex; align-items: center; gap: 10px;
   background: var(--ab-grau); padding: 4px 10px; font-size: 12px; color: var(--ab-muted);
 }
-.nit-code-lang { flex: 1; text-transform: uppercase; }
+.koalino-lang { flex: 1; text-transform: uppercase; }
 .nit-btn { color: #3b6ea5; text-decoration: none; cursor: pointer; }
 .nit-btn:hover { color: #7f0055; }
 .codehilite { margin: 0; padding: 10px; overflow-x: auto; }
