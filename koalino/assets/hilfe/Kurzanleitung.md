@@ -1,6 +1,6 @@
 # Koalino – Kurzanleitung
 
-Python und MicroPython in einer Oberfläche. Download: <https://github.com/juchemGDG/NIT_Code/releases/latest>
+Python und MicroPython in einer Oberfläche. Download: <https://github.com/juchemGDG/Koalino/releases/latest>
 
 ---
 

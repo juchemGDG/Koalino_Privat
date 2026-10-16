@@ -4,7 +4,7 @@
 
 **Koalino** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).
 
-Downloads & Releases: https://github.com/juchemGDG/NIT_Code
+Downloads & Releases: https://github.com/juchemGDG/Koalino
 
 ---
 
@@ -45,10 +45,10 @@ Downloads & Releases: https://github.com/juchemGDG/NIT_Code
 
 Aktuelle Versionen stehen auf der GitHub-Release-Seite bereit:
 
-- Release-Übersicht: https://github.com/juchemGDG/NIT_Code/releases/latest
-- **Windows (.exe):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/Koalino.exe
-- **macOS (.dmg):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/Koalino-macos.dmg
-- **Linux (.tar.gz):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/Koalino-linux-x86_64.tar.gz
+- Release-Übersicht: https://github.com/juchemGDG/Koalino/releases/latest
+- **Windows (.exe):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino.exe
+- **macOS (.dmg):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino-macos.dmg
+- **Linux (.tar.gz):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino-linux-x86_64.tar.gz
 
 ### Schnellstart
 
