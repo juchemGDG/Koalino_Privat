@@ -571,15 +571,42 @@ CODE_SCHEMES: dict[str, dict] = {
         "margin_bg": "#21252b", "margin_fg": "#636d83",
         "line": "#2c313c", "caret": "#528bff", "bold_kw": False,
     },
+    "github": {
+        "bg": "#ffffff", "text": "#24292f", "comment": "#6e7781",
+        "keyword": "#cf222e", "string": "#0a3069", "number": "#0550ae",
+        "name": "#8250df", "decorator": "#953800", "error": "#cf222e",
+        "margin_bg": "#f6f8fa", "margin_fg": "#8c959f",
+        "line": "#f6f8fa", "caret": "#24292f", "bold_kw": False,
+    },
+    "monokai": {
+        "bg": "#272822", "text": "#f8f8f2", "comment": "#88846f",
+        "keyword": "#f92672", "string": "#e6db74", "number": "#ae81ff",
+        "name": "#a6e22e", "decorator": "#fd971f", "error": "#ff5555",
+        "margin_bg": "#1e1f1c", "margin_fg": "#90908a",
+        "line": "#3e3d32", "caret": "#f8f8f0", "bold_kw": False,
+    },
+    # Farbenblind-freundlich (Okabe-Ito, für weißen Grund abgedunkelt):
+    # Schlüsselwörter fett, Kommentare kursiv – nicht nur über die Farbe.
+    "okabe": {
+        "bg": "#ffffff", "text": "#000000", "comment": "#5f5f5f",
+        "keyword": "#b34700", "string": "#0072b2", "number": "#007a5a",
+        "name": "#9c3f7c", "decorator": "#7a6a00", "error": "#b34700",
+        "margin_bg": "#f0f0f0", "margin_fg": "#6b6b6b",
+        "line": "#eef5fb", "caret": "#000000", "bold_kw": True,
+        "italic_comment": True,
+    },
 }
 CODE_SCHEME_LABELS: dict[str, str] = {
     "auto":      "Passend zum Design",
     "eclipse":   "Eclipse",
     "thonny":    "Thonny",
     "idle":      "IDLE (klassisch)",
+    "github":    "GitHub Hell",
     "solarized": "Solarized Hell",
+    "okabe":     "Okabe-Ito (farbenblind-freundlich)",
     "dracula":   "Dracula (dunkel)",
     "onedark":   "One Dark (dunkel)",
+    "monokai":   "Monokai (dunkel, hoher Kontrast)",
 }
 _code_scheme = "auto"
 
@@ -598,6 +625,7 @@ def editor_colors() -> dict:
         "number": t["warning"], "name": t["info"], "decorator": t["warning"],
         "error": t["error"], "margin_bg": t["bg_mid"], "margin_fg": t["text_dim"],
         "line": t["selection"], "caret": t["accent"], "bold_kw": False,
+        "italic_comment": False,
         "guide": t["scroll"],
     }
     scheme = CODE_SCHEMES.get(_code_scheme, {})

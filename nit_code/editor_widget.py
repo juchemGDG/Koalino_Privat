@@ -198,6 +198,8 @@ class CodeEditor(QWidget):
         font = QFont(mono_family(), getattr(self, "_font_size", 12))
         bold = QFont(font)
         bold.setBold(True)
+        italic = QFont(font)
+        italic.setItalic(True)
 
         # Basis-Farben
         lexer.setDefaultPaper(_hex(e["bg"]))
@@ -225,7 +227,9 @@ class CodeEditor(QWidget):
             lexer.setColor(_hex(color), style)
             lexer.setPaper(_hex(e["bg"]), style)
             is_bold = e["bold_kw"] and style == QsciLexerPython.Keyword
-            lexer.setFont(bold if is_bold else font, style)
+            is_italic = e["italic_comment"] and style in (
+                QsciLexerPython.Comment, QsciLexerPython.CommentBlock)
+            lexer.setFont(bold if is_bold else italic if is_italic else font, style)
 
         self.sci.setLexer(lexer)
         self._lexer = lexer
