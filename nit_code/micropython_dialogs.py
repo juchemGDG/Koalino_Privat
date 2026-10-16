@@ -302,6 +302,24 @@ class FlashWorker(QThread):
     _UF2_RP2040 = 0xE48BFF56
     _UF2_RP2350 = {0xE48BFF57, 0xE48BFF59, 0xE48BFF5A}   # absolut, ARM-S, RISC-V
 
+    def _detect_bootsel_chip(self, drive: str) -> str | None:
+        """Liest INFO_UF2.TXT des Bootloaders (Model/Board-ID) und liefert 'RP2350', 'RP2040' oder None."""
+        import os
+        for name in ("INFO_UF2.TXT", "info_uf2.txt"):
+            try:
+                with open(os.path.join(drive, name), "r", errors="replace") as f:
+                    info = f.read()
+            except OSError:
+                continue
+            first = " ".join(info.splitlines()[:4])
+            self.log.emit("INFO_UF2: " + " | ".join(info.splitlines()[:3]) + "\n")
+            up = first.upper()
+            if "RP2350" in up:
+                return "RP2350"
+            if "RP2040" in up or "RPI-RP2" in up:
+                return "RP2040"
+        return None
+
     def _check_uf2(self, fw: str, drive: str) -> str | None:
         """Prüft Datei und Chip-Familie. Ein UF2 für den falschen Chip (oder eine
         defekte/unvollständige Datei) wird vom Bootloader kommentarlos verworfen:
@@ -319,15 +337,19 @@ class FlashWorker(QThread):
         m0, m1, _flags, _addr, _n, _blk, _total, family = struct.unpack("<8I", head[:32])
         if m0 != 0x0A324655 or m1 != 0x9E5D5157:
             return "Die Datei ist keine gültige UF2-Datei (evtl. wurde eine Webseite statt der Firmware geladen)."
-        is_rp2350_drive = os.path.basename(drive).upper().startswith("RP2350")
-        self.log.emit(f"UF2-Familie: 0x{family:08X} ({'RP2350' if family in self._UF2_RP2350 else 'RP2040' if family == self._UF2_RP2040 else '?'}), "
-                      f"Laufwerk: {os.path.basename(drive)}\n")
-        if is_rp2350_drive and family == self._UF2_RP2040:
+        chip = self._detect_bootsel_chip(drive)
+        fam_name = ('RP2350' if family in self._UF2_RP2350 else
+                    'RP2040' if family == self._UF2_RP2040 else '?')
+        self.log.emit(f"UF2-Familie: 0x{family:08X} ({fam_name}), "
+                      f"Laufwerk: {os.path.basename(drive)}, erkannter Chip: {chip or 'unbekannt'}\n")
+        # Nur bei eindeutiger Erkennung (INFO_UF2.TXT) blockieren – der Laufwerksname
+        # allein ist unzuverlässig und führte zu falschen „RP2040“-Meldungen.
+        if chip == "RP2350" and family == self._UF2_RP2040:
             return ("Diese Firmware ist für den Raspberry Pi Pico (RP2040), das Gerät ist aber ein "
                     "Pico 2 / 2W (RP2350). Bitte als Board „RPI Pico 2W“ wählen.")
-        if not is_rp2350_drive and family in self._UF2_RP2350:
-            return ("Diese Firmware ist für den Pico 2 / 2W (RP2350), das Gerät ist aber ein "
-                    "Pico mit RP2040. Bitte das passende Board wählen.")
+        if chip == "RP2040" and family in self._UF2_RP2350:
+            return ("Diese Firmware ist für den Pico 2 / 2W (RP2350), das Gerät meldet sich aber als "
+                    "RP2040. Bitte das passende Board wählen.")
         return None
 
     def _flash_pico(self):
