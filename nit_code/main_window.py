@@ -31,6 +31,7 @@ except ImportError:
 
 from .config import (
     APP_NAME,
+    FOBIZZ_URL,
     APP_VERSION,
     THEME,
     THEMES,
@@ -57,6 +58,7 @@ from .pap_editor import IbdEditorWindow, PapEditorWindow, SchaltLabWindow
 from .statplot_window import StatPlotWindow
 from .settings_dialog import ACTIVITY_TOGGLEABLE, SettingsDialog
 from .terminal_panel import ClaudeTerminalPanel, find_claude_binary, pty_available
+from .toolbar_widgets import ModeSwitch, PortPicker
 from .tutor_panel import TutorPanel
 from .net_hints import git_network_hint
 
@@ -916,7 +918,7 @@ class MainWindow(QMainWindow):
         self._apply_settings()      # Standard-Einstellungen sofort anwenden
         # currentIndexChanged feuerte beim addItem noch nicht (Signal erst danach verbunden)
         # → Modus einmalig manuell initialisieren
-        QTimer.singleShot(0, lambda: self._on_mode_changed(0))
+        QTimer.singleShot(0, lambda: self._on_mode_changed("python"))
         # Beim Start übergebene Datei öffnen (z. B. Doppelklick auf .py in Windows).
         if initial_file and os.path.isfile(initial_file):
             self._open_file_path(initial_file)
@@ -1105,32 +1107,24 @@ class MainWindow(QMainWindow):
         tb.widgetForAction(stop_act).setObjectName("stopButton")
         tb.addSeparator()
 
-        # Modus-Auswahl
-        self._mode_lbl = QLabel("  Modus: ")
-        self._mode_lbl.setStyleSheet(f"background:transparent; color:{THEME['text_dim']};")
-        tb.addWidget(self._mode_lbl)
-
-        self._mode_combo = QComboBox()
-        self._mode_combo.addItem("🐍  Python (lokal)", "python")
-        self._mode_combo.addItem("⚡  MicroPython", "micropython")
-        self._mode_combo.setMinimumWidth(160)
-        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
-        tb.addWidget(self._mode_combo)
-
-        tb.addSeparator()
+        # Modus-Schalter (segmentiert) – ersetzt die frühere Combobox
+        self._mode_switch = ModeSwitch([
+            ("python", "Python", "Programme lokal auf diesem Computer ausführen"),
+            ("micropython", "MicroPython", "Programme auf einem angeschlossenen Controller ausführen"),
+        ])
+        self._mode_switch.set_mode("python")
+        self._mode_switch.modeChanged.connect(self._on_mode_changed)
+        tb.addWidget(self._mode_switch)
 
         # Geräte-Auswahl (nur im MicroPython-Modus sichtbar)
-        self._port_lbl = QLabel("  Gerät: ")
-        self._port_lbl.setStyleSheet(f"background:transparent; color:{THEME['text_dim']};")
-        self._port_lbl_act = tb.addWidget(self._port_lbl)
-
-        self._port_combo = QComboBox()
-        self._port_combo.setMinimumWidth(200)
+        self._port_sep_act = tb.addSeparator()
+        self._port_combo = PortPicker()
+        self._port_combo.apply_theme()
         self._port_combo.currentIndexChanged.connect(self._on_port_selected)
         self._port_combo_act = tb.addWidget(self._port_combo)
 
         self._port_refresh_act = tbtn("", self._refresh_ports, "Geräte aktualisieren", "refresh")
-        self._port_lbl_act.setVisible(False)
+        self._port_sep_act.setVisible(False)
         self._port_combo_act.setVisible(False)
         self._port_refresh_act.setVisible(False)
 
@@ -1255,7 +1249,9 @@ class MainWindow(QMainWindow):
 
     def _ai_page_visible(self) -> bool:
         """True, wenn rechts ein KI-Panel (Infi, AIS-Chat, Code-Generator) zu sehen ist."""
-        return not self._ai_stack.isHidden() and self._ai_stack.currentIndex() in (0, 1, 2)
+        return (not self._ai_stack.isHidden()
+                and self._ai_stack.currentWidget() in (self._tutor_panel, self._aischat_panel,
+                                                       self._coder_panel, self._fobizz_panel))
 
     def _py_site_visible(self) -> bool:
         return (not self._ai_stack.isHidden()
@@ -1276,7 +1272,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self, "KI-Assistent",
                 "Es ist kein KI-Assistent aktiv.\n"
-                "Wähle unter Datei → Einstellungen → KI-Tutor einen Assistenten aus.",
+                "Wähle unter Datei → Einstellungen → Chatbot ais.chat oder fobizz.com aus.",
             )
         else:
             if self._debug_log_visible():
@@ -1380,6 +1376,7 @@ class MainWindow(QMainWindow):
         self._tutor_panel.set_code_provider(self._current_editor_text)
         self._aischat_panel  = AisChatPanel()
         self._coder_panel    = CoderPanel()
+        self._fobizz_panel   = AisChatPanel(url=FOBIZZ_URL, title="🎓  fobizz", portal_fix=False, lazy=True)
         self._claude_terminal_panel = ClaudeTerminalPanel()
         self._worksheet_panel = WorksheetPanel()
         self._ai_stack.addWidget(self._tutor_panel)          # Index 0 → Infi/Ollama
@@ -1397,6 +1394,7 @@ class MainWindow(QMainWindow):
         self._py_site_panel = PySitePanel()
         self._ai_stack.addWidget(self._py_site_panel)          # Index 6 → py.nitbw.de
         self._py_site_panel.close_requested.connect(self._toggle_py_site)
+        self._ai_stack.addWidget(self._fobizz_panel)           # Index 7 → fobizz.com
         self._debug_log_panel.restore_requested.connect(self._restore_last_good)
         self._debug_log_panel.pin_requested.connect(self._pin_snapshot)
         self._coder_panel.insert_code_requested.connect(self._on_insert_generated_code)
@@ -1459,12 +1457,10 @@ class MainWindow(QMainWindow):
             )
             return False
         self._port_busy = True
-        self._console.pause_shell()
         return True
 
     def _release_port(self):
         self._port_busy = False
-        self._console.resume_shell()
 
     def _retire_process(self):
         """Alten self._process sicher aufbewahren bis QThread.finished feuert.
@@ -1478,11 +1474,10 @@ class MainWindow(QMainWindow):
 
     def _on_device_refresh_start(self):
         self._port_busy = True
-        self._console.pause_shell()
 
     def _on_device_refresh_done(self):
         self._port_busy = False
-        self._console.resume_shell()
+
     def _new_tab(self, filepath: str | None = None):
         tab = EditorTab(filepath)
         tab.editor.set_filepath(filepath)
@@ -1813,13 +1808,13 @@ class MainWindow(QMainWindow):
     # ────────────────────────────────────────────────────────────────────��─
     # Modus & Board
     # ──────────────────────────────────────────────────────────────────────
-    def _on_mode_changed(self, index: int):
-        self._mode = self._mode_combo.itemData(index)
+    def _on_mode_changed(self, mode: str):
+        self._mode = mode
         is_upy = self._mode == "micropython"
         _note(f"Moduswechsel → {self._mode}")
         self._m_upy.setEnabled(is_upy)
         self._m_python.setEnabled(not is_upy)
-        self._port_lbl_act.setVisible(is_upy)
+        self._port_sep_act.setVisible(is_upy)
         self._port_combo_act.setVisible(is_upy)
         self._port_refresh_act.setVisible(is_upy)
         self._act_upload.setVisible(is_upy)
@@ -1832,11 +1827,9 @@ class MainWindow(QMainWindow):
             _note(f"Port im Modus: {port}")
             if port:
                 # Beim Zurückwechseln ist die Port-Liste unverändert, der Scan löst dann
-                # nichts mehr aus – Dateiliste und REPL hier selbst neu aufbauen.
+                # nichts mehr aus – Dateiliste hier selbst neu aufbauen.
                 self._device_panel.refresh(port)
                 _note("Dateiliste angestoßen")
-                self._console.set_shell_mode("micropython", port=port)
-                _note("REPL-Shell vorbereitet")
             self._refresh_ports()
             _note("Port-Scan angestoßen")
             self._port_scan_timer.start()
@@ -1848,8 +1841,6 @@ class MainWindow(QMainWindow):
             self._file_panel.set_device_connected(False)
             self._device_panel.refresh("")
             self._left_splitter.setSizes([600, 0])
-            self._console.set_shell_mode("python",
-                                         python_exec=self._get_python_executable())
 
     def _set_board(self, board_id: str):
         self._board = board_id
@@ -2073,8 +2064,6 @@ class MainWindow(QMainWindow):
             port = self._get_serial_port()
             if not port:
                 return
-            # mpremote-Shell pausieren damit Port frei ist
-            self._console.pause_shell()
             self._process = MicroPythonRunner(port, tab.filepath)
         self._process.output.connect(self._on_process_output)
         self._process.finished_run.connect(self._on_process_done)
@@ -2088,8 +2077,6 @@ class MainWindow(QMainWindow):
             self._console.flush_now()
             self._console.append_info("\n■  Abgebrochen.\n")
         self._console.set_active_runner(None)
-        if self._mode == "micropython":
-            self._console.resume_shell()
 
     def _toggle_plotter(self, checked: bool):
         """Blendet den Serial Plotter (Live-Graph der Zahlenausgabe) ein/aus."""
@@ -2211,7 +2198,6 @@ class MainWindow(QMainWindow):
         self._console.flush_now()
         self._console.set_active_runner(None)
         if self._mode == "micropython":
-            self._console.resume_shell()
             # Nach Lauf/Stop im MicroPython-Modus Dateiliste automatisch aktualisieren.
             QTimer.singleShot(250, self._refresh_device_files_after_run)
         if code == 0:
@@ -4056,8 +4042,6 @@ class MainWindow(QMainWindow):
         self._status_mode.setText(f"MicroPython  –  {port}")
         self._file_panel.set_device_connected(True)
         self._device_panel.refresh(port)
-        # mpremote REPL starten – der REPL-Banner zeigt Firmware-Version
-        self._console.set_shell_mode("micropython", port=port)
 
     def _get_serial_port(self, silent: bool = False) -> str | None:
         """Gibt den aktuell in der Toolbar gewählten Port zurück."""
@@ -4143,8 +4127,6 @@ class MainWindow(QMainWindow):
             python_exec=self._settings_python_exec,
             scrollback=self._settings_scrollback,
             tutor_mode=self._settings_tutor_mode,
-            tutor_url=self._settings_tutor_url,
-            tutor_model=self._settings_tutor_model,
             sketchbook_dir=self._settings_sketchbook,
             git_exec=self._settings_git_executable,
             theme=self._settings_theme,
@@ -4181,8 +4163,6 @@ class MainWindow(QMainWindow):
             self._settings_python_exec = dlg.python_exec
             self._settings_scrollback = dlg.scrollback_lines
             self._settings_tutor_mode = dlg.tutor_mode
-            self._settings_tutor_url = dlg.tutor_url
-            self._settings_tutor_model = dlg.tutor_model
             self._settings_sketchbook = self._normalize_sketchbook_dir(dlg.sketchbook_dir)
             self._settings_git_executable = dlg.git_exec
             self._settings_theme = dlg.theme
@@ -4284,6 +4264,8 @@ class MainWindow(QMainWindow):
             self._settings_store.setValue("blocks/enabled", True)
             self._settings_store.setValue("blocks/default_on_migrated", True)
         self._settings_tutor_mode = str(self._settings_store.value("tutor/mode", self._settings_tutor_mode) or "none")
+        if self._settings_tutor_mode not in ("none", "aischat", "fobizz"):
+            self._settings_tutor_mode = "none"   # Ollama-Modi (Infi, Code-Generator) gibt es nicht mehr
         self._settings_tutor_url = str(self._settings_store.value("tutor/url", self._settings_tutor_url) or "")
         self._settings_tutor_model = str(self._settings_store.value("tutor/model", self._settings_tutor_model) or "")
         self._settings_sketchbook = self._normalize_sketchbook_dir(
@@ -4439,10 +4421,10 @@ class MainWindow(QMainWindow):
     def _update_widget_styles(self):
         """Inline-Stylesheets von Toolbar-Widgets und Statusleiste nach Theme-Wechsel neu setzen."""
         t = THEME
-        if hasattr(self, "_mode_lbl"):
-            self._mode_lbl.setStyleSheet(f"background:transparent; color:{t['text_dim']};")
-        if hasattr(self, "_port_lbl"):
-            self._port_lbl.setStyleSheet(f"background:transparent; color:{t['text_dim']};")
+        if hasattr(self, "_mode_switch"):
+            self._mode_switch.apply_theme()
+        if hasattr(self, "_port_combo"):
+            self._port_combo.apply_theme()
         if hasattr(self, "_status_mode"):
             self._status_mode.setStyleSheet(f"background:transparent; color:{t['accent']}; font-weight:bold; padding:0 8px;")
         if hasattr(self, "_status_git"):
@@ -4471,6 +4453,7 @@ class MainWindow(QMainWindow):
         self._tutor_panel.refresh_theme()
         self._coder_panel.refresh_theme()
         self._aischat_panel.refresh_theme()
+        self._fobizz_panel.refresh_theme()
         self._claude_terminal_panel.refresh_theme()
         self._worksheet_panel.refresh_theme()
         self._debug_log_panel.refresh_theme()
@@ -4495,7 +4478,7 @@ class MainWindow(QMainWindow):
         self._autosave_timer.stop()
         if self._settings_autosave_secs > 0:
             self._autosave_timer.start(self._settings_autosave_secs * 1000)
-        # KI-Tutor (3 Modi: none / ollama / aischat). Ein offenes Fehlerprotokoll bleibt offen.
+        # Chatbot (3 Modi: none / aischat / fobizz). Ein offenes Fehlerprotokoll bleibt offen.
         keep_log = self._debug_log_visible()
         keep_site = self._py_site_visible()
         self._show_tutor_panel()
@@ -4520,39 +4503,12 @@ class MainWindow(QMainWindow):
             self._ai_stack.setVisible(False)
             sizes = self._main_splitter.sizes()
             self._main_splitter.setSizes([sizes[0], sizes[1] + sizes[2], 0])
-        elif mode == "ollama":
-            self._main_splitter.setCollapsible(2, False)
-            self._ai_stack.setMinimumWidth(0)
-            self._ai_stack.setMaximumWidth(16777215)
-            self._ai_stack.setCurrentIndex(0)
-            self._ai_stack.setVisible(True)
-            self._tutor_panel.apply_settings(
-                self._settings_tutor_url,
-                self._settings_tutor_model,
-            )
-            sizes = self._main_splitter.sizes()
-            if sizes[2] == 0:
-                total = sum(sizes)
-                self._main_splitter.setSizes([sizes[0], total - sizes[0] - 320, 320])
-        elif mode == "coder":
-            self._main_splitter.setCollapsible(2, False)
-            self._ai_stack.setMinimumWidth(0)
-            self._ai_stack.setMaximumWidth(16777215)
-            self._ai_stack.setCurrentIndex(2)
-            self._ai_stack.setVisible(True)
-            self._coder_panel.apply_settings(
-                self._settings_tutor_url,
-                self._settings_tutor_model,
-            )
-            sizes = self._main_splitter.sizes()
-            if sizes[2] == 0:
-                total = sum(sizes)
-                self._main_splitter.setSizes([sizes[0], total - sizes[0] - 360, 360])
-        elif mode == "aischat":
+        elif mode in ("aischat", "fobizz"):
             self._main_splitter.setCollapsible(2, False)
             self._ai_stack.setMinimumWidth(PANEL_MIN_WIDTH)
             self._ai_stack.setMaximumWidth(PANEL_MAX_WIDTH)
-            self._ai_stack.setCurrentIndex(1)
+            self._ai_stack.setCurrentWidget(
+                self._fobizz_panel if mode == "fobizz" else self._aischat_panel)
             self._ai_stack.setVisible(True)
             sizes = self._main_splitter.sizes()
             total = sum(sizes)

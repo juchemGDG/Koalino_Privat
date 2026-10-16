@@ -26,7 +26,6 @@ GitHub-Repository: https://github.com/juchemGDG/NIT_Code
 | **Suchen & Ersetzen** | Im Editor über `Strg+F` (Suchen) bzw. `Strg+H` (Suchen und Ersetzen) |
 | **Fehler-Links** | Fehler in rot, klickbar → Sprung zur Fehlerstelle im Editor |
 | **Fehler-Erklärung** | Verständliche deutsche Klartext-Hinweise zu Programmfehlern; auf Wunsch erklärt der KI-Tutor „Infi" den Fehler mit Bezug auf den eigenen Code |
-| **Shell** | Integriertes Terminal für Einzelbefehle |
 | **Dateibaum** | Ordner/Dateien verwalten, neue Dateien erstellen |
 | **Helles & dunkles Design** | Zwei Themes – klassisch-hell (Standard) und modern-dunkel, umschaltbar in den Einstellungen |
 | **KI-Tutor „Infi"** | Lokaler, kostenloser KI-Tutor für Python-Anfängerinnen und -Anfänger (optional, via Ollama) |
@@ -392,7 +391,7 @@ NIT_Code/
 │   ├── editor_widget.py        # Code-Editor (QScintilla)
 │   ├── completion.py           # Auto-Vervollständigung (Jedi)
 │   ├── file_panel.py           # Dateibaum
-│   ├── console_panel.py        # Konsole + Shell
+│   ├── console_panel.py        # Konsole (Ausgabe)
 │   ├── block_panel.py          # Block-Editor-Fenster (Blockly)
 │   ├── coder_panel.py          # KI-Codegenerator
 │   ├── ais_chat_panel.py       # AIS-Schulchat

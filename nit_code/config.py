@@ -394,6 +394,7 @@ def _user_config_dir() -> Path:
 
 # AIS-Chat (schulischer Web-Chatbot)
 AIS_CHAT_URL = "https://app.ais-chat.schule"
+FOBIZZ_URL = "https://tools.fobizz.com"
 
 # Lehrgang py.nitbw.de als Seitenleisten-Panel (py_site_panel.py)
 PY_SITE_URL = "https://py.nitbw.de"

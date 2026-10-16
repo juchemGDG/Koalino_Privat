@@ -1,37 +1,16 @@
-"""Konsolenbereich: Shell + Programmausgaben + Fehler-Links."""
+"""Konsolenbereich: Programmausgaben + Fehler-Links."""
 import re
-import sys
-import os
 import subprocess
 import threading
-from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLineEdit, QPushButton, QLabel, QSplitter, QTabWidget,
+    QLineEdit, QPushButton, QLabel, QTabWidget,
 )
 
-from .config import THEME, mono_family, python_executable, tool_command
-
-
-def _decode_shell_bytes(raw: bytes) -> str:
-    """Dekodiert Shell-Ausgabe: zuerst UTF-8, sonst die System-Codepage
-    (Windows: meist cp1252) – nie mit Exception."""
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        import locale
-        # getencoding() (ab 3.11) liefert die echte ANSI-Codepage auch im UTF-8-Modus.
-        getenc = getattr(locale, "getencoding", None)
-        enc = (getenc() if getenc else locale.getpreferredencoding(False)) or "cp1252"
-        if enc.lower().replace("-", "") == "utf8":
-            enc = "cp1252"
-        try:
-            return raw.decode(enc, errors="replace")
-        except LookupError:
-            return raw.decode("cp1252", errors="replace")
+from .config import THEME, mono_family
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -477,317 +456,10 @@ class OutputConsole(QTextEdit):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Shell-Widget (interaktive Eingabe)
-# ──────────────────────────────────────────────────────────────────────────────
-class ShellWidget(QWidget):
-    """Einfache interaktive Shell mit Eingabezeile und Ausgabebereich."""
-
-    # Thread-sicheres Signal: aus Hintergrund-Thread emittierbar
-    _text_ready = pyqtSignal(str, str)   # (text, color)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._history: list[str] = []
-        self._hist_idx = 0
-        self._proc: subprocess.Popen | None = None
-        self._master_fd: int | None = None   # PTY master (Unix)
-        self._current_cmd: list = [python_executable(), "-i"]
-        self._text_ready.connect(self._do_append)
-        self._setup_ui()
-        # In PyInstaller-Bundles ist sys.executable die App-EXE, kein Python-Interpreter.
-        # Die Shell wird dann über set_shell_mode() mit dem System-Python gestartet.
-        if not getattr(sys, 'frozen', False):
-            self._start_shell([python_executable(), "-i"])  # Standard: Python REPL
-
-    def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self.output = QTextEdit()
-        self.output.setReadOnly(True)
-        self.output.setFont(QFont("JetBrains Mono, Fira Code, Consolas, monospace", 11))
-        self.output.setStyleSheet(
-            f"background:{THEME['terminal_bg']}; color:{THEME['terminal_text']};"
-            f" border:none; padding:4px;"
-        )
-        layout.addWidget(self.output)
-
-        # Eingabezeile
-        input_row = QHBoxLayout()
-        input_row.setContentsMargins(4, 2, 4, 4)
-        input_row.setSpacing(4)
-
-        self._prompt_label = QLabel("$")
-        self._prompt_label.setStyleSheet(
-            f"color:{THEME['accent']}; font-family:monospace; font-size:12px;"
-        )
-        input_row.addWidget(self._prompt_label)
-
-        self._input = QLineEdit()
-        self._input.setStyleSheet(
-            f"background:{THEME['bg_dark']}; color:{THEME['text']};"
-            f" border:1px solid {THEME['border']}; border-radius:4px; padding:3px 6px;"
-            f" font-family:'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size:11px;"
-        )
-        self._input.returnPressed.connect(self._send_command)
-        self._input.installEventFilter(self)
-        input_row.addWidget(self._input)
-
-        self._btn_clear = QPushButton("Leeren")
-        self._btn_clear.setFixedWidth(70)
-        self._btn_clear.setStyleSheet(self._btn_style())
-        self._btn_clear.clicked.connect(self.output.clear)
-        input_row.addWidget(self._btn_clear)
-
-        layout.addLayout(input_row)
-
-    def _btn_style(self):
-        return (
-            f"QPushButton {{ background:{THEME['bg_panel']}; color:{THEME['text']};"
-            f" border:1px solid {THEME['border']}; border-radius:6px; padding:4px 10px; }}"
-            f"QPushButton:hover {{ background:{THEME['accent']}; color:#fff; }}"
-        )
-
-    def refresh_theme(self):
-        self.output.setStyleSheet(
-            f"background:{THEME['terminal_bg']}; color:{THEME['terminal_text']};"
-            f" border:none; padding:4px;"
-        )
-        self._prompt_label.setStyleSheet(
-            f"color:{THEME['accent']}; font-family:monospace; font-size:12px;"
-        )
-        self._input.setStyleSheet(
-            f"background:{THEME['bg_dark']}; color:{THEME['text']};"
-            f" border:1px solid {THEME['border']}; border-radius:4px; padding:3px 6px;"
-            f" font-family:'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size:11px;"
-        )
-        self._btn_clear.setStyleSheet(self._btn_style())
-
-    def restart(self, cmd: list):
-        """Beendet den aktuellen Prozess und startet neu mit neuem Befehl."""
-        self._current_cmd = cmd
-        self._kill_proc()
-        self.output.clear()
-        self._start_shell(cmd)
-
-    def stop(self):
-        """Beendet den Prozess ohne Neustart (Port freigeben)."""
-        self._kill_proc()
-
-    def resume(self):
-        """Startet den zuletzt verwendeten Befehl neu."""
-        if self._current_cmd:
-            self._start_shell(self._current_cmd)
-
-    def _kill_proc(self):
-        # Den PTY-Master schließt ausschließlich der Lesethread (siehe _read_pty).
-        # Würde er hier geschlossen, während der Thread noch in select()/read()
-        # steckt, könnte die Nummer neu vergeben werden und der Thread läse aus
-        # einer fremden Datei (z. B. Qt-intern) – Absturz-Kandidat, v. a. beim
-        # Wechsel Python ⇄ MicroPython, wo die Shell neu gestartet wird.
-        from . import crash_log
-        crash_log.note("Shell wird beendet")
-        self._master_fd = None
-        proc = self._proc
-        self._proc = None
-        if proc and proc.poll() is None:
-            self._terminate_child(proc)
-        if proc:
-            # Zombie vermeiden, ohne den UI-Thread zu blockieren
-            threading.Thread(target=self._reap, args=(proc,), daemon=True).start()
-
-    @staticmethod
-    def _terminate_child(proc):
-        """SIGTERM an die eigene Gruppe der Shell – nie an die Gruppe der App."""
-        try:
-            if sys.platform != "win32":
-                pgid = os.getpgid(proc.pid)
-                if pgid == proc.pid and pgid != os.getpgrp():
-                    os.killpg(pgid, 15)
-                    return
-            proc.terminate()
-        except Exception:
-            pass
-
-    @staticmethod
-    def _reap(proc):
-        try:
-            proc.wait(timeout=3)
-        except Exception:
-            try:
-                proc.kill()
-                proc.wait(timeout=2)
-            except Exception:
-                pass
-
-    def _start_shell(self, cmd: list):
-        """Startet cmd als interaktiven Prozess (PTY auf Unix, PIPE auf Windows)."""
-        from . import crash_log
-        crash_log.note(f"Shell startet: {' '.join(map(str, cmd))[-80:]}")
-        try:
-            if sys.platform != "win32":
-                # Unix/macOS: PTY damit readline/REPL korrekt funktioniert
-                import pty, termios, fcntl, struct
-                master_fd, slave_fd = pty.openpty()
-                try:
-                    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ,
-                                struct.pack("HHHH", 24, 80, 0, 0))
-                except Exception:
-                    pass
-                env = os.environ.copy()
-                env["TERM"] = "dumb"          # readline ohne Cursor-Escape-Seq.
-                env["PYTHONUNBUFFERED"] = "1"
-                self._proc = subprocess.Popen(
-                    cmd,
-                    stdin=slave_fd,
-                    stdout=slave_fd,
-                    stderr=slave_fd,
-                    close_fds=True,
-                    cwd=Path.home(),
-                    env=env,
-                    # Eigene Sitzung/Prozessgruppe: das Kind teilt weder Gruppe noch
-                    # Terminal mit der App, ein Signal an die Shell kann die App
-                    # (und das Terminal-Skript run.sh) nicht mehr treffen.
-                    start_new_session=True,
-                )
-                os.close(slave_fd)
-                self._master_fd = master_fd
-                t = threading.Thread(target=self._read_pty, args=(master_fd, self._proc),
-                                     daemon=True)
-                t.start()
-            else:
-                # Binär lesen und selbst dekodieren: Windows-Programme geben oft
-                # in der ANSI-Codepage aus (z. B. 0xFC = „ü“), ein fester UTF-8-
-                # Textmodus ließe den Lesethread mit UnicodeDecodeError abstürzen.
-                env = os.environ.copy()
-                env["PYTHONIOENCODING"] = "utf-8"   # Python-REPL/mpremote → UTF-8
-                env["PYTHONUNBUFFERED"] = "1"
-                self._proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    bufsize=0,
-                    cwd=Path.home(),
-                    env=env,
-                )
-                t = threading.Thread(target=self._read_output, daemon=True)
-                t.start()
-        except Exception as e:
-            self._append(f"Prozess konnte nicht gestartet werden: {e}\n", THEME["error"])
-
-    def _read_pty(self, fd: int, proc):
-        """Liest kontinuierlich vom PTY-Master (Unix/macOS) und schließt ihn am Ende."""
-        import select, re as _re
-        try:
-            # Weiterlaufen, solange dies noch die aktuelle Sitzung ist
-            while self._master_fd == fd and proc.poll() is None:
-                try:
-                    r, _, _ = select.select([fd], [], [], 0.1)
-                    if r:
-                        data = os.read(fd, 4096)
-                        if not data:
-                            break
-                        text = data.decode("utf-8", errors="replace")
-                        # ANSI/VT100-Escape-Sequenzen entfernen
-                        text = _re.sub(r'\x1b\[[\x20-\x3f]*[\x40-\x7e]', '', text)
-                        text = _re.sub(r'\x1b\][^\x07]*\x07', '', text)
-                        text = _re.sub(r'\x1b[^[\]]', '', text)
-                        text = _re.sub(r'\r(?!\n)', '', text)
-                        text = text.replace('\r\n', '\n')
-                        self._bridge_append(text, THEME["terminal_text"])
-                except (OSError, TypeError, ValueError):
-                    break
-        finally:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            if self._master_fd == fd:
-                self._master_fd = None
-
-    def _read_output(self):
-        """Liest stdout des Shell-Prozesses (Windows, binäre Pipe)."""
-        proc = self._proc
-        if not proc or not proc.stdout:
-            return
-        try:
-            for raw in iter(proc.stdout.readline, b""):
-                text = _decode_shell_bytes(raw).replace("\r\n", "\n")
-                self._append(text, THEME["terminal_text"])
-        except (OSError, ValueError):
-            pass   # Pipe beim Beenden/Neustart der Shell geschlossen
-
-    def _append(self, text: str, color: str):
-        """Thread-sicher: aus Hintergrund-Thread aufrufbar."""
-        try:
-            self._text_ready.emit(text, color)
-        except RuntimeError:
-            pass   # Widget beim Beenden schon zerstört – Lesethread läuft noch kurz weiter
-
-    def _bridge_append(self, text: str, color: str):
-        """Alias für _append (Kompatibilität)."""
-        self._append(text, color)
-
-    def _do_append(self, text: str, color: str):
-        cursor = self.output.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        fmt = QTextCharFormat()
-        fmt.setForeground(QColor(color))
-        cursor.insertText(text, fmt)
-        self.output.setTextCursor(cursor)
-        self.output.ensureCursorVisible()
-
-    def _send_command(self):
-        cmd = self._input.text().strip()
-        if not cmd:
-            return
-        self._history.append(cmd)
-        self._hist_idx = len(self._history)
-        if self._master_fd is not None:
-            # PTY: schreiben → bash echot den Befehl selbst zurück
-            try:
-                os.write(self._master_fd, (cmd + "\n").encode())
-            except OSError as e:
-                self._do_append(f"Fehler: {e}\n", THEME["error"])
-        elif self._proc and self._proc.poll() is None:
-            self._do_append(f"$ {cmd}\n", THEME["accent"])
-            try:
-                self._proc.stdin.write((cmd + "\n").encode("utf-8"))
-                self._proc.stdin.flush()
-            except Exception as e:
-                self._do_append(f"Fehler: {e}\n", THEME["error"])
-        self._input.clear()
-
-    def eventFilter(self, obj, event):
-        from PyQt6.QtCore import QEvent
-        from PyQt6.QtGui import QKeyEvent
-        if obj is self._input and event.type() == QEvent.Type.KeyPress:
-            key = event.key()
-            if key == Qt.Key.Key_Up and self._history:
-                self._hist_idx = max(0, self._hist_idx - 1)
-                self._input.setText(self._history[self._hist_idx])
-                return True
-            if key == Qt.Key.Key_Down:
-                self._hist_idx = min(len(self._history), self._hist_idx + 1)
-                if self._hist_idx < len(self._history):
-                    self._input.setText(self._history[self._hist_idx])
-                else:
-                    self._input.clear()
-                return True
-        return super().eventFilter(obj, event)
-
-    def closeEvent(self, event):
-        self._kill_proc()
-        super().closeEvent(event)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # Kombiniertes Konsolenpanel
 # ──────────────────────────────────────────────────────────────────────────────
 class ConsolePanel(QWidget):
-    """Konsolenpanel mit Tabs: Ausgabe + Shell."""
+    """Konsolenpanel mit Tabs: Ausgabe (+ Serial Plotter bei Bedarf)."""
 
     error_link_clicked = pyqtSignal(str, int)
     explain_requested  = pyqtSignal()   # „Infi erklärt diesen Fehler"-Knopf gedrückt
@@ -796,8 +468,6 @@ class ConsolePanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._active_runner: ProcessRunner | None = None
-        self._shell_is_micropython = False
-        self._shell_pending_cmd: list | None = None
         # Gepufferte Programmausgabe: viele kleine print()-Chunks werden
         # gesammelt und nur alle 40 ms gebündelt eingefügt. Das verhindert,
         # dass der GUI-Thread bei ausgabeintensiven Programmen (Schleifen mit
@@ -900,11 +570,6 @@ class ConsolePanel(QWidget):
 
         self.tabs.addTab(output_container, "Ausgabe")
 
-        # Tab 2: Shell
-        self.shell = ShellWidget()
-        self.tabs.addTab(self.shell, "Shell")
-        self.tabs.currentChanged.connect(self._on_tab_changed)
-
         layout.addWidget(self.tabs)
 
     def refresh_theme(self):
@@ -923,18 +588,8 @@ class ConsolePanel(QWidget):
             f"QPushButton:hover {{ background:{THEME['accent_hover']}; }}"
         )
         self.output_console.refresh_theme()
-        self.shell.refresh_theme()
         if self._plot is not None:
             self._plot.refresh_theme()
-
-    def _on_tab_changed(self, index: int):
-        """mpremote-REPL erst starten wenn Shell-Tab aktiv wird."""
-        if index == 1 and self._shell_pending_cmd:
-            self.shell.restart(self._shell_pending_cmd)
-            self._shell_pending_cmd = None
-        elif index != 1 and self._shell_is_micropython:
-            # Shell-Tab verlassen → Port freigeben
-            self.shell.stop()
 
     def _send_input(self):
         text = self._input_field.text()
@@ -1068,48 +723,11 @@ class ConsolePanel(QWidget):
                 if idx != -1:
                     self.tabs.removeTab(idx)
 
-    def pause_shell(self):
-        """Port freigeben: Shell-Prozess beenden."""
-        self.shell.stop()
-        if self._shell_is_micropython:
-            # Beim nächsten Tab-Klick neu starten
-            self._shell_pending_cmd = self.shell._current_cmd
-
-    def resume_shell(self):
-        """Shell neu starten, aber nur wenn Shell-Tab gerade sichtbar ist."""
-        if self._shell_is_micropython and self.tabs.currentIndex() == 1:
-            self.shell.resume()
-
-    def set_shell_mode(self, mode: str, port: str = "", python_exec: str = ""):
-        """Setzt Shell-Modus. mpremote-REPL wird erst beim Tab-Klick gestartet."""
-        if mode == "micropython" and port:
-            cmd = [*tool_command("mpremote"), "connect", port]
-            label = f"Shell  –  MicroPython REPL ({port})"
-            self._shell_is_micropython = True
-            self.shell.stop()                 # alten Prozess beenden
-            self.shell._current_cmd = cmd     # für resume()
-            if self.tabs.currentIndex() == 1:
-                # Shell-Tab bereits aktiv → sofort starten
-                self.shell.restart(cmd)
-            else:
-                # Lazy: erst beim nächsten Tab-Klick starten
-                self._shell_pending_cmd = cmd
-        else:
-            exe = python_exec or python_executable()
-            cmd = [exe, "-i"]
-            label = "Shell  –  Python REPL"
-            self._shell_is_micropython = False
-            self._shell_pending_cmd = None
-            self.shell.restart(cmd)
-        self.tabs.setTabText(1, label)
-
     def set_font_size(self, size: int):
-        """Schriftgröße der Konsole und Shell ändern."""
+        """Schriftgröße der Konsole ändern."""
         font = QFont(mono_family(), size)
         self.output_console.setFont(font)   # OutputConsole ist selbst das QTextEdit
-        self.shell.output.setFont(font)
 
     def set_scrollback_limit(self, lines: int):
-        """Maximale Zeilenzahl im Output- und Shell-Puffer setzen."""
+        """Maximale Zeilenzahl im Ausgabepuffer setzen."""
         self.output_console.document().setMaximumBlockCount(lines)
-        self.shell.output.document().setMaximumBlockCount(lines)

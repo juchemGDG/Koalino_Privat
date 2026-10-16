@@ -48,9 +48,16 @@ _PORTAL_MAX_BACK = 4          # danach statt „Zurück“ die Chat-Startseite l
 class AisChatPanel(QWidget):
     """Seitliches Panel mit eingebetteter AIS-Chat-Webseite."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, url: str = AIS_CHAT_URL,
+                 title: str = "🏫  AIS-Chat", portal_fix: bool = True,
+                 lazy: bool = False):
         super().__init__(parent)
         self._view = None
+        self._url = url
+        self._title = title
+        # Die Umleitung von der SCHULE@BW-Übersicht gibt es nur bei ais.chat
+        self._portal_fix = portal_fix
+        self._lazy = lazy          # Seite erst beim ersten Einblenden laden
         self._build_ui()
 
     def _build_ui(self):
@@ -65,12 +72,12 @@ class AisChatPanel(QWidget):
         self._header.setFixedHeight(36)
         hlay = QHBoxLayout(self._header)
         hlay.setContentsMargins(10, 0, 10, 0)
-        self._title_lbl = QLabel("🏫  AIS-Chat")
+        self._title_lbl = QLabel(self._title)
         hlay.addWidget(self._title_lbl)
         hlay.addStretch()
         self._home_btn = QToolButton()
         self._home_btn.setText("⌂")
-        self._home_btn.setToolTip("Zur AIS-Chat-Startseite")
+        self._home_btn.setToolTip("Zur Startseite")
         self._home_btn.setAutoRaise(True)
         self._home_btn.clicked.connect(self.go_home)
         hlay.addWidget(self._home_btn)
@@ -103,7 +110,8 @@ class AisChatPanel(QWidget):
             self._portal_deadline = 0.0
             self._portal_cooldown = 0.0
             self._portal_backs = 0
-            self._view.setUrl(QUrl(AIS_CHAT_URL))
+            if not self._lazy:
+                self._view.setUrl(QUrl(self._url))
             layout.addWidget(self._view, stretch=1)
         else:
             info = QLabel(
@@ -119,6 +127,12 @@ class AisChatPanel(QWidget):
             layout.addStretch()
         self.refresh_theme()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._lazy and self._view is not None:
+            self._lazy = False
+            self._view.setUrl(QUrl(self._url))
+
     def refresh_theme(self):
         self._header.setStyleSheet(
             f"background:{THEME['bg_panel']};"
@@ -133,13 +147,15 @@ class AisChatPanel(QWidget):
 
     def go_home(self):
         if self._view is not None:
-            self._view.setUrl(QUrl(AIS_CHAT_URL))
+            self._view.setUrl(QUrl(self._url))
 
     # ------------------------------------------------------------------
     # Umleitung auf die SCHULE@BW-Dienste-Übersicht abfangen
     # ------------------------------------------------------------------
     def _on_url_changed(self, url):
-        if url.host() == QUrl(AIS_CHAT_URL).host():
+        if not self._portal_fix:
+            return
+        if url.host() == QUrl(self._url).host():
             # Im Chat angekommen – nichts mehr zu prüfen
             self._portal_backs = 0
             self._portal_timer.stop()
