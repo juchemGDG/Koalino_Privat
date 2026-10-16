@@ -1,3 +1,5 @@
+<p align="center"><img src="koalino/assets/brand/koalino-wortbild-hell.svg" alt="Koalino – Editor für Python und MicroPython auf dem ESP32" width="560"></p>
+
 # Koalino
 
 **Koalino** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).

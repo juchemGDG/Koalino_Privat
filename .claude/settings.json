@@ -91,7 +91,8 @@
       "Bash(QT_QPA_PLATFORM=offscreen python3 /tmp/claude-1000/-workspaces-NIT-PyEd/317f9b73-4164-4ec4-9816-6b157385c8d8/scratchpad/render.py)",
       "Bash(sed -i \"s/de.nit.nitcode/de.koalino.app/\" release/pyinstaller.spec)",
       "Bash(sed -i \"s/nit-code-/koalino-/\" .github/workflows/release-build.yml)",
-      "Read(//home/codespace/.config/**)"
+      "Read(//home/codespace/.config/**)",
+      "Bash(python3 -m py_compile koalino/main_window.py)"
     ],
     "additionalDirectories": [
       "/workspaces/NIT_Code",

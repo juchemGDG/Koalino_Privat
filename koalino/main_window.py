@@ -4112,14 +4112,17 @@ class MainWindow(QMainWindow):
         dlg.activateWindow()
 
     def _show_about(self):
-        QMessageBox.about(
-            self, f"Über {APP_NAME}",
+        box = QMessageBox(self)
+        box.setIconPixmap(find_logo().pixmap(96, 96))
+        box.setWindowTitle(f"Über {APP_NAME}")
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(
             f"<h2>{APP_NAME} {APP_VERSION}</h2>"
             f"<p>Ein Python- und MicroPython-Editor für den Schulunterricht.</p>"
             f"<p>Unterstützte Controller:<br>"
             + "<br>".join(b["label"] for b in SUPPORTED_BOARDS.values())
-            + "</p>"
-        )
+            + "</p>")
+        box.exec()
 
     def _open_settings(self):
         dlg = SettingsDialog(
