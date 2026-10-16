@@ -62,7 +62,20 @@
       "Bash(python /tmp/test_py2blockly.py)",
       "Bash(npm install *)",
       "Bash(python /tmp/blockly_test/dump_states.py)",
-      "Bash(node roundtrip.js)"
+      "Bash(node roundtrip.js)",
+      "Bash(grep -v -E '\\\\.\\(png|svg|json|md\\)$')",
+      "Bash(python3 -m pyflakes nit_code/console_panel.py)",
+      "Bash(python3 -m pyflakes nit_code/console_panel.py nit_code/main_window.py)",
+      "Bash(git diff *)",
+      "Bash(python3 -m pyflakes nit_code/main_window.py)",
+      "Bash(sed -i 's/self._section\\(\"SHELL\"\\)/self._section\\(\"AUSGABE\"\\)/; s/Schriftgröße \\(Editor & Shell\\):/Schriftgröße \\(Editor \\\\& Konsole\\):/; s#nicht für Editor/Shell\\)#nicht für Editor/Konsole\\)#' nit_code/settings_dialog.py)",
+      "Bash(sed -i '/^| \\\\*\\\\*Shell\\\\*\\\\* |/d; s/# Konsole + Shell/# Konsole \\(Ausgabe\\)/' README.md)",
+      "WebSearch",
+      "Bash(python3 -m pyflakes nit_code/settings_dialog.py)",
+      "Bash(sed -i 's/from PyQt6.QtCore import Qt, QThread$/from PyQt6.QtCore import Qt, QThread, pyqtSignal/; s/tutor_mode, tutor_url, tutor_model, sketchbook_dir/tutor_mode, sketchbook_dir/' nit_code/settings_dialog.py)",
+      "Bash(sed -i '33s/.*/    APP_NAME,\\\\n    FOBIZZ_URL,/' nit_code/main_window.py)",
+      "Bash(python3 -m pyflakes nit_code/main_window.py nit_code/settings_dialog.py nit_code/ais_chat_panel.py)",
+      "Bash(timeout 120 python3 -u /tmp/claude-1000/-workspaces-NIT-PyEd/0c91dd4e-a733-4574-b418-d751c842ef05/scratchpad/smoke.py /tmp/claude-1000/-workspaces-NIT-PyEd/0c91dd4e-a733-4574-b418-d751c842ef05/scratchpad)"
     ],
     "additionalDirectories": [
       "/workspaces/NIT_Code",
