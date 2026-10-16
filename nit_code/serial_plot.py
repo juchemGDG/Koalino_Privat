@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from .qt_utils import ThemedComboBox
 from .config import THEME
 from .csv_stats import linear_regression, regression_text
 
@@ -411,7 +412,7 @@ class SerialPlot(QWidget):
         # Y-Achse (Hochachse)
         self._y_lbl = QLabel("Y:")
         bar.addWidget(self._y_lbl)
-        self._y_combo = QComboBox()
+        self._y_combo = ThemedComboBox()
         self._y_combo.addItem("Auto", "auto")
         self._y_combo.addItem("Fest", "fixed")
         self._setup_combo(self._y_combo)
@@ -427,7 +428,7 @@ class SerialPlot(QWidget):
         # X-Achse (Rechtsachse)
         self._x_lbl = QLabel("X:")
         bar.addWidget(self._x_lbl)
-        self._x_combo = QComboBox()
+        self._x_combo = ThemedComboBox()
         self._x_combo.addItem("Gleitend", "sliding")
         self._x_combo.addItem("Sweep", "sweep")
         self._x_combo.addItem("X-Y (Kennlinie)", "xy")
@@ -442,7 +443,7 @@ class SerialPlot(QWidget):
         # Nur im X-Y-Modus sichtbar: welche Größe liefert die X-Werte?
         self._xy_lbl = QLabel("X-Wert:")
         bar.addWidget(self._xy_lbl)
-        self._xy_combo = QComboBox()
+        self._xy_combo = ThemedComboBox()
         self._setup_combo(self._xy_combo)
         bar.addWidget(self._xy_combo)
         self._reg_chk = QCheckBox("Ausgleichsgerade")

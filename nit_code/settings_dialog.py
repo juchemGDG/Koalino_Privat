@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .qt_utils import UI_FONT_PT_DEFAULT, UI_FONT_PT_RANGE
+from .qt_utils import ThemedComboBox
 from .config import (
     MONO_FONTS, THEME, THEMES,
     detect_python_interpreters, python_version_label, python_has_tkinter,
@@ -356,7 +357,7 @@ class SettingsDialog(QDialog):
         form_dbg.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         dbg_level, dbg_stepped, dbg_change = self._debug_init
 
-        self._combo_dbg_level = QComboBox()
+        self._combo_dbg_level = ThemedComboBox()
         self._combo_dbg_level.setFixedWidth(220)
         self._combo_dbg_level.addItem("Klasse 8/9", "kl89")
         self._combo_dbg_level.addItem("Klasse 10/KS", "kl10")
@@ -386,7 +387,7 @@ class SettingsDialog(QDialog):
         form_run.setSpacing(8)
         form_run.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._combo_as = QComboBox()
+        self._combo_as = ThemedComboBox()
         self._combo_as.setFixedWidth(120)
         self._combo_as.setMaxVisibleItems(6)
         for label, secs in _AUTOSAVE_OPTIONS:
@@ -408,7 +409,7 @@ class SettingsDialog(QDialog):
         form_pl.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         # Hochachse (Y): automatisch oder feste Grenzen
-        self._combo_plot_y = QComboBox()
+        self._combo_plot_y = ThemedComboBox()
         self._combo_plot_y.setFixedWidth(190)
         self._combo_plot_y.addItem("Automatisch (gleitend)", "auto")
         self._combo_plot_y.addItem("Feste Grenzen (Min/Max)", "fixed")
@@ -433,7 +434,7 @@ class SettingsDialog(QDialog):
         form_pl.addRow("Y Min / Max:", y_row)
 
         # Rechtsachse (X): gleitend, fester Indexbereich (Sweep) oder X-Y (Kennlinie)
-        self._combo_plot_x = QComboBox()
+        self._combo_plot_x = ThemedComboBox()
         self._combo_plot_x.setFixedWidth(190)
         self._combo_plot_x.addItem("Gleitend (letzte Werte)", "sliding")
         self._combo_plot_x.addItem("Fester Bereich (Sweep)", "sweep")
@@ -499,7 +500,7 @@ class SettingsDialog(QDialog):
         form_design.setSpacing(8)
         form_design.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._combo_theme = QComboBox()
+        self._combo_theme = ThemedComboBox()
         self._combo_theme.setMaxVisibleItems(8)
         self._combo_theme.addItem("Modernes Hell-Design", "modern_light")
         self._combo_theme.addItem("Modernes Dunkel-Design", "modern_dark")
@@ -511,7 +512,7 @@ class SettingsDialog(QDialog):
         self._combo_theme.setCurrentIndex(tidx)
         form_design.addRow("Design:", self._combo_theme)
 
-        self._combo_font = QComboBox()
+        self._combo_font = ThemedComboBox()
         for key, (label, _family) in MONO_FONTS.items():
             self._combo_font.addItem(label, key)
         self._combo_font.setCurrentIndex(max(0, self._combo_font.findData(self._editor_font_init)))
@@ -545,7 +546,7 @@ class SettingsDialog(QDialog):
 
         py_row = QHBoxLayout()
         py_row.setSpacing(6)
-        self._combo_py = QComboBox()
+        self._combo_py = ThemedComboBox()
         self._combo_py.setEditable(True)
         self._combo_py.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self._combo_py.lineEdit().setPlaceholderText("(automatisch erkannt)")
@@ -604,7 +605,7 @@ class SettingsDialog(QDialog):
 
         git_row = QHBoxLayout()
         git_row.setSpacing(6)
-        self._combo_git = QComboBox()
+        self._combo_git = ThemedComboBox()
         self._combo_git.setEditable(True)
         self._combo_git.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self._combo_git.lineEdit().setPlaceholderText("(automatisch erkannt)")
@@ -660,7 +661,8 @@ class SettingsDialog(QDialog):
 
         # ── Buttons (fest unten, immer sichtbar – außerhalb des Scrollbereichs) ──
         btn_bar = QFrame()
-        btn_bar.setStyleSheet(f"background:{THEME['bg_panel']}; border-top:1px solid {THEME['border']};")
+        btn_bar.setObjectName("btnBar")
+        btn_bar.setStyleSheet(f"QFrame#btnBar {{ background:{THEME['bg_panel']}; border-top:1px solid {THEME['border']}; }}")
         btn_row = QHBoxLayout(btn_bar)
         btn_row.setContentsMargins(20, 10, 20, 12)
         btn_row.addStretch()

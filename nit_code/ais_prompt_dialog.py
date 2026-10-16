@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QWidget,
 )
 
+from .qt_utils import ThemedComboBox
 from .config import AIS_CHAT_URL, THEME
 from .coder_panel import LEVEL_KL10, LEVEL_KL89, coder_system_prompt
 
@@ -91,7 +92,7 @@ class AisChatPromptDialog(QDialog):
 
         level_row = QHBoxLayout()
         level_row.addWidget(QLabel("Stufe der Instruktionen:"))
-        self._level_combo = QComboBox()
+        self._level_combo = ThemedComboBox()
         self._level_combo.addItem("Klasse 8/9 (ohne main())", LEVEL_KL89)
         self._level_combo.addItem("Klasse 10/KS (mit main(), nach IBD gegliedert)", LEVEL_KL10)
         self._level_combo.setCurrentIndex(self._level_combo.findData(self._level))

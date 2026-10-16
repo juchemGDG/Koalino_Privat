@@ -117,6 +117,8 @@ def _git_network_env() -> dict | None:
 def build_global_style() -> str:
     t = THEME
     scroll = t.get("scroll", t["border"])
+    from .qt_utils import tab_close_icons
+    _close_n, _close_h = tab_close_icons(t["text"], "#ffffff")
     return f"""
 QMainWindow, QWidget {{
     background: {t['bg_dark']};
@@ -214,13 +216,13 @@ QTabBar::tab:hover:!selected {{
 }}
 QTabBar::close-button {{
     subcontrol-position: right;
-    width: 14px;
-    height: 14px;
-    margin-left: 4px;
-    border-radius: 7px;
+    image: url({_close_n});
+    width: 16px;
+    height: 16px;
+    margin-left: 6px;
 }}
 QTabBar::close-button:hover {{
-    background: {t['border']};
+    image: url({_close_h});
 }}
 QSplitter::handle {{
     background: {t['border']};

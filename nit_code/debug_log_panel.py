@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 )
 
 from . import debug_guide as guide
+from .qt_utils import ThemedComboBox
 from .config import THEME
 from .debug_guide import LEVEL_KL10, LEVEL_KL89
 
@@ -256,7 +257,7 @@ class DebugLogPanel(QWidget):
         hl.setContentsMargins(10, 0, 4, 0)
         self._title = QLabel("📝  Fehlerprotokoll")
         hl.addWidget(self._title, 1)
-        self._form_combo = QComboBox()
+        self._form_combo = ThemedComboBox()
         for lv in guide.LEVELS:
             self._form_combo.addItem(guide.LEVEL_LABEL[lv], lv)
         self._form_combo.currentIndexChanged.connect(

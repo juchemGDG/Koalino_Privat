@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QColor
 
+from .qt_utils import ThemedComboBox
 from .config import THEME, SUPPORTED_BOARDS, LIB_REPO_API, LIB_REPO_RAW, python_executable, tool_command
 from .net_hints import with_network_hint
 
@@ -720,7 +721,7 @@ class FlashDialog(QDialog):
         board_row = QHBoxLayout()
         board_lbl = QLabel("Board:")
         board_lbl.setStyleSheet(f"color:{THEME['text_dim']}; min-width:50px;")
-        self._board_combo_dlg = QComboBox()
+        self._board_combo_dlg = ThemedComboBox()
         for bid, binfo in SUPPORTED_BOARDS.items():
             self._board_combo_dlg.addItem(binfo["label"], bid)
         idx = self._board_combo_dlg.findData(self._board)
@@ -743,7 +744,7 @@ class FlashDialog(QDialog):
         # ── Serieller Port (nur für ESP32) ──
         self._port_group = QGroupBox("Serieller Port (nur für ESP32)")
         pg = QHBoxLayout(self._port_group)
-        self._port_combo = QComboBox()
+        self._port_combo = ThemedComboBox()
         self._refresh_ports()
         pg.addWidget(self._port_combo)
         btn_refresh = QPushButton("↻")
@@ -763,7 +764,7 @@ class FlashDialog(QDialog):
 
         mb_row = QHBoxLayout()
         self._microbit_mode_lbl = QLabel("micro:bit-Version:")
-        self._microbit_mode = QComboBox()
+        self._microbit_mode = ThemedComboBox()
         self._microbit_mode.addItem("Automatisch erkennen", "auto")
         self._microbit_mode.addItem("Erzwingen: v1", "v1")
         self._microbit_mode.addItem("Erzwingen: v2", "v2")
@@ -1465,7 +1466,7 @@ class LibraryManagerDialog(QDialog):
         # Port
         port_row = QHBoxLayout()
         port_row.addWidget(QLabel("Serieller Port:"))
-        self._port_combo = QComboBox()
+        self._port_combo = ThemedComboBox()
         self._refresh_ports()
         if self._port:
             idx = self._port_combo.findText(self._port)
