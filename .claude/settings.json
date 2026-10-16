@@ -76,7 +76,14 @@
       "Bash(sed -i '33s/.*/    APP_NAME,\\\\n    FOBIZZ_URL,/' nit_code/main_window.py)",
       "Bash(python3 -m pyflakes nit_code/main_window.py nit_code/settings_dialog.py nit_code/ais_chat_panel.py)",
       "Bash(timeout 120 python3 -u /tmp/claude-1000/-workspaces-NIT-PyEd/0c91dd4e-a733-4574-b418-d751c842ef05/scratchpad/smoke.py /tmp/claude-1000/-workspaces-NIT-PyEd/0c91dd4e-a733-4574-b418-d751c842ef05/scratchpad)",
-      "Bash(grep -E '\\\\.py$')"
+      "Bash(grep -E '\\\\.py$')",
+      "Bash(git remote *)",
+      "Bash(python3 -c \"import ast,sys;[ast.parse\\(open\\(f\\).read\\(\\)\\) for f in ['nit_code/main_window.py','nit_code/config.py']];print\\('syntax ok'\\)\")",
+      "Bash(ls \"/Users/stephan/Documents/02 - Dateien_Privat/Homepage/Mint_Checker/mint_checker\" 2>&1 | head)",
+      "Read(//Users/stephan/Documents/02 - Dateien_Privat/Homepage/Mint_Checker/**)",
+      "Bash(gh repo *)",
+      "Bash(python3 -c \"import PyQt6, sys; print\\(sys.version\\)\")",
+      "Bash(pkill -f shots.py)"
     ],
     "additionalDirectories": [
       "/workspaces/NIT_Code",
