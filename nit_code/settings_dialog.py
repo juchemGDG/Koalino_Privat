@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 from .qt_utils import UI_FONT_PT_DEFAULT, UI_FONT_PT_RANGE
 from .qt_utils import ThemedComboBox
 from .config import (
-    MONO_FONTS, THEME, THEMES,
+    CODE_SCHEME_LABELS, MONO_FONTS, THEME, THEMES,
     detect_python_interpreters, python_version_label, python_has_tkinter,
 )
 
@@ -118,9 +118,11 @@ class SettingsDialog(QDialog):
         debug_change_hint: bool = True,
         hidden_activity=(),
         editor_font: str = "default",
+        code_scheme: str = "auto",
     ):
         super().__init__(parent)
         self._editor_font_init = editor_font
+        self._code_scheme_init = code_scheme
         self._hidden_activity_init = set(hidden_activity)
         self._initial_ui_font_pt = ui_font_pt
         self._debug_init = (debug_level, debug_stepped, debug_change_hint)
@@ -502,15 +504,23 @@ class SettingsDialog(QDialog):
 
         self._combo_theme = ThemedComboBox()
         self._combo_theme.setMaxVisibleItems(8)
-        self._combo_theme.addItem("Modernes Hell-Design", "modern_light")
-        self._combo_theme.addItem("Modernes Dunkel-Design", "modern_dark")
-        self._combo_theme.addItem("Klassisches Hell-Design (Eclipse)", "classic_light")
-        self._combo_theme.addItem("Solarized (warmes Hell-Design)", "solarized")
-        self._combo_theme.addItem("Dracula (Dunkel, kräftige Farben)", "dracula")
-        self._combo_theme.addItem("Hoher Kontrast (Schwarz auf Weiß)", "contrast")
+        self._combo_theme.addItem("Modern Hell", "modern_light")
+        self._combo_theme.addItem("Modern Dunkel", "modern_dark")
+        self._combo_theme.addItem("Klassisch Hell", "classic_light")
+        self._combo_theme.addItem("Schwarz-Weiß (hoher Kontrast)", "contrast")
         tidx = max(0, self._combo_theme.findData(theme))
         self._combo_theme.setCurrentIndex(tidx)
         form_design.addRow("Design:", self._combo_theme)
+
+        self._combo_scheme = ThemedComboBox()
+        self._combo_scheme.setMaxVisibleItems(8)
+        for key, label in CODE_SCHEME_LABELS.items():
+            self._combo_scheme.addItem(label, key)
+        self._combo_scheme.setCurrentIndex(
+            max(0, self._combo_scheme.findData(self._code_scheme_init)))
+        self._combo_scheme.setToolTip(
+            "Farben des Code-Editors, unabhängig vom Design der Oberfläche.")
+        form_design.addRow("Code-Farben:", self._combo_scheme)
 
         self._combo_font = ThemedComboBox()
         for key, (label, _family) in MONO_FONTS.items():
@@ -877,6 +887,10 @@ class SettingsDialog(QDialog):
     @property
     def theme(self) -> str:
         return self._combo_theme.currentData()
+
+    @property
+    def code_scheme(self) -> str:
+        return self._combo_scheme.currentData()
 
     @property
     def tutor_mode(self) -> str:

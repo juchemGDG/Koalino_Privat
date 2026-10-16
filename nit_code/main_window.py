@@ -42,6 +42,9 @@ from .config import (
     tool_command,
     set_mono_font,
     set_theme,
+    set_code_scheme,
+    CODE_SCHEMES,
+    LEGACY_THEME_MIGRATION,
 )
 from .editor_widget import CodeEditor
 from .file_panel import FilePanel, DeviceFilePanel, DeviceListWorker
@@ -883,6 +886,7 @@ class MainWindow(QMainWindow):
         self._settings_git_executable: str = ""
         self._settings_git_repo: str = ""
         self._settings_theme: str = "modern_light"
+        self._settings_code_scheme: str = "auto"
         self._settings_editor_font: str = "default"
         self._settings_ui_font_pt: int = UI_FONT_PT_DEFAULT
         # Serial-Plotter-Achsen (Standardwerte; im Plotter live übersteuerbar)
@@ -4132,6 +4136,7 @@ class MainWindow(QMainWindow):
             sketchbook_dir=self._settings_sketchbook,
             git_exec=self._settings_git_executable,
             theme=self._settings_theme,
+            code_scheme=self._settings_code_scheme,
             blocks_enabled=self._settings_blocks_enabled,
             plot_y_mode=self._settings_plot_y_mode,
             plot_y_min=self._settings_plot_y_min,
@@ -4168,6 +4173,7 @@ class MainWindow(QMainWindow):
             self._settings_sketchbook = self._normalize_sketchbook_dir(dlg.sketchbook_dir)
             self._settings_git_executable = dlg.git_exec
             self._settings_theme = dlg.theme
+            self._settings_code_scheme = dlg.code_scheme
             self._settings_blocks_enabled = dlg.blocks_enabled
             self._settings_hidden_activity = dlg.hidden_activity
             self._settings_plot_y_mode = dlg.plot_y_mode
@@ -4284,6 +4290,15 @@ class MainWindow(QMainWindow):
             if self._settings_theme == "classic_light":
                 self._settings_theme = "modern_light"
             self._settings_store.setValue("ui/layout_v2", True)
+        # Solarized/Dracula gibt es nur noch als Code-Farbschema.
+        self._settings_code_scheme = str(
+            self._settings_store.value("ui/code_scheme", "") or "")
+        if self._settings_theme in LEGACY_THEME_MIGRATION:
+            self._settings_theme, legacy_scheme = LEGACY_THEME_MIGRATION[self._settings_theme]
+            if not self._settings_code_scheme:
+                self._settings_code_scheme = legacy_scheme
+        if self._settings_code_scheme not in CODE_SCHEMES:
+            self._settings_code_scheme = "auto"
         self._settings_ui_font_pt = self._settings_int("ui/font_pt", self._settings_ui_font_pt)
         # Serial-Plotter-Achsen
         self._settings_plot_y_mode = str(self._settings_store.value("plot/y_mode", self._settings_plot_y_mode) or "auto")
@@ -4301,6 +4316,7 @@ class MainWindow(QMainWindow):
         self._settings_debug_change_hint = self._settings_bool("debug/change_hint", self._settings_debug_change_hint)
         # Theme sofort anwenden, damit alle nachfolgenden UI-Elemente korrekte Farben erhalten
         set_theme(self._settings_theme)
+        set_code_scheme(self._settings_code_scheme)
 
     def _save_persistent_settings(self):
         self._settings_store.setValue("editor/font_size", self._settings_font_size)
@@ -4319,6 +4335,7 @@ class MainWindow(QMainWindow):
         self._settings_store.setValue("git/executable", self._settings_git_executable)
         self._settings_store.setValue("git/repo_dir", self._settings_git_repo)
         self._settings_store.setValue("ui/theme", self._settings_theme)
+        self._settings_store.setValue("ui/code_scheme", self._settings_code_scheme)
         self._settings_store.setValue("ui/font_pt", self._settings_ui_font_pt)
         self._settings_store.setValue("plot/y_mode", self._settings_plot_y_mode)
         self._settings_store.setValue("plot/y_min", self._settings_plot_y_min)
@@ -4438,6 +4455,7 @@ class MainWindow(QMainWindow):
         """Einstellungen auf alle offenen Tabs + Konsole anwenden."""
         # Theme zuerst anwenden, damit alle Farben stimmen
         set_theme(self._settings_theme)
+        set_code_scheme(self._settings_code_scheme)
         self.setStyleSheet(build_global_style())
         self._update_widget_styles()
         self._apply_toolbar_icons()

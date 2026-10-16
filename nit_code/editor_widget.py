@@ -14,7 +14,7 @@ try:
 except ImportError:
     HAS_QSCI = False
 
-from .config import THEME, mono_family
+from .config import THEME, editor_colors, mono_family
 from .completion import JediCompleter, HAS_JEDI
 
 
@@ -142,19 +142,20 @@ class CodeEditor(QWidget):
         sci.setEolMode(QsciScintilla.EolMode.EolUnix)
 
         # Farben
-        sci.setPaper(_hex(t["bg_editor"]))
-        sci.setColor(_hex(t["text"]))
+        e = editor_colors()
+        sci.setPaper(_hex(e["bg"]))
+        sci.setColor(_hex(e["text"]))
 
         # Zeilennummern
         sci.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
         sci.setMarginWidth(0, "0000")
-        sci.setMarginsBackgroundColor(_hex(t["bg_mid"]))
-        sci.setMarginsForegroundColor(_hex(t["text_dim"]))
+        sci.setMarginsBackgroundColor(_hex(e["margin_bg"]))
+        sci.setMarginsForegroundColor(_hex(e["margin_fg"]))
 
         # Einrückungsführungslinien
         # (eigene durchgehende Linien, siehe _PyScintilla – die eingebauten sind gepunktet)
         sci.setIndentationGuides(False)
-        sci.guide_color = _hex(t["scroll"])
+        sci.guide_color = _hex(e["guide"])
 
         # Tabs → Spaces
         sci.setTabWidth(4)
@@ -165,8 +166,8 @@ class CodeEditor(QWidget):
 
         # Aktuelle Zeile hervorheben
         sci.setCaretLineVisible(True)
-        sci.setCaretLineBackgroundColor(_hex(t["selection"]))
-        sci.setCaretForegroundColor(_hex(t["accent"]))
+        sci.setCaretLineBackgroundColor(_hex(e["line"]))
+        sci.setCaretForegroundColor(_hex(e["caret"]))
 
         # Klammernabgleich
         sci.setBraceMatching(QsciScintilla.BraceMatch.SloppyBraceMatch)
@@ -183,8 +184,8 @@ class CodeEditor(QWidget):
         sci.setMarginWidth(1, 16)
         sci.setMarginSensitivity(1, True)
         self._error_marker = sci.markerDefine(QsciScintilla.MarkerSymbol.Circle)
-        sci.setMarkerBackgroundColor(_hex(t["error"]), self._error_marker)
-        sci.setMarkerForegroundColor(_hex(t["error"]), self._error_marker)
+        sci.setMarkerBackgroundColor(_hex(e["error"]), self._error_marker)
+        sci.setMarkerForegroundColor(_hex(e["error"]), self._error_marker)
 
         # Lexer setzen
         self._set_lexer_python()
@@ -192,42 +193,45 @@ class CodeEditor(QWidget):
     def _set_lexer_python(self):
         if not HAS_QSCI:
             return
-        t = THEME
+        e = editor_colors()
         lexer = QsciLexerPython(self.sci)
         font = QFont(mono_family(), getattr(self, "_font_size", 12))
+        bold = QFont(font)
+        bold.setBold(True)
 
         # Basis-Farben
-        lexer.setDefaultPaper(_hex(t["bg_editor"]))
-        lexer.setDefaultColor(_hex(t["text"]))
+        lexer.setDefaultPaper(_hex(e["bg"]))
+        lexer.setDefaultColor(_hex(e["text"]))
         lexer.setDefaultFont(font)
 
         color_map = {
-            QsciLexerPython.Default:          t["text"],
-            QsciLexerPython.Comment:          t["text_dim"],
-            QsciLexerPython.CommentBlock:     t["text_dim"],
-            QsciLexerPython.Number:           t["warning"],
-            QsciLexerPython.DoubleQuotedString: t["success"],
-            QsciLexerPython.SingleQuotedString: t["success"],
-            QsciLexerPython.TripleSingleQuotedString: t["success"],
-            QsciLexerPython.TripleDoubleQuotedString: t["success"],
-            QsciLexerPython.Keyword:          t["accent_hover"],
-            QsciLexerPython.ClassName:        t["info"],
-            QsciLexerPython.FunctionMethodName: t["info"],
-            QsciLexerPython.Operator:         t["text"],
-            QsciLexerPython.Identifier:       t["text"],
-            QsciLexerPython.UnclosedString:   t["error"],
-            QsciLexerPython.Decorator:        t["warning"],
+            QsciLexerPython.Default:          e["text"],
+            QsciLexerPython.Comment:          e["comment"],
+            QsciLexerPython.CommentBlock:     e["comment"],
+            QsciLexerPython.Number:           e["number"],
+            QsciLexerPython.DoubleQuotedString: e["string"],
+            QsciLexerPython.SingleQuotedString: e["string"],
+            QsciLexerPython.TripleSingleQuotedString: e["string"],
+            QsciLexerPython.TripleDoubleQuotedString: e["string"],
+            QsciLexerPython.Keyword:          e["keyword"],
+            QsciLexerPython.ClassName:        e["name"],
+            QsciLexerPython.FunctionMethodName: e["name"],
+            QsciLexerPython.Operator:         e["text"],
+            QsciLexerPython.Identifier:       e["text"],
+            QsciLexerPython.UnclosedString:   e["error"],
+            QsciLexerPython.Decorator:        e["decorator"],
         }
         for style, color in color_map.items():
             lexer.setColor(_hex(color), style)
-            lexer.setPaper(_hex(t["bg_editor"]), style)
-            lexer.setFont(font, style)
+            lexer.setPaper(_hex(e["bg"]), style)
+            is_bold = e["bold_kw"] and style == QsciLexerPython.Keyword
+            lexer.setFont(bold if is_bold else font, style)
 
         self.sci.setLexer(lexer)
         self._lexer = lexer
         # Der Lexer setzt den Zeilennummernrand zurück – Farben danach erneut setzen.
-        self.sci.setMarginsBackgroundColor(_hex(t["bg_mid"]))
-        self.sci.setMarginsForegroundColor(_hex(t["text_dim"]))
+        self.sci.setMarginsBackgroundColor(_hex(e["margin_bg"]))
+        self.sci.setMarginsForegroundColor(_hex(e["margin_fg"]))
 
     # ------------------------------------------------------------------
     # Öffentliche API
@@ -502,19 +506,19 @@ class CodeEditor(QWidget):
         self._style_device_banner()
         if not HAS_QSCI:
             return
-        t = THEME
-        self.sci.setPaper(_hex(t["bg_editor"]))
-        self.sci.setColor(_hex(t["text"]))
-        self.sci.setMarginsBackgroundColor(_hex(t["bg_mid"]))
-        self.sci.setMarginsForegroundColor(_hex(t["text_dim"]))
-        self.sci.setCaretLineBackgroundColor(_hex(t["selection"]))
-        self.sci.setCaretForegroundColor(_hex(t["accent"]))
-        self.sci.guide_color = _hex(t["scroll"])
+        e = editor_colors()
+        self.sci.setPaper(_hex(e["bg"]))
+        self.sci.setColor(_hex(e["text"]))
+        self.sci.setMarginsBackgroundColor(_hex(e["margin_bg"]))
+        self.sci.setMarginsForegroundColor(_hex(e["margin_fg"]))
+        self.sci.setCaretLineBackgroundColor(_hex(e["line"]))
+        self.sci.setCaretForegroundColor(_hex(e["caret"]))
+        self.sci.guide_color = _hex(e["guide"])
         self.sci.viewport().update()
         if hasattr(self, "_completer"):
             self._style_calltip()
-        self.sci.setMarkerBackgroundColor(_hex(t["error"]), self._error_marker)
-        self.sci.setMarkerForegroundColor(_hex(t["error"]), self._error_marker)
+        self.sci.setMarkerBackgroundColor(_hex(e["error"]), self._error_marker)
+        self.sci.setMarkerForegroundColor(_hex(e["error"]), self._error_marker)
         self._set_lexer_python()
 
     def set_filepath(self, path: str | None):

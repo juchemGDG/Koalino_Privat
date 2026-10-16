@@ -489,47 +489,6 @@ _LIGHT_THEME: dict[str, str] = {          # Eclipse-klassisch
     "terminal_text": "#1a1a1a",
 }
 
-_SOLARIZED_THEME: dict[str, str] = {      # Solarized Light: warmes Cremeweiß, augenschonend
-    "bg_dark":       "#fdf6e3",
-    "bg_mid":        "#eee8d5",
-    "bg_panel":      "#f5efdc",
-    "bg_editor":     "#fdf6e3",
-    "accent":        "#268bd2",
-    "accent_hover":  "#6c71c4",            # Schlüsselwörter: Violett
-    "text":          "#073642",
-    "text_dim":      "#7c8b8d",
-    "success":       "#2a7f78",            # Strings: Cyan-Grün
-    "error":         "#dc322f",
-    "warning":       "#b4540a",            # Zahlen: Orange
-    "info":          "#1f6fb0",
-    "selection":     "#eadfb8",
-    "border":        "#e4dcc4",
-    "scroll":        "#c9c0a4",
-    "terminal_bg":   "#fdf6e3",
-    "terminal_text": "#073642",
-}
-
-_DRACULA_THEME: dict[str, str] = {        # Dunkel mit kräftigen Farben, gut für Beamer im Dunkeln
-    "bg_dark":       "#21222c",
-    "bg_mid":        "#282a36",
-    "bg_panel":      "#282a36",
-    "bg_editor":     "#282a36",
-    "accent":        "#bd93f9",
-    "accent_hover":  "#ff79c6",            # Schlüsselwörter: Pink
-    "text":          "#f8f8f2",
-    "text_dim":      "#8b93b8",
-    "success":       "#f1fa8c",            # Strings: Gelb
-    "error":         "#ff5555",
-    "warning":       "#ffb86c",            # Zahlen: Orange
-    "info":          "#8be9fd",
-    "selection":     "#44475a",
-    "border":        "#3b3e52",
-    "scroll":        "#5b5f7a",
-    "sidebar":       "#1b1c25",
-    "terminal_bg":   "#1e1f29",
-    "terminal_text": "#f8f8f2",
-}
-
 _CONTRAST_THEME: dict[str, str] = {       # Hoher Kontrast: Schwarz auf Weiß, für Beamer und Sehhilfe
     "bg_dark":       "#ffffff",
     "bg_mid":        "#ececec",
@@ -554,10 +513,100 @@ THEMES: dict[str, dict[str, str]] = {
     "modern_light":  _LIGHT_MODERN_THEME,
     "modern_dark":   _DARK_THEME,
     "classic_light": _LIGHT_THEME,
-    "solarized":     _SOLARIZED_THEME,
-    "dracula":       _DRACULA_THEME,
     "contrast":      _CONTRAST_THEME,
 }
+
+# Frühere Oberflächen-Designs, die es nur noch als Code-Farbschema gibt:
+# gespeicherte Einstellung -> (Design, Code-Farbschema)
+LEGACY_THEME_MIGRATION: dict[str, tuple[str, str]] = {
+    "solarized": ("modern_light", "solarized"),
+    "dracula":   ("modern_dark",  "dracula"),
+}
+
+# ── Code-Farbschemata (nur der Editor, unabhängig vom Oberflächen-Design) ─────
+# "auto" = Farben aus dem gewählten Design ableiten (Verhalten wie bisher).
+# bg/text: Hintergrund und Standardtext; margin_*: Zeilennummernrand;
+# line: aktuelle Zeile; bold_kw: Schlüsselwörter fett.
+CODE_SCHEMES: dict[str, dict] = {
+    "auto": {},
+    "eclipse": {
+        "bg": "#ffffff", "text": "#000000", "comment": "#3f7f5f",
+        "keyword": "#7f0055", "string": "#2a00ff", "number": "#00627a",
+        "name": "#0000c0", "decorator": "#646464", "error": "#cc0000",
+        "margin_bg": "#f0f0f0", "margin_fg": "#787878",
+        "line": "#e8f2fe", "caret": "#000000", "bold_kw": True,
+    },
+    "thonny": {
+        "bg": "#ffffff", "text": "#000000", "comment": "#8a8a8a",
+        "keyword": "#c25a00", "string": "#00923a", "number": "#a31515",
+        "name": "#0033cc", "decorator": "#900090", "error": "#d00000",
+        "margin_bg": "#f2f2f2", "margin_fg": "#8a8a8a",
+        "line": "#f3f7ff", "caret": "#000000", "bold_kw": True,
+    },
+    "idle": {
+        "bg": "#ffffff", "text": "#000000", "comment": "#dd0000",
+        "keyword": "#ff7700", "string": "#00aa00", "number": "#000000",
+        "name": "#0000ff", "decorator": "#900090", "error": "#dd0000",
+        "margin_bg": "#e0e0e0", "margin_fg": "#555555",
+        "line": "#f0f0f0", "caret": "#000000", "bold_kw": False,
+    },
+    "solarized": {
+        "bg": "#fdf6e3", "text": "#073642", "comment": "#7c8b8d",
+        "keyword": "#6c71c4", "string": "#2a7f78", "number": "#b4540a",
+        "name": "#1f6fb0", "decorator": "#b4540a", "error": "#dc322f",
+        "margin_bg": "#eee8d5", "margin_fg": "#7c8b8d",
+        "line": "#eee8d5", "caret": "#268bd2", "bold_kw": False,
+    },
+    "dracula": {
+        "bg": "#282a36", "text": "#f8f8f2", "comment": "#6272a4",
+        "keyword": "#ff79c6", "string": "#f1fa8c", "number": "#bd93f9",
+        "name": "#50fa7b", "decorator": "#ffb86c", "error": "#ff5555",
+        "margin_bg": "#21222c", "margin_fg": "#6272a4",
+        "line": "#44475a", "caret": "#f8f8f2", "bold_kw": False,
+    },
+    "onedark": {
+        "bg": "#282c34", "text": "#abb2bf", "comment": "#5c6370",
+        "keyword": "#c678dd", "string": "#98c379", "number": "#d19a66",
+        "name": "#61afef", "decorator": "#e5c07b", "error": "#e06c75",
+        "margin_bg": "#21252b", "margin_fg": "#636d83",
+        "line": "#2c313c", "caret": "#528bff", "bold_kw": False,
+    },
+}
+CODE_SCHEME_LABELS: dict[str, str] = {
+    "auto":      "Passend zum Design",
+    "eclipse":   "Eclipse",
+    "thonny":    "Thonny",
+    "idle":      "IDLE (klassisch)",
+    "solarized": "Solarized Hell",
+    "dracula":   "Dracula (dunkel)",
+    "onedark":   "One Dark (dunkel)",
+}
+_code_scheme = "auto"
+
+
+def set_code_scheme(name: str) -> None:
+    global _code_scheme
+    _code_scheme = name if name in CODE_SCHEMES else "auto"
+
+
+def editor_colors() -> dict:
+    """Farben des Code-Editors: Schema, sonst aus dem aktiven Design abgeleitet."""
+    t = THEME
+    c = {
+        "bg": t["bg_editor"], "text": t["text"], "comment": t["text_dim"],
+        "keyword": t["accent_hover"], "string": t["success"],
+        "number": t["warning"], "name": t["info"], "decorator": t["warning"],
+        "error": t["error"], "margin_bg": t["bg_mid"], "margin_fg": t["text_dim"],
+        "line": t["selection"], "caret": t["accent"], "bold_kw": False,
+        "guide": t["scroll"],
+    }
+    scheme = CODE_SCHEMES.get(_code_scheme, {})
+    c.update(scheme)
+    if scheme:   # Einrückungslinien: Mitte zwischen Rand-Hintergrund und Rand-Schrift
+        a, b = c["margin_bg"].lstrip("#"), c["margin_fg"].lstrip("#")
+        c["guide"] = "#" + "".join(
+            f"{(int(a[i:i + 2], 16) + int(b[i:i + 2], 16)) // 2:02x}" for i in (0, 2, 4))
+    return c
 
 THEME: dict[str, str] = dict(_LIGHT_MODERN_THEME)  # aktives Theme (veränderlich), Standard: modern hell
 
