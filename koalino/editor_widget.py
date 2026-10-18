@@ -91,6 +91,7 @@ class CodeEditor(QWidget):
     """Haupt-Editor-Widget mit Zeilennummern, Syntax-Highlighting und Fehlermarkierung."""
 
     go_to_line_requested = pyqtSignal(int)  # für Klick auf Fehlermeldung → Zeile
+    breakpoints_changed = pyqtSignal()      # Haltepunkt im Rand gesetzt/entfernt
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -186,6 +187,18 @@ class CodeEditor(QWidget):
         self._error_marker = sci.markerDefine(QsciScintilla.MarkerSymbol.Circle)
         sci.setMarkerBackgroundColor(_hex(e["error"]), self._error_marker)
         sci.setMarkerForegroundColor(_hex(e["error"]), self._error_marker)
+
+        # Debugger: Haltepunkt (orange Punkt im Rand, Klick setzt/entfernt) und die
+        # Zeile, an der das Programm gerade angehalten hat (Pfeil + Hintergrund)
+        self._bp_marker = sci.markerDefine(QsciScintilla.MarkerSymbol.Circle)
+        sci.setMarkerBackgroundColor(QColor("#f97316"), self._bp_marker)
+        sci.setMarkerForegroundColor(QColor("#9a3412"), self._bp_marker)
+        self._dbg_arrow = sci.markerDefine(QsciScintilla.MarkerSymbol.RightArrow)
+        sci.setMarkerBackgroundColor(QColor("#2563eb"), self._dbg_arrow)
+        sci.setMarkerForegroundColor(QColor("#1e3a8a"), self._dbg_arrow)
+        self._dbg_line = sci.markerDefine(QsciScintilla.MarkerSymbol.Background)
+        sci.setMarkerBackgroundColor(QColor(250, 204, 21, 90), self._dbg_line)
+        sci.marginClicked.connect(self._on_margin_clicked)
 
         # Lexer setzen
         self._set_lexer_python()
@@ -350,6 +363,48 @@ class CodeEditor(QWidget):
     def clear_error_markers(self):
         if HAS_QSCI:
             self.sci.markerDeleteAll(self._error_marker)
+
+    # ------------------------------------------------------------------
+    # Debugger: Haltepunkte und aktuelle Zeile (Zeilennummern ab 1)
+    # ------------------------------------------------------------------
+    def _on_margin_clicked(self, margin: int, line: int, _modifiers):
+        if margin == 1:
+            self.toggle_breakpoint(line + 1)
+
+    def toggle_breakpoint(self, line: int):
+        if not HAS_QSCI or not (1 <= line <= self.sci.lines()):
+            return
+        if self.sci.markersAtLine(line - 1) & (1 << self._bp_marker):
+            self.sci.markerDelete(line - 1, self._bp_marker)
+        else:
+            self.sci.markerAdd(line - 1, self._bp_marker)
+        self.breakpoints_changed.emit()
+
+    def breakpoint_lines(self) -> list[int]:
+        if not HAS_QSCI:
+            return []
+        lines, mask, n = [], 1 << self._bp_marker, -1
+        while True:
+            n = self.sci.markerFindNext(n + 1, mask)
+            if n < 0:
+                return lines
+            lines.append(n + 1)
+
+    def clear_breakpoints(self):
+        if HAS_QSCI:
+            self.sci.markerDeleteAll(self._bp_marker)
+            self.breakpoints_changed.emit()
+
+    def set_debug_line(self, line: int | None):
+        """Zeigt, wo das Programm angehalten hat (None = Markierung entfernen)."""
+        if not HAS_QSCI:
+            return
+        self.sci.markerDeleteAll(self._dbg_arrow)
+        self.sci.markerDeleteAll(self._dbg_line)
+        if line:
+            self.sci.markerAdd(line - 1, self._dbg_arrow)
+            self.sci.markerAdd(line - 1, self._dbg_line)
+            self.goto_line(line)
 
     def is_modified(self) -> bool:
         if HAS_QSCI:

@@ -475,6 +475,13 @@ class DebugLogPanel(QWidget):
     def refresh_theme(self):
         self._apply_styles()
 
+    # ── Modus (lokal / Controller) ───────────────────────────────────────
+    def set_mode(self, mode: str):
+        """Leitfaden für lokales Python oder MicroPython: die Schritt-Texte kommen aus
+        :mod:`debug_guide` (dort ist der Modus gesetzt), hier wird die Anzeige neu aufgebaut."""
+        guide.set_mode(mode)
+        self.set_level(self._level)
+
     # ── Stufe ────────────────────────────────────────────────────────────
     def set_level(self, level: str):
         if level not in guide.LEVELS:
@@ -506,13 +513,15 @@ class DebugLogPanel(QWidget):
             self._chip_grid.addWidget(b, i // spalten, i % spalten)
         for c in self._cards:
             c.setVisible(c.set_level(level) or False)
-        s0 = guide.step("stopp", level)
-        self._banner.setText(
-            f"<b>SCHRITT 0 · {html.escape(s0.title.upper().rstrip('?'))}</b> &nbsp;{html.escape(s0.lead)}<br>"
-            f"→ {html.escape(guide.plain(s0.detail))}")
+        local = guide.is_local()
+        self._banner.setVisible(not local)      # Schritt 0 (Hardware) gibt es lokal nicht
+        if not local:
+            s0 = guide.step("stopp", level)
+            self._banner.setText(
+                f"<b>SCHRITT 0 · {html.escape(s0.title.upper().rstrip('?'))}</b> &nbsp;{html.escape(s0.lead)}<br>"
+                f"→ {html.escape(guide.plain(s0.detail))}")
         kl89 = level == LEVEL_KL89
-        self._btn_next.setText("➕  Nächste Runde (weiter bei 2)" if kl89
-                               else "➕  Nächste Runde (weiter bei 4)")
+        self._btn_next.setText(f"➕  Nächste Runde (weiter bei {guide.zurueck_nr(level)})")
         self._f_soll.setPlaceholderText(
             "Meldung wörtlich, mit Zeilennummer – oder: was passiert statt dem, was soll" if kl89
             else "Soll: …\nIst: …  (Meldung wörtlich, mit Zeilennummer)")
@@ -521,10 +530,14 @@ class DebugLogPanel(QWidget):
             else "Genau eine Änderung, z. B. „Zeile 6: address=0x77“")
         self._f_erg.setPlaceholderText("Ergebnis, z. B. „blinkt im Sekundentakt“")
         self._f_erg.setVisible(not kl89)    # Klasse 8/9: Ursache steht schon im „weil“ der Änderung
-        self._f_eingr.setPlaceholderText(
-            "Was hast du gefunden? z. B. K3 und K2 kommen gleichzeitig; nach K3 fehlt „1 s warten“ aus dem PAP"
-            if level == LEVEL_KL89 else
-            "Was hast du gefunden? z. B. IBD P1: Pin im Code = Kabel; i2c.scan() → [119] = 0x77")
+        if local:
+            eingr = ("Was hast du gefunden? z. B. Haltepunkt Zeile 7: summe ist schon 5, "
+                     "sollte 3 sein; Schleife läuft einmal zu oft")
+        elif level == LEVEL_KL89:
+            eingr = "Was hast du gefunden? z. B. K3 und K2 kommen gleichzeitig; nach K3 fehlt „1 s warten“ aus dem PAP"
+        else:
+            eingr = "Was hast du gefunden? z. B. IBD P1: Pin im Code = Kabel; i2c.scan() → [119] = 0x77"
+        self._f_eingr.setPlaceholderText(eingr)
         self._loading = False
         self._on_select(self._list.currentRow())
         self._schedule_save()

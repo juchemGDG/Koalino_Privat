@@ -20,6 +20,13 @@ from .debug_guide import LEVEL_KL10, LEVEL_KL89  # noqa: F401  (von anderen Modu
 
 _EXC_RE = re.compile(r"^([A-Za-z_][\w.]*)\s*(?::\s*(.*))?$")
 
+# Lokales Python: dieselben Typen, aber ohne Hardware (Pins, Sensoren, Bus).
+_HINTS_LOCAL: dict[str, str] = {
+    "OSError": """Ein Zugriff auf eine Datei oder das System ist fehlgeschlagen.
+Existiert der Pfad, und liegt die Datei im richtigen Ordner?
+Ist die Datei in einem anderen Programm geöffnet oder schreibgeschützt?""",
+}
+
 # Exception-Typ → mehrzeilige Erklärung (1. Zeile: was es bedeutet, dann Prüf-Tipps).
 _HINTS: dict[str, str] = {
     "SyntaxError": """Python kann den Code nicht lesen – irgendwo stimmt die Schreibweise nicht.
@@ -262,6 +269,8 @@ def _find_rule(etype: str, message: str, traceback_text: str = "") -> dict | Non
     for regel in lesetabelle().get("regeln", []):
         if regel.get("typ") != etype:
             continue
+        if guide.is_local() and regel.get("fall") == "hardware":
+            continue        # Verdrahtung, Sensoren, Pins: gibt es lokal nicht
         muster = regel.get("meldung") or []
         if muster and not any(re.search(m, message) for m in muster):
             continue
@@ -296,7 +305,7 @@ def analyze(traceback_text: str, level: str = LEVEL_KL10) -> ErrorHint | None:
             aktion=regel.get("aktion"),
             belegt=bool(regel.get("belegt", True)),
         )
-    body = _HINTS.get(etype)
+    body = (_HINTS_LOCAL.get(etype) if guide.is_local() else None) or _HINTS.get(etype)
     if body:
         lines = [ln.strip() for ln in body.strip().splitlines() if ln.strip()]
         lesart, tipps = lines[0], lines[1:]

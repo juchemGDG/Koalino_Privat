@@ -860,6 +860,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._tabs: list[EditorTab] = []
         self._mode = "python"       # "python" | "micropython"
+        self._debug_session = None  # laufende Debug-Sitzung (nur lokales Python)
+        self._debug_tab = None
         self._board = "ESP32"
         self._process: ProcessRunner | None = None
         self._retired_threads: list = []   # hält QThread-Referenzen bis finished
@@ -1007,6 +1009,22 @@ class MainWindow(QMainWindow):
 
         # ── Debuggen (Fehler finden: Schritt für Schritt) ──
         m_dbg = mb.addMenu("Debuggen")
+        self._dbg_actions = [
+            self._add_action(m_dbg, "🐞  Debugger starten (bis zum Haltepunkt)",
+                             lambda: self._start_debug(step=False), "Ctrl+F5"),
+            self._add_action(m_dbg, "⏯  Schritt für Schritt starten",
+                             lambda: self._debug_step_key("next"), "F10"),
+            self._add_action(m_dbg, "▶  Weiter bis zum nächsten Haltepunkt",
+                             lambda: self._debug_command("continue"), "F8"),
+            self._add_action(m_dbg, "⤵  Hinein in die Funktion",
+                             lambda: self._debug_step_key("step"), "F11"),
+            self._add_action(m_dbg, "⤴  Heraus aus der Funktion",
+                             lambda: self._debug_command("out"), "Shift+F11"),
+            self._add_action(m_dbg, "●  Haltepunkt setzen / entfernen",
+                             self._toggle_breakpoint_here, "F9"),
+            self._add_action(m_dbg, "Alle Haltepunkte entfernen", self._clear_breakpoints),
+        ]
+        m_dbg.addSeparator()
         self._add_action(m_dbg, "📝  Fehlerprotokoll", self._toggle_debug_log, "Ctrl+Shift+P")
         m_dbg.addSeparator()
         self._add_action(m_dbg, "📍  Kontrollpunkt einfügen", self._insert_checkpoint, "Ctrl+K")
@@ -1109,6 +1127,8 @@ class MainWindow(QMainWindow):
 
         run_act = tbtn("Starten", self._run_program, "Programm ausführen (F5)", "play", True)
         stop_act = tbtn("Stoppen", self._stop_program, "Ausführung stoppen (F6)", "stop")
+        self._debug_btn_act = tbtn("Debuggen", lambda: self._start_debug(step=False),
+                                   "Mit Haltepunkten und Variablenanzeige starten (Strg+F5)")
         tb.widgetForAction(run_act).setObjectName("runButton")
         tb.widgetForAction(stop_act).setObjectName("stopButton")
         tb.addSeparator()
@@ -1361,6 +1381,14 @@ class MainWindow(QMainWindow):
         self._tab_widget.currentChanged.connect(self._on_tab_changed)
         self._right_splitter.addWidget(self._tab_widget)
 
+        # Debugger-Leiste (nur während einer Debug-Sitzung sichtbar)
+        from .debugger import DebugPanel
+        self._debug_panel = DebugPanel()
+        self._debug_panel.command.connect(self._debug_command)
+        self._debug_panel.watches_changed.connect(self._debug_watches_changed)
+        self._debug_panel.frame_selected.connect(self._debug_select_frame)
+        self._right_splitter.addWidget(self._debug_panel)
+
         # Konsole
         self._console = ConsolePanel()
         self._console.error_link_clicked.connect(self._jump_to_error)
@@ -1373,7 +1401,7 @@ class MainWindow(QMainWindow):
         )
         self._right_splitter.addWidget(self._console)
 
-        self._right_splitter.setSizes([520, 200])
+        self._right_splitter.setSizes([520, 0, 200])
         self._main_splitter.addWidget(self._right_splitter)
 
         # KI-Panel: TutorPanel (Ollama), AisChatPanel, CoderPanel im Stack
@@ -1393,6 +1421,7 @@ class MainWindow(QMainWindow):
         from .debug_log_panel import DebugLogPanel
         self._debug_log_panel = DebugLogPanel()
         self._debug_log_panel.set_level(self._settings_debug_level)
+        self._debug_log_panel.set_mode(self._mode)
         self._coder_panel.set_level(self._settings_debug_level)
         self._ai_stack.addWidget(self._debug_log_panel)        # Index 5 → Fehlerprotokoll
         self._debug_log_panel.close_requested.connect(self._close_debug_log)
@@ -1495,6 +1524,7 @@ class MainWindow(QMainWindow):
                 self._console.append_error(f"Datei konnte nicht geladen werden: {e}\n")
 
         tab.editor.set_context_actions(self._editor_context_actions())
+        tab.editor.breakpoints_changed.connect(lambda t=tab: self._on_breakpoints_changed(t))
 
         self._tabs.append(tab)
         idx = self._tab_widget.addTab(tab.editor, tab.display_name)
@@ -1820,6 +1850,13 @@ class MainWindow(QMainWindow):
         _note(f"Moduswechsel → {self._mode}")
         self._m_upy.setEnabled(is_upy)
         self._m_python.setEnabled(not is_upy)
+        for act in getattr(self, "_dbg_actions", []):
+            act.setEnabled(not is_upy)
+        self._debug_btn_act.setVisible(not is_upy)
+        if hasattr(self, "_debug_log_panel"):
+            self._debug_log_panel.set_mode(self._mode)   # Leitfaden: lokal ohne Hardware-Schritte
+        if is_upy:
+            self._debug_end()
         self._port_sep_act.setVisible(is_upy)
         self._port_combo_act.setVisible(is_upy)
         self._port_refresh_act.setVisible(is_upy)
@@ -2021,6 +2058,11 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def _run_program(self):
+        self._launch_program()
+
+    def _launch_program(self, debug_step: bool | None = None):
+        """Startet das Programm. ``debug_step``: None = normaler Lauf, sonst Debugger
+        (False = bis zum ersten Haltepunkt, True = Einzelschritt ab Zeile 1)."""
         # Vorhersage-Modus: am Anfang abgreifen, damit ein Abbruch (z. B.
         # „Speichern als" verworfen) keine Vorhersage für den nächsten Lauf liegen lässt.
         prediction = getattr(self, "_pending_prediction", None)
@@ -2040,7 +2082,8 @@ class MainWindow(QMainWindow):
 
         tab.editor.clear_error_markers()
         self._console.clear_output()
-        self._console.append_info(f"▶  Starte: {tab.filepath}\n")
+        self._console.append_info(
+            f"{'🐞' if debug_step is not None else '▶'}  Starte{' mit Debugger' if debug_step is not None else ''}: {tab.filepath}\n")
         self._last_run_file = tab.filepath
         # Fehler-Zustand für diesen Lauf zurücksetzen
         self._run_stderr_buf = []
@@ -2054,6 +2097,7 @@ class MainWindow(QMainWindow):
         self._predict_mode = prediction is not None
         self._run_stdout_buf = []
 
+        self._debug_end()
         self._retire_process()
         if self._mode == "python":
             python = self._get_python_executable()
@@ -2064,6 +2108,10 @@ class MainWindow(QMainWindow):
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
             env["PYTHONIOENCODING"] = "utf-8"
+            if debug_step is not None:
+                cmd = self._debug_begin(tab, python, debug_step)
+                if cmd is None:
+                    return
             self._process = ProcessRunner(cmd, cwd=os.path.dirname(tab.filepath), env=env)
         else:
             # MicroPython: Raw-REPL über pyserial (stdin-Forwarding)
@@ -2075,6 +2123,102 @@ class MainWindow(QMainWindow):
         self._process.finished_run.connect(self._on_process_done)
         self._process.start()
         self._console.set_active_runner(self._process)
+
+    # ── Debugger (lokales Python) ──────────────────────────────────────────
+    def _start_debug(self, step: bool):
+        if self._mode != "python":
+            self._console.append_info(
+                "Der Debugger gibt es für lokales Python. Auf dem Controller helfen "
+                "Kontrollpunkte (Rechtsklick im Editor).\n")
+            return
+        self._launch_program(debug_step=step)
+
+    def _debug_step_key(self, cmd: str):
+        """F10/F11: laufende Sitzung weiterschalten, sonst im Einzelschritt starten."""
+        if self._debug_session is None:
+            self._start_debug(step=True)
+        else:
+            self._debug_command(cmd)
+
+    def _debug_begin(self, tab, python: str, step: bool):
+        from .debugger import DebugSession, runner_script
+        runner = runner_script()
+        if not runner:
+            self._console.append_error("Debugger-Datei nicht gefunden (assets/debug).\n")
+            return None
+        try:
+            session = DebugSession(tab.editor.breakpoint_lines(), self._debug_panel.watches(), step)
+        except OSError as e:
+            self._console.append_error(f"Debugger konnte nicht starten: {e}\n")
+            return None
+        session.paused.connect(self._on_debug_paused)
+        self._debug_session = session
+        self._debug_tab = tab
+        self._debug_panel.start(step)
+        if not step and not tab.editor.breakpoint_lines():
+            self._console.append_info(
+                "   Kein Haltepunkt gesetzt – das Programm läuft durch. Klick links neben die "
+                "Zeilennummer setzt einen (F9), F10 startet Schritt für Schritt.\n")
+        sizes = self._right_splitter.sizes()
+        if len(sizes) == 3 and sizes[1] < 180:
+            want = 240
+            self._right_splitter.setSizes([max(120, sizes[0] - (want - sizes[1])), want, sizes[2]])
+        return [python, "-u", runner, str(session.port), tab.filepath]
+
+    def _debug_end(self):
+        session, tab = self._debug_session, self._debug_tab
+        self._debug_session = self._debug_tab = None
+        if session is not None:
+            session.close()
+            session.deleteLater()
+        if tab is not None:
+            tab.editor.set_debug_line(None)
+        self._debug_panel.finish()
+
+    def _on_debug_paused(self, msg: dict):
+        self._debug_panel.show_paused(msg)
+        if msg.get("reason", "stop") == "stop" and self._debug_tab is not None:
+            if self._tab_widget.indexOf(self._debug_tab.editor) >= 0:
+                self._tab_widget.setCurrentWidget(self._debug_tab.editor)
+            self._debug_tab.editor.set_debug_line(msg.get("line"))
+        elif self._debug_tab is not None:
+            self._debug_tab.editor.set_debug_line(msg.get("line"))
+
+    def _debug_command(self, cmd: str):
+        if cmd == "stop":
+            self._stop_program()
+            return
+        if self._debug_session is None or not self._debug_panel.is_paused():
+            return
+        self._debug_panel.set_running()
+        if self._debug_tab is not None:
+            self._debug_tab.editor.set_debug_line(None)
+        self._debug_session.send({"cmd": cmd})
+
+    def _debug_watches_changed(self, exprs: list):
+        if self._debug_session is None:
+            return
+        self._debug_session.send({"cmd": "watches", "exprs": exprs})
+        if self._debug_panel.is_paused():
+            self._debug_session.send({"cmd": "select", "index": self._debug_panel.current_index()})
+
+    def _debug_select_frame(self, index: int):
+        if self._debug_session is not None:
+            self._debug_session.send({"cmd": "select", "index": index})
+
+    def _on_breakpoints_changed(self, tab):
+        if self._debug_session is not None and tab is self._debug_tab:
+            self._debug_session.send({"cmd": "breakpoints", "lines": tab.editor.breakpoint_lines()})
+
+    def _toggle_breakpoint_here(self):
+        tab = self._current_tab()
+        if tab:
+            tab.editor.toggle_breakpoint(tab.editor.cursor_line())
+
+    def _clear_breakpoints(self):
+        tab = self._current_tab()
+        if tab:
+            tab.editor.clear_breakpoints()
 
     def _stop_program(self):
         if self._process and self._process.isRunning():
@@ -2200,6 +2344,8 @@ class MainWindow(QMainWindow):
                 self._run_stdout_buf.append(text)
 
     def _on_process_done(self, code: int):
+        if self.sender() in (None, self._process):   # nicht für einen abgelösten Lauf
+            self._debug_end()
         # Restpuffer leeren, damit die Abschlussmeldung wirklich zuletzt erscheint
         self._console.flush_now()
         self._console.set_active_runner(None)
@@ -2684,6 +2830,7 @@ class MainWindow(QMainWindow):
         if dlg is None:
             dlg = DebugMapDialog(self, self._settings_debug_level)
             self._debug_map_dlg = dlg
+        dlg.set_level(self._settings_debug_level)    # Blatt passend zu Stufe und aktuellem Modus
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
