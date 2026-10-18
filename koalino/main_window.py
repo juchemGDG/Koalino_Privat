@@ -1423,6 +1423,7 @@ class MainWindow(QMainWindow):
         self._debug_log_panel.set_level(self._settings_debug_level)
         self._debug_log_panel.set_mode(self._mode)
         self._coder_panel.set_level(self._settings_debug_level)
+        self._coder_panel.set_local(self._mode == "python")
         self._ai_stack.addWidget(self._debug_log_panel)        # Index 5 → Fehlerprotokoll
         self._debug_log_panel.close_requested.connect(self._close_debug_log)
         from .py_site_panel import PySitePanel
@@ -1855,6 +1856,7 @@ class MainWindow(QMainWindow):
         self._debug_btn_act.setVisible(not is_upy)
         if hasattr(self, "_debug_log_panel"):
             self._debug_log_panel.set_mode(self._mode)   # Leitfaden: lokal ohne Hardware-Schritte
+            self._coder_panel.set_local(not is_upy)
         if is_upy:
             self._debug_end()
         self._port_sep_act.setVisible(is_upy)

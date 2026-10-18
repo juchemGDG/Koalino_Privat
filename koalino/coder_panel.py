@@ -649,7 +649,39 @@ _IBD_BLOCK = (
 )
 
 
-def _fehlersuche_block(level: str) -> str:
+# Lokales Python: keine Hardware, dafür der Debugger von Koalino.
+_FEHLERSUCHE_LOKAL = (
+    '\nFEHLERSUCHE-MODUS (LOKALES PYTHON) – Beginnt eine Nachricht mit "Fehlersuche:", '
+    'bist du Fehler-Tutor nach dem Cheatsheet "Fehler finden: Schritt für Schritt" '
+    '(Schritte 1 bis {LETZTER}; es gibt hier keine Hardware, also keinen Schritt 0 und '
+    'keine Hardware-Meldungen). Dann gelten die Regeln zur Spezifikation und zum '
+    'Code-Erzeugen NICHT. Du schreibst KEINEN korrigierten Code und nennst keine '
+    'fertige Lösung.\n'
+    '- Nenne den FALL ({FAELLE}), wo gesucht wird, höchstens DREI Verdächtige und genau '
+    'EINEN Test, der sie unterscheidet. Der Test ist zuerst der Debugger von Koalino: '
+    'Haltepunkt in die Zeile vor der Stelle setzen (Klick neben die Zeilennummer, F9), '
+    'mit Strg+F5 starten, mit F10 Zeile für Zeile weitergehen und im Variablen-Panel '
+    'beobachten, wo ein Wert zum ersten Mal von der Erwartung abweicht. Unter '
+    '"Beobachten" lassen sich eigene Ausdrücke eintragen. Ein print() ist die zweite '
+    'Möglichkeit. Die Erwartung wird VORHER notiert.\n'
+    '- Eine Meldung nennt Verdächtige, keinen Schuldigen.\n'
+    '- Die Vermutung ("Ich vermute …, weil …") formuliert die Schülerin oder der '
+    'Schüler selbst. Fehlt sie, bitte zuerst darum, bevor du weitere Tipps gibst.\n'
+    '- Genau EINE Änderung pro Test; hilft sie nicht, rückgängig machen. Eine Zeile '
+    'nennst du erst auf Nachfrage.\n'
+    '- Schließe mit genau EINER Frage, die zum nächsten Schritt führt.'
+)
+_FEHLERSUCHE_LOKAL_FAELLE_KL89 = 'Meldung | Keine Meldung, Ergebnis falsch | Nichts passiert'
+_FEHLERSUCHE_LOKAL_FAELLE_KL10 = 'Meldung zum Code | Wert falsch | Nichts passiert / hängt'
+
+
+def _fehlersuche_block(level: str, local: bool = False) -> str:
+    if local:
+        kl10 = level == LEVEL_KL10
+        return (_FEHLERSUCHE_LOKAL
+                .replace("{FAELLE}", _FEHLERSUCHE_LOKAL_FAELLE_KL10 if kl10
+                         else _FEHLERSUCHE_LOKAL_FAELLE_KL89)
+                .replace("{LETZTER}", "5" if kl10 else "4"))
     if level == LEVEL_KL10:
         return (_FEHLERSUCHE_BASIS.replace("{FAELLE}", _FEHLERSUCHE_FAELLE_KL10)
                 .replace("{IBD}", _FEHLERSUCHE_IBD) + _FEHLERSUCHE_DIFFERENZ)
@@ -657,11 +689,12 @@ def _fehlersuche_block(level: str) -> str:
             .replace("{IBD}", ""))
 
 
-def coder_system_prompt(level: str = LEVEL_KL89) -> str:
-    """System-Prompt des Code-Generators für „kl89“ (Standard) oder „kl10“."""
+def coder_system_prompt(level: str = LEVEL_KL89, local: bool = False) -> str:
+    """System-Prompt des Code-Generators für „kl89“ (Standard) oder „kl10“; ``local``:
+    Fehlersuche-Teil für lokales Python (Debugger statt Hardware-Prüfung)."""
     rule = _MAIN_RULE_KL10 if level == LEVEL_KL10 else _MAIN_RULE_KL89
     ibd = _IBD_BLOCK if level == LEVEL_KL10 else ""
-    return _CODER_PROMPT_TEMPLATE.replace("@@MAIN_RULE@@", rule) + "\n" + ibd + "\n" + _fehlersuche_block(level)
+    return _CODER_PROMPT_TEMPLATE.replace("@@MAIN_RULE@@", rule) + "\n" + ibd + "\n" + _fehlersuche_block(level, local)
 
 
 CODER_SYSTEM_PROMPT = coder_system_prompt(LEVEL_KL89)
@@ -966,6 +999,7 @@ class CoderPanel(QWidget):
         self._ollama_url       = TUTOR_DEFAULT_URL
         self._model            = TUTOR_DEFAULT_MODEL
         self._level            = LEVEL_KL89
+        self._local            = False
         self._history: list    = [{"role": "system", "content": coder_system_prompt(self._level)}]
         self._worker           = None
         self._retired_workers: list = []
@@ -1609,11 +1643,22 @@ class CoderPanel(QWidget):
                 _SPEC_TEMPLATE_KL10 if level == LEVEL_KL10 else _SPEC_TEMPLATE)
         # Neuer System-Prompt gilt sofort; der bisherige Verlauf bleibt erhalten.
         if self._history and self._history[0].get("role") == "system":
-            self._history[0] = {"role": "system", "content": coder_system_prompt(level)}
+            self._history[0] = {"role": "system", "content": coder_system_prompt(level, self._local)}
+
+    def set_local(self, local: bool):
+        """Lokales Python (True) oder MicroPython: bestimmt den Fehlersuche-Teil des Prompts."""
+        local = bool(local)
+        if local == self._local:
+            return
+        self._local = local
+        if self._history and self._history[0].get("role") == "system":
+            self._history[0] = {"role": "system",
+                                "content": coder_system_prompt(self._level, local)}
 
     # ── Verlauf zurücksetzen ──────────────────────────────────────────────────
     def _clear_history(self):
-        self._history         = [{"role": "system", "content": coder_system_prompt(self._level)}]
+        self._history         = [{"role": "system",
+                                  "content": coder_system_prompt(self._level, self._local)}]
         self._last_code_block = ""
         self._iteration       = 0
         self._iter_lbl.setText("Iteration 0")

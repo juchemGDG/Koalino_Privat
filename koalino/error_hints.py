@@ -384,7 +384,28 @@ def build_infi_error_prompt(code: str, traceback_text: str,
     code = (code or "").strip()
     if len(code) > 4000:
         code = code[:4000] + "\n# … (gekürzt)"
-    if level == LEVEL_KL89:
+    n = lambda key: guide.nr(key, level)        # noqa: E731 – Schrittnummern je Modus
+    if guide.is_local():
+        debugger = ("Der Debugger von Koalino (Haltepunkt, F10, Variablen) ist der erste Test. ")
+        if level == LEVEL_KL89:
+            zyklus = (
+                "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
+                f"Schritt {n('eingrenzen')} (Eingrenzen): Nenne den Fall (Meldung, Ergebnis "
+                "falsch oder nichts passiert), wo ich im Code suchen soll und höchstens drei "
+                f"Verdächtige. {debugger}Was ich ändere („Ich ändere …, weil …“, Schritt "
+                f"{n('aendern')}) formuliere ich selbst. Gib keine fertige Lösung und keinen "
+                "korrigierten Code.\n\n"
+            )
+        else:
+            zyklus = (
+                "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
+                f"Schritt {n('eingrenzen')} (Eingrenzen): Nenne den Fall (Meldung zum Code, "
+                "Wert falsch oder nichts passiert), wo ich suchen soll, höchstens drei "
+                f"Verdächtige und EINEN Test, der sie unterscheidet. {debugger}Die Vermutung "
+                f"(Schritt {n('vermuten')}: „Ich vermute …, weil …“) formuliere ich selbst. Gib "
+                "keine fertige Lösung und keinen korrigierten Code.\n\n"
+            )
+    elif level == LEVEL_KL89:
         zyklus = (
             "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
             "Schritt 2 (Eingrenzen): Nenne den Fall (Meldung, Ergebnis falsch oder nichts "
