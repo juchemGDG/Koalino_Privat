@@ -1315,14 +1315,14 @@ class CoderPanel(QWidget):
         self._chat_view.setStyleSheet(
             f"background:{THEME['bg_dark']}; color:{THEME['text']};"
             f"border:none; padding:8px;"
-            f"font-family:system-ui,-apple-system,'Segoe UI','Ubuntu',sans-serif; font-size:12px;"
+            f"font-family:Helvetica,Arial,'Segoe UI','Ubuntu',sans-serif; font-size:12px;"
         )
         self._sep2.setStyleSheet(f"background:{THEME['border']}; margin:0;")
         self._input_area.setStyleSheet(f"background:{THEME['bg_panel']};")
         self._input.setStyleSheet(
             f"background:{THEME['bg_dark']}; color:{THEME['text']};"
             f"border:1px solid {THEME['border']}; border-radius:8px; padding:4px;"
-            f"font-family:system-ui,-apple-system,'Segoe UI','Ubuntu',sans-serif; font-size:12px;"
+            f"font-family:Helvetica,Arial,'Segoe UI','Ubuntu',sans-serif; font-size:12px;"
         )
         self._clear_btn.setStyleSheet(
             f"background:{THEME['bg_dark']}; color:{THEME['text_dim']};"

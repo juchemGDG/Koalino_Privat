@@ -7,6 +7,9 @@ Klasse 8/9: eine Zeile pro gelöstem Fehler, zwei Spalten (Meldung oder Symptom,
 Ursache und Änderung); vier Karten (1 Beobachten, 2 Eingrenzen, 3 Eine Sache ändern,
 4 Geklappt?). Gleiche Wörter und Farben wie auf dem jeweiligen Cheatsheet.
 
+Angezeigt wird immer die einfache Form (Klasse 8/9) – für die SuS übersichtlicher; die
+Form 10/KS bleibt im Code für ältere Protokolle und einen möglichen späteren Rückweg.
+
 Grundsatz: Koalino trägt nur Fakten ein (Meldung, Läufe mit Änderungen, Scan-Ergebnis
 auf Knopfdruck). Fall, Vermutung und Ergebnis schreiben die SuS selbst.
 
@@ -263,6 +266,7 @@ class DebugLogPanel(QWidget):
         self._form_combo.currentIndexChanged.connect(
             lambda _i: self.set_level(self._form_combo.currentData()))
         hl.addWidget(self._form_combo)
+        self._form_combo.setVisible(False)    # Protokoll immer in der einfachen Form (Kl. 8/9)
         close = QPushButton("✕")
         close.setFixedWidth(28)
         close.setToolTip("Schließen")
@@ -434,7 +438,7 @@ class DebugLogPanel(QWidget):
         scroll.setWidget(cards_w)
         split.addWidget(scroll)
         split.setSizes([190, 420])
-        self.set_level(LEVEL_KL10)
+        self.set_level(LEVEL_KL89)
 
     @staticmethod
     def _lead_of(key: str) -> tuple[str, str]:
@@ -484,8 +488,10 @@ class DebugLogPanel(QWidget):
 
     # ── Stufe ────────────────────────────────────────────────────────────
     def set_level(self, level: str):
-        if level not in guide.LEVELS:
-            level = LEVEL_KL10
+        # Für die SuS genügt überall das einfache Protokoll (zwei Spalten, vier Karten) –
+        # unabhängig von der eingestellten Stufe. Ältere Protokolle in der Form 10/KS
+        # behalten ihre Rohdaten (Vermutung, Ergebnis …) und werden so angezeigt.
+        level = LEVEL_KL89
         self._level = level
         self._loading = True
         idx = self._form_combo.findData(level)

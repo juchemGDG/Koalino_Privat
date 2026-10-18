@@ -126,7 +126,7 @@ def build_global_style() -> str:
 QMainWindow, QWidget {{
     background: {t['bg_dark']};
     color: {t['text']};
-    font-family: Helvetica, Arial, system-ui, -apple-system, 'Segoe UI', 'Ubuntu', sans-serif;
+    font-family: Helvetica, Arial, 'Segoe UI', 'Ubuntu', sans-serif;
     font-size: 13px;
 }}
 QToolTip {{
@@ -1036,6 +1036,7 @@ class MainWindow(QMainWindow):
         self._add_action(m_dbg, "🕘  Stände anzeigen …", self._show_snapshots)
         m_dbg.addSeparator()
         self._act_i2c_scan_dbg = self._add_action(m_dbg, "🔍  I2C-Scan …", self._open_i2c_scan)
+        self._act_i2c_scan_dbg.setEnabled(False)     # nur im MicroPython-Modus
         m_dbg.addSeparator()
         self._add_action(m_dbg, "🗺  Fehler finden: Schritt für Schritt", self._show_debug_map)
 
@@ -1853,6 +1854,7 @@ class MainWindow(QMainWindow):
         self._m_python.setEnabled(not is_upy)
         for act in getattr(self, "_dbg_actions", []):
             act.setEnabled(not is_upy)
+        self._act_i2c_scan_dbg.setEnabled(is_upy)
         self._debug_btn_act.setVisible(not is_upy)
         if hasattr(self, "_debug_log_panel"):
             self._debug_log_panel.set_mode(self._mode)   # Leitfaden: lokal ohne Hardware-Schritte
