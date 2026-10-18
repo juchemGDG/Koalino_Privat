@@ -361,13 +361,13 @@ class SettingsDialog(QDialog):
 
         self._combo_dbg_level = ThemedComboBox()
         self._combo_dbg_level.setFixedWidth(220)
-        self._combo_dbg_level.addItem("Klasse 8/9", "kl89")
-        self._combo_dbg_level.addItem("Klasse 10/KS", "kl10")
+        self._combo_dbg_level.addItem("Klasse 8/9 (ohne main())", "kl89")
+        self._combo_dbg_level.addItem("Klasse 10/KS (mit main(), IBD)", "kl10")
         self._combo_dbg_level.setCurrentIndex(max(0, self._combo_dbg_level.findData(dbg_level)))
         self._combo_dbg_level.setToolTip(
-            "Welches Cheatsheet „Fehler finden: Schritt für Schritt“ gilt: Fälle in Schritt 3, "
-            "Hilfetexte in der Konsole und Fall-Auswahl im Fehlerprotokoll.")
-        form_dbg.addRow("Fehler finden (Cheatsheet):", self._combo_dbg_level)
+            "Wie der Code-Generator Programme aufbaut. Die Fehlersuche (Konsole, "
+            "Fehlerprotokoll, Hilfe) folgt immer dem Cheatsheet Klasse 8/9.")
+        form_dbg.addRow("Code-Generator (Stufe):", self._combo_dbg_level)
 
         self._chk_dbg_stepped = QCheckBox("  Fehlerhilfe in Stufen (Fall → Wo suche ich? → Verdächtige)")
         self._chk_dbg_stepped.setChecked(dbg_stepped)

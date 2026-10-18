@@ -899,7 +899,10 @@ class MainWindow(QMainWindow):
         self._settings_plot_x_min: int = 0
         self._settings_plot_x_max: int = 500
         # Fehler finden (Cheatsheet)
-        self._settings_debug_level: str = "kl10"        # "kl89" | "kl10" (Begriffe, Protokollform)
+        self._settings_debug_level: str = "kl10"        # "kl89" | "kl10" – nur noch Code-Generator/NiT_Coder
+        # Fehlersuche (Konsole, Fehlerprotokoll, Hilfe, Infi) immer nach dem Cheatsheet Klasse 8/9 –
+        # für die SuS einfacher; die Daten für 10/KS bleiben in debug_guide erhalten.
+        self._debug_level: str = "kl89"
         self._settings_debug_stepped: bool = True       # Fehlerhilfe in Stufen
         self._settings_debug_change_hint: bool = True   # „Seit dem letzten Lauf: n Stellen geändert"
         self._snapshots = None                          # SnapshotStore (lazy)
@@ -1421,7 +1424,7 @@ class MainWindow(QMainWindow):
         self._ai_stack.addWidget(self._worksheet_panel)        # Index 4 → Arbeitsblatt-Vorschau
         from .debug_log_panel import DebugLogPanel
         self._debug_log_panel = DebugLogPanel()
-        self._debug_log_panel.set_level(self._settings_debug_level)
+        self._debug_log_panel.set_level(self._debug_level)
         self._debug_log_panel.set_mode(self._mode)
         self._coder_panel.set_level(self._settings_debug_level)
         self._coder_panel.set_local(self._mode == "python")
@@ -2313,7 +2316,7 @@ class MainWindow(QMainWindow):
         tab = self._current_tab()
         code = tab.editor.get_text() if tab else ""
         from .error_hints import build_infi_error_prompt
-        prompt = build_infi_error_prompt(code, tb, self._last_hint, self._settings_debug_level)
+        prompt = build_infi_error_prompt(code, tb, self._last_hint, self._debug_level)
         # Infi-Panel sicher einblenden (Index 0) – auch wenn der Splitter kollabiert war.
         self._ai_stack.setCurrentIndex(0)
         self._ai_stack.setVisible(True)
@@ -2386,7 +2389,7 @@ class MainWindow(QMainWindow):
         self._sync_debug_log()      # offene Runde gehört zur gerade gelaufenen Datei
         self._console.flush_now()   # Traceback steht sicher vor den Hinweisen
         from .error_hints import analyze, detect_busy, traceback_frames
-        hint = analyze(traceback_text, self._settings_debug_level)
+        hint = analyze(traceback_text, self._debug_level)
         if hint is None and not traceback_frames(traceback_text):
             # Keine Python-Meldung, sondern ein Problem mit dem Board selbst (Start nicht
             # bestätigt, Verbindung weg): Schritt 0 bzw. 1 sagen schon, was zu tun ist.
@@ -2510,12 +2513,12 @@ class MainWindow(QMainWindow):
         """Schritt 1 · Läuft schon was? – das Board hat den Programmstart nicht bestätigt."""
         from . import debug_guide as guide
         self._console.flush_now()
-        self._console.append_info(guide.step1_text(self._settings_debug_level))
+        self._console.append_info(guide.step1_text(self._debug_level))
 
     def _show_danger(self, kind: str):
         from .error_hints import danger_text
         self._console.flush_now()
-        self._console.append_warning(danger_text(kind, self._settings_debug_level))
+        self._console.append_warning(danger_text(kind, self._debug_level))
 
     def _checkpoint_line(self, error: bool) -> str | None:
         """Satz zu den Kontrollpunkten dieses Laufs (None, wenn das Programm keine hat)."""
@@ -2553,7 +2556,7 @@ class MainWindow(QMainWindow):
             resolved = self._resolve_traceback_file(fname)
             return bool(resolved and target and os.path.abspath(resolved) == target)
 
-        lvl = self._settings_debug_level
+        lvl = self._debug_level
         lines = [guide.step_header("beobachten", lvl),
                  "   Lies die Meldung von unten und beachte die Zeilennummer." if lvl == "kl89"
                  else "   Schreib die Meldung wörtlich ab – mit Zeilennummer."]
@@ -2660,7 +2663,7 @@ class MainWindow(QMainWindow):
         if ergebnis in ("ok", "error") and panel.open_round() is not None:
             from . import debug_guide as guide
             ok = ergebnis == "ok"
-            self._console.append_info(guide.step6_text(ok, panel.failed_in_a_row() >= 3, self._settings_debug_level))
+            self._console.append_info(guide.step6_text(ok, panel.failed_in_a_row() >= 3, self._debug_level))
             links = [("📝 Ergebnis eintragen", "ergebnis")]
             if not ok:
                 links.insert(0, ("⏪ Zurück zum letzten funktionierenden Stand", "zurueck"))
@@ -2832,9 +2835,9 @@ class MainWindow(QMainWindow):
         from .debug_map_dialog import DebugMapDialog
         dlg = getattr(self, "_debug_map_dlg", None)
         if dlg is None:
-            dlg = DebugMapDialog(self, self._settings_debug_level)
+            dlg = DebugMapDialog(self, self._debug_level)
             self._debug_map_dlg = dlg
-        dlg.set_level(self._settings_debug_level)    # Blatt passend zu Stufe und aktuellem Modus
+        dlg.set_level(self._debug_level)    # Blatt passend zu Stufe und aktuellem Modus
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
@@ -4308,10 +4311,9 @@ class MainWindow(QMainWindow):
             self._settings_debug_level = dlg.debug_level
             self._settings_debug_stepped = dlg.debug_stepped
             self._settings_debug_change_hint = dlg.debug_change_hint
-            self._debug_log_panel.set_level(self._settings_debug_level)
             self._coder_panel.set_level(self._settings_debug_level)
             if getattr(self, "_debug_map_dlg", None) is not None:
-                self._debug_map_dlg.set_level(self._settings_debug_level)
+                self._debug_map_dlg.set_level(self._debug_level)
             ui_font_changed = dlg.ui_font_pt != self._settings_ui_font_pt
             self._settings_ui_font_pt = dlg.ui_font_pt
             self._settings_font_size = dlg.font_size
