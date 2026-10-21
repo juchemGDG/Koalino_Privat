@@ -148,6 +148,21 @@ class SettingsDialog(QDialog):
                 border-radius: 4px;
                 padding: 3px 6px;
             }}
+            QRadioButton {{
+                color: {THEME['text']};
+                spacing: 6px;
+            }}
+            QRadioButton::indicator {{
+                width: 14px; height: 14px; border-radius: 8px;
+                border: 2px solid {THEME['text_dim']}; background: {THEME['bg_dark']};
+            }}
+            QRadioButton::indicator:hover {{ border-color: {THEME['accent']}; }}
+            QRadioButton::indicator:checked {{
+                border: 2px solid {THEME['accent']};
+                background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                    stop:0 {THEME['accent']}, stop:0.5 {THEME['accent']},
+                    stop:0.6 {THEME['bg_dark']}, stop:1 {THEME['bg_dark']});
+            }}
             QSpinBox::up-button, QSpinBox::down-button {{
                 background: {THEME['bg_panel']};
                 border: none;

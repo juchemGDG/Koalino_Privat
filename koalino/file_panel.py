@@ -408,6 +408,8 @@ class DeviceFilePanel(QWidget):
     refresh_started    = pyqtSignal()
     refresh_done        = pyqtSignal()
     firmware_info       = pyqtSignal(str)   # Firmware-Version an main_window weiterleiten
+    # (lokale Dateien/Ordner, Zielordner auf dem Controller) – Mehrfach-Upload
+    upload_requested    = pyqtSignal(list, str)
 
     # Zusätzliche Datenrollen für Listeneinträge
     _ROLE_NAME   = Qt.ItemDataRole.UserRole
@@ -442,7 +444,14 @@ class DeviceFilePanel(QWidget):
         self._btn_refresh.setFixedSize(22, 22)
         self._btn_refresh.clicked.connect(lambda: self.refresh(self._port))
         h.addWidget(self._btn_refresh)
+        self._btn_upload = QPushButton("⬆")
+        self._btn_upload.setToolTip("Dateien oder Ordner auf den Controller hochladen "
+                                    "(oder einfach hierher ziehen)")
+        self._btn_upload.setFixedSize(22, 22)
+        self._btn_upload.clicked.connect(self._show_upload_menu)
+        h.addWidget(self._btn_upload)
         layout.addWidget(self._dev_header)
+        self.setAcceptDrops(True)
 
         # Trennlinie
         self._dev_sep = QWidget()
@@ -680,6 +689,47 @@ class DeviceFilePanel(QWidget):
         menu.addSeparator()
         menu.addAction("↻ Aktualisieren", lambda: self.refresh(self._port))
         menu.exec(self._list.viewport().mapToGlobal(pos))
+
+    # ── Hochladen: Dateien/Ordner wählen oder hineinziehen ───────────────────
+    def _show_upload_menu(self):
+        if not self._port:
+            QMessageBox.information(self, "Controller", "Kein Controller verbunden.")
+            return
+        menu = QMenu(self)
+        menu.addAction("Dateien hochladen …", self._pick_files)
+        menu.addAction("Ordner hochladen …", self._pick_folder)
+        menu.exec(self._btn_upload.mapToGlobal(self._btn_upload.rect().bottomLeft()))
+
+    def _pick_files(self):
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Dateien für den Controller wählen", str(Path.home()),
+            "Alle Dateien (*)",
+        )
+        if paths:
+            self.upload_requested.emit(paths, self._cwd)
+
+    def _pick_folder(self):
+        path = QFileDialog.getExistingDirectory(
+            self, "Ordner für den Controller wählen", str(Path.home()),
+        )
+        if path:
+            self.upload_requested.emit([path], self._cwd)
+
+    @staticmethod
+    def _dropped_paths(event) -> list[str]:
+        return [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
+
+    def dragEnterEvent(self, event):
+        if self._port and self._dropped_paths(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        paths = self._dropped_paths(event)
+        if self._port and paths:
+            event.acceptProposedAction()
+            self.upload_requested.emit(paths, self._cwd)
 
     def _run_device_cmd(self, args: list[str], on_done, timeout: int = 15):
         """Startet einen Geräte-Befehl im Hintergrund (UI bleibt bedienbar).

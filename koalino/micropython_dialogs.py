@@ -169,6 +169,17 @@ def _dialog_style():
             border-radius: 4px;
         }}
         QRadioButton {{ color: {THEME['text']}; spacing: 6px; }}
+        QRadioButton::indicator {{
+            width: 14px; height: 14px; border-radius: 8px;
+            border: 2px solid {THEME['text_dim']}; background: {THEME['bg_dark']};
+        }}
+        QRadioButton::indicator:hover {{ border-color: {THEME['accent']}; }}
+        QRadioButton::indicator:checked {{
+            border: 2px solid {THEME['accent']};
+            background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                stop:0 {THEME['accent']}, stop:0.5 {THEME['accent']},
+                stop:0.6 {THEME['bg_dark']}, stop:1 {THEME['bg_dark']});
+        }}
         QCheckBox {{ color: {THEME['text']}; spacing: 6px; }}
         QLabel {{ color: {THEME['text']}; }}
     """
@@ -246,6 +257,8 @@ class FlashWorker(QThread):
             proc.wait()
             self.progress.emit(100)
             if proc.returncode == 0:
+                if flash_cmd == "esp32":
+                    self._wait_until_ready()
                 self.done.emit(True, "Flash erfolgreich!")
             else:
                 self.done.emit(False, f"Fehler (Code {proc.returncode})")
@@ -253,6 +266,31 @@ class FlashWorker(QThread):
             self.done.emit(False, "esptool nicht gefunden. Bitte installieren: pip install esptool")
         except Exception as e:
             self.done.emit(False, str(e))
+
+    def _wait_until_ready(self):
+        """Wartet nach dem Flashen, bis MicroPython die Raw-REPL annimmt.
+
+        Nach dem Löschen des gesamten Flashs formatiert MicroPython beim ersten
+        Start das Dateisystem (mehrere Sekunden); bei CP210x-Adaptern kommt der
+        Reset durch DTR/RTS beim Öffnen des Ports dazu. Ein mpremote-Aufruf direkt
+        nach dem Flashen scheitert sonst mit "could not enter raw repl".
+        """
+        import subprocess, time
+        self.log.emit("Warte, bis der Controller gestartet ist ...\n")
+        time.sleep(3)
+        for _ in range(8):
+            try:
+                r = subprocess.run(
+                    [*tool_command("mpremote"), "connect", self.port, "exec", "pass"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                if r.returncode == 0:
+                    return
+            except Exception:
+                pass
+            time.sleep(2)
+        self.log.emit("Hinweis: Der Controller meldet sich noch nicht. Falls danach ein "
+                      "Fehler erscheint: USB-Kabel kurz abziehen und wieder einstecken.\n")
 
     # ------------------------------------------------------------------
     # Pico: UF2 automatisch auf das BOOTSEL-Laufwerk kopieren
@@ -725,9 +763,11 @@ class FirmwareDownloader(QThread):
 # Flash-Dialog
 # ──────────────────────────────────────────────────────────────────────────────
 class FlashDialog(QDialog):
-    def __init__(self, board: str | None = None, parent=None):
+    def __init__(self, board: str | None = None, parent=None, port: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("MicroPython flashen")
+        self._preferred_port = port or ""
+        self.flashed = False   # True, sobald ein Flash erfolgreich war
         self.setMinimumSize(520, 540)
         self.setStyleSheet(_dialog_style())
         self._board = board or list(SUPPORTED_BOARDS.keys())[0]
@@ -921,6 +961,12 @@ class FlashDialog(QDialog):
         else:
             for p in ports:
                 self._port_combo.addItem(p)
+            # Den im Hauptfenster gewählten Port vorauswählen
+            pref = getattr(self, "_preferred_port", "")
+            if pref:
+                idx = self._port_combo.findText(pref)
+                if idx >= 0:
+                    self._port_combo.setCurrentIndex(idx)
 
     def _browse_firmware(self):
         flash_cmd = getattr(self, "_flash_cmd", "esp32")
@@ -1020,6 +1066,7 @@ class FlashDialog(QDialog):
         self._btn_flash.setText("Jetzt flashen")
         self._log_append(f"\n{'✓ ' if ok else '✗ '}{msg}\n")
         if ok:
+            self.flashed = True
             QMessageBox.information(self, "Fertig", msg)
         else:
             box = QMessageBox(self)
@@ -1063,12 +1110,20 @@ class IpadDeployWorker(QThread):
         import subprocess
         if desc:
             self.log.emit(desc + "\n")
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        except FileNotFoundError:
-            return False, "mpremote nicht gefunden. Bitte installieren: pip install mpremote"
-        except Exception as e:
-            return False, str(e)
+        import time
+        proc = None
+        for attempt in range(4):
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            except FileNotFoundError:
+                return False, "mpremote nicht gefunden. Bitte installieren: pip install mpremote"
+            except Exception as e:
+                return False, str(e)
+            # Board noch beschäftigt/startet gerade -> kurz warten, erneut versuchen
+            if proc.returncode != 0 and "raw repl" in (proc.stderr or "").lower() and attempt < 3:
+                time.sleep(2)
+                continue
+            break
         if proc.stdout:
             self.log.emit(proc.stdout)
         if proc.returncode != 0:

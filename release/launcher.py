@@ -18,7 +18,14 @@ if getattr(sys, "frozen", False) and len(sys.argv) >= 3 and sys.argv[1] == "-m":
     if _module == "mpremote":
         from mpremote import main as _mpremote_main
         sys.argv = ["mpremote", *sys.argv[3:]]
-        sys.exit(_mpremote_main.main())
+        try:
+            sys.exit(_mpremote_main.main())
+        except Exception as _exc:
+            # Ohne Abfangen zeigt der PyInstaller-Bootloader (console=False) ein
+            # Windows-Fehlerfenster ("Unhandled exception in script"). Stattdessen
+            # die Meldung auf stderr ausgeben, damit sie im Koalino-Protokoll landet.
+            sys.stderr.write(f"{type(_exc).__name__}: {_exc}\n")
+            sys.exit(1)
     if _module == "esptool":
         import esptool
         sys.argv = ["esptool", *sys.argv[3:]]

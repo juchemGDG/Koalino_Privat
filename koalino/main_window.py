@@ -991,6 +991,11 @@ class MainWindow(QMainWindow):
             m_run, "Auf Controller hochladen", self._upload_to_device, "F7"
         )
         self._act_upload.setVisible(False)
+        self._act_upload_many = self._add_action(
+            m_run, "Dateien/Ordner auf Controller hochladen …",
+            self._upload_many_dialog,
+        )
+        self._act_upload_many.setVisible(False)
 
         # ── Blöcke (in Einstellungen abschaltbar) ──
         self._m_blocks = mb.addMenu("Blöcke")
@@ -1366,6 +1371,7 @@ class MainWindow(QMainWindow):
         self._device_panel = DeviceFilePanel()
         self._device_panel.file_open_requested.connect(self._open_file_path)
         self._device_panel.device_file_open_requested.connect(self._open_device_file)
+        self._device_panel.upload_requested.connect(self._upload_paths_to_device)
         self._device_panel.setVisible(False)
         self._left_splitter.addWidget(self._device_panel)
         # FilePanel wächst mit, DeviceFilePanel bleibt kompakt
@@ -1868,6 +1874,7 @@ class MainWindow(QMainWindow):
         self._port_combo_act.setVisible(is_upy)
         self._port_refresh_act.setVisible(is_upy)
         self._act_upload.setVisible(is_upy)
+        self._act_upload_many.setVisible(is_upy)
         self._upload_btn_act.setVisible(is_upy)
         self._reset_btn_act.setVisible(is_upy)
         self._device_panel.setVisible(is_upy)
@@ -2889,6 +2896,86 @@ class MainWindow(QMainWindow):
         self._track_aux_worker(worker)
         worker.start()
 
+    def _upload_many_dialog(self):
+        """Menü: mehrere Dateien oder einen Ordner wählen und hochladen."""
+        box = QMessageBox(self)
+        box.setWindowTitle("Hochladen")
+        box.setText("Was soll auf den Controller?")
+        b_files = box.addButton("Dateien …", QMessageBox.ButtonRole.AcceptRole)
+        b_dir = box.addButton("Ordner …", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Abbrechen", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        start = str(Path.home())
+        if box.clickedButton() is b_files:
+            paths, _ = QFileDialog.getOpenFileNames(
+                self, "Dateien für den Controller wählen", start, "Alle Dateien (*)")
+        elif box.clickedButton() is b_dir:
+            d = QFileDialog.getExistingDirectory(self, "Ordner für den Controller wählen", start)
+            paths = [d] if d else []
+        else:
+            return
+        if paths:
+            self._upload_paths_to_device(paths, None)
+
+    def _upload_paths_to_device(self, paths: list, folder: str | None = None):
+        """Lädt Dateien und/oder ganze Ordner hoch (beliebige Dateitypen).
+
+        ``folder``: Zielordner auf dem Controller; None = nachfragen.
+        """
+        paths = [p for p in paths if p and os.path.exists(p)]
+        if not paths:
+            return
+        port = self._get_serial_port()
+        if not port:
+            return
+        if folder is None:
+            # Ordnerliste im Hintergrund holen, dann Zielordner wählen
+            self._console.append_info("↑  Ermittle Zielordner auf dem Controller …\n")
+            worker = DeviceListWorker(port)
+            worker.result.connect(lambda files: self._start_multi_upload(
+                paths, port, [n for n, _s, is_dir in files if is_dir]))
+            worker.error.connect(lambda _m: self._start_multi_upload(paths, port, []))
+            self._track_aux_worker(worker)
+            worker.start()
+            return
+        self._run_multi_upload(paths, port, folder)
+
+    def _start_multi_upload(self, paths: list, port: str, dirs: list[str]):
+        folder = self._choose_device_folder(dirs)
+        if folder is None:
+            return
+        self._run_multi_upload(paths, port, folder)
+
+    def _run_multi_upload(self, paths: list, port: str, folder: str):
+        from .device_upload import plan_upload, UploadWorker
+        dirs, files = plan_upload(paths, folder)
+        if not files:
+            QMessageBox.information(self, "Hochladen", "Es gibt nichts zu übertragen.")
+            return
+        if len(files) > 150 and QMessageBox.question(
+            self, "Viele Dateien",
+            f"Das sind {len(files)} Dateien – das kann einige Minuten dauern. Fortfahren?",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        if not self._acquire_port():
+            return
+        ziel = f"{folder}/" if folder else "Hauptebene"
+        self._console.append_info(f"↑  Lade {len(files)} Datei(en) nach {ziel} auf {port} hoch ...\n")
+        worker = UploadWorker(port, dirs, files)
+        worker.log.connect(self._console.append_info)
+
+        def _done(ok: bool, msg: str):
+            self._release_port()
+            if ok:
+                self._console.append_success(f"✓  {msg}\n")
+                self._device_panel.show_folder(port, folder)
+            else:
+                self._console.append_error(f"✗  Upload fehlgeschlagen: {msg}\n")
+
+        worker.done.connect(_done)
+        self._track_aux_worker(worker)
+        worker.start()
+
     def _continue_upload(self, local_path: str, port: str, dirs: list[str]):
         """Zweiter Teil von :meth:`_upload_to_device` – läuft nach dem Geräte-Listing."""
         folder = self._choose_device_folder(dirs)
@@ -2959,8 +3046,11 @@ class MainWindow(QMainWindow):
 
     def _flash_firmware(self):
         from .micropython_dialogs import FlashDialog
-        dlg = FlashDialog(self._board, self)
+        dlg = FlashDialog(self._board, self, port=self._get_serial_port(silent=True))
         dlg.exec()
+        if dlg.flashed:
+            # Frisch geflasht: Dateiliste des Controllers neu einlesen
+            self._refresh_device_files_after_run()
 
     def _ipad_firmware_dir(self):
         """Findet den 'firmware'-Ordner (Dev-Modus wie im PyInstaller-Bundle)."""
