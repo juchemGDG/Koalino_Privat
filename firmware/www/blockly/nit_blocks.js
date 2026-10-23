@@ -259,7 +259,7 @@
     var val = block.getFieldValue('VAL');
     P.definitions_['from_machine_pin'] = 'from machine import Pin';
     P.definitions_['inst_pin_out_' + pin] = 'pin_out_' + pin + ' = Pin(' + pin + ', Pin.OUT)';
-    return 'pin_out_' + pin + '.value(' + val + ')\n';
+    return 'pin_out_' + pin + (val === '1' ? '.on()' : '.off()') + '\n';
   });
 
   // ── Digitaler Eingang (mit Pull-Up/-Down/ohne) ────────────────────────────

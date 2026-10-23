@@ -1,6 +1,7 @@
 """Dateibaum-Panel (linke Sidebar)."""
 import os
 import sys
+import shutil
 import tempfile
 import subprocess
 from pathlib import Path
@@ -381,10 +382,13 @@ class _DeviceCmdWorker(QThread):
     """
     done = pyqtSignal(bool, str)   # (ok, fehlermeldung)
 
-    def __init__(self, args: list[str], timeout: int = 15):
+    def __init__(self, args: list[str], timeout: int = 15, copy_to: tuple | None = None):
         super().__init__()
         self._args = args
         self._timeout = timeout
+        # (Quelle, Ziel): nach erfolgreichem Befehl hierhin kopieren – im Thread,
+        # damit ein hängender Netzwerkpfad (Schulserver) die Oberfläche nicht blockiert.
+        self._copy_to = copy_to
 
     def run(self):
         try:
@@ -392,6 +396,13 @@ class _DeviceCmdWorker(QThread):
                 self._args, capture_output=True, text=True, timeout=self._timeout,
             )
             if r.returncode == 0:
+                if self._copy_to:
+                    try:
+                        shutil.copyfile(*self._copy_to)
+                    except OSError as e:
+                        self.done.emit(False, f"Speichern auf {self._copy_to[1]} nicht möglich "
+                                              f"(Server nicht erreichbar?): {e}")
+                        return
                 self.done.emit(True, "")
             else:
                 self.done.emit(False, (r.stderr or "").strip() or "Befehl fehlgeschlagen")
@@ -731,7 +742,7 @@ class DeviceFilePanel(QWidget):
             event.acceptProposedAction()
             self.upload_requested.emit(paths, self._cwd)
 
-    def _run_device_cmd(self, args: list[str], on_done, timeout: int = 15):
+    def _run_device_cmd(self, args: list[str], on_done, timeout: int = 15, copy_to: tuple | None = None):
         """Startet einen Geräte-Befehl im Hintergrund (UI bleibt bedienbar).
 
         ``on_done(ok, fehlermeldung)`` wird nach Abschluss im GUI-Thread
@@ -752,7 +763,7 @@ class DeviceFilePanel(QWidget):
             self._btn_refresh.setEnabled(True)
             on_done(ok, err)
 
-        worker = _DeviceCmdWorker(args, timeout)
+        worker = _DeviceCmdWorker(args, timeout, copy_to)
         worker.done.connect(_finished)
         retain_thread(self._retired_workers, worker)
         worker.start()
@@ -803,10 +814,14 @@ class DeviceFilePanel(QWidget):
             else:
                 QMessageBox.critical(self, "Fehler", err or "Download fehlgeschlagen")
 
+        # Erst in den lokalen Zwischenordner laden, dann auf das Ziel kopieren:
+        # mpremote schreibt so nie direkt auf ein evtl. nicht erreichbares Laufwerk.
+        tmp_path = os.path.join(_download_dir(), "saveas", os.path.basename(name))
+        os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
         self._run_device_cmd(
             [*tool_command("mpremote"), "connect", self._port,
-             "cp", f":{self._remote_path(name)}", target_path],
-            _done, timeout=15,
+             "cp", f":{self._remote_path(name)}", tmp_path],
+            _done, timeout=15, copy_to=(tmp_path, target_path),
         )
 
     def _delete_file(self, name: str):

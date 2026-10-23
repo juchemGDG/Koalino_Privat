@@ -219,6 +219,15 @@ class CodeEditor(QWidget):
         lexer.setDefaultColor(_hex(e["text"]))
         lexer.setDefaultFont(font)
 
+        # Zuerst ALLE Stile auf die gewählte Schrift setzen. Stile ohne eigenen
+        # Eintrag unten (z. B. f-Strings: f"{x:.2f}") behielten sonst die feste
+        # Lexer-Standardschrift und blieben beim Vergrößern (v. a. unter Windows) klein.
+        for style in range(128):
+            try:
+                lexer.setFont(font, style)
+            except Exception:
+                pass
+
         color_map = {
             QsciLexerPython.Default:          e["text"],
             QsciLexerPython.Comment:          e["comment"],
@@ -228,6 +237,11 @@ class CodeEditor(QWidget):
             QsciLexerPython.SingleQuotedString: e["string"],
             QsciLexerPython.TripleSingleQuotedString: e["string"],
             QsciLexerPython.TripleDoubleQuotedString: e["string"],
+            QsciLexerPython.SingleQuotedFString: e["string"],
+            QsciLexerPython.DoubleQuotedFString: e["string"],
+            QsciLexerPython.TripleSingleQuotedFString: e["string"],
+            QsciLexerPython.TripleDoubleQuotedFString: e["string"],
+            QsciLexerPython.HighlightedIdentifier: e["text"],
             QsciLexerPython.Keyword:          e["keyword"],
             QsciLexerPython.ClassName:        e["name"],
             QsciLexerPython.FunctionMethodName: e["name"],
@@ -418,13 +432,9 @@ class CodeEditor(QWidget):
         if HAS_QSCI:
             self.sci.setFont(font)
             if hasattr(self, "_lexer") and self._lexer:
-                self._lexer.setDefaultFont(font)
-                # Not all style IDs are valid on all QScintilla/Python builds.
-                for style in range(128):
-                    try:
-                        self._lexer.setFont(font, style)
-                    except Exception:
-                        pass
+                # Lexer neu aufbauen: setzt Schrift für alle Stile und behält
+                # Fett (Schlüsselwörter) und Kursiv (Kommentare) bei.
+                self._set_lexer_python()
         else:
             self.sci.setFont(font)
 

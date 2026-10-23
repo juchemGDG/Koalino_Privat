@@ -75,9 +75,9 @@ import time
 
 led = Pin(2, Pin.OUT)      # ESP32: eingebaute LED an Pin 2
 while True:
-    led.value(1)           # an
+    led.on()               # an
     time.sleep(0.5)
-    led.value(0)           # aus
+    led.off()              # aus
     time.sleep(0.5)
 ```
 
@@ -85,7 +85,7 @@ while True:
 
 | Aufgabe | Code |
 |---|---|
-| Digitaler Ausgang (LED) | `led = Pin(2, Pin.OUT)` · `led.value(1)` / `led.on()` / `led.off()` |
+| Digitaler Ausgang (LED) | `led = Pin(2, Pin.OUT)` · `led.on()` / `led.off()` |
 | Digitaler Eingang (Taster) | `taster = Pin(4, Pin.IN, Pin.PULL_UP)` · `taster.value()` |
 | Analog lesen (0–4095) | `adc = ADC(Pin(34))` · `adc.read()` |
 | Analog lesen in Volt (ESP32) | `adc.atten(ADC.ATTN_11DB)` · `adc.read_uv() / 1_000_000` |

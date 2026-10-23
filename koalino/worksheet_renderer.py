@@ -121,6 +121,27 @@ class _KoalinoBlockExtension(Extension if HAS_MARKDOWN else object):
         )
 
 
+# Callouts nur für Lehrkräfte (z. B. „> [!loesung]“): in der Schüleransicht ausblenden.
+_TEACHER_CALLOUT_RE = re.compile(
+    r"^(?P<ind>[ \t]{0,3})>[ \t]*\[!(?:muster)?(?:loesung|lösung|loes|lehrer\w*)\][+-]?", re.IGNORECASE
+)
+
+
+def strip_teacher_callouts(text: str) -> str:
+    """Entfernt Callouts vom Typ loesung/lösung (inkl. aller „>“-Folgezeilen)."""
+    out, skipping = [], False
+    for line in text.splitlines():
+        if skipping:
+            if _QUOTE_MARK_RE.match(line):
+                continue
+            skipping = False
+        if _TEACHER_CALLOUT_RE.match(line):
+            skipping = True
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def render_worksheet(markdown_text: str, dark: bool):
     """Markdown → (HTML-Fragment, {block_id: roher Code}).
 
@@ -141,7 +162,7 @@ def render_worksheet(markdown_text: str, dark: bool):
         ],
         output_format="html",
     )
-    return md.convert(markdown_text), blocks
+    return md.convert(strip_teacher_callouts(markdown_text)), blocks
 
 
 def pygments_css(dark: bool) -> str:

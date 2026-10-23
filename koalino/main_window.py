@@ -51,6 +51,7 @@ from .file_panel import FilePanel, DeviceFilePanel, DeviceListWorker
 from .console_panel import ConsolePanel, ProcessRunner, MicroPythonRunner
 from .icons import make_icon
 from .qt_utils import retain_thread, find_logo, UI_FONT_PT_DEFAULT
+from . import offline_cache
 from .block_panel import BlockEditorWindow
 from .parsons_panel import ParsonsWindow
 from .ais_chat_panel import AisChatPanel
@@ -816,6 +817,9 @@ class EditorTab:
         self.device_path: str | None = None
         # Lokal gespeichert, aber noch nicht auf den Controller übertragen
         self.device_dirty = False
+        # Speichern am Ziel (z. B. Schulserver) ist fehlgeschlagen: Stand liegt
+        # nur in der lokalen Zwischenkopie (offline_cache).
+        self.offline = False
 
     @property
     def display_name(self) -> str:
@@ -1527,12 +1531,28 @@ class MainWindow(QMainWindow):
     def _new_tab(self, filepath: str | None = None):
         tab = EditorTab(filepath)
         tab.editor.set_filepath(filepath)
-        if filepath and os.path.isfile(filepath):
+        if filepath:
+            text, err = None, None
             try:
-                with open(filepath, encoding="utf-8") as f:
-                    tab.editor.set_text(f.read())
+                if os.path.isfile(filepath):
+                    with open(filepath, encoding="utf-8") as f:
+                        text = f.read()
             except Exception as e:
-                self._console.append_error(f"Datei konnte nicht geladen werden: {e}\n")
+                err = e
+            if text is not None:
+                tab.editor.set_text(text)
+                offline_cache.store(filepath, text)
+            else:
+                cached = offline_cache.load(filepath)
+                if cached is not None:
+                    tab.editor.set_text(cached)
+                    tab.offline = True
+                    self._console.append_info(
+                        f"⚠  {os.path.basename(filepath)} ist nicht erreichbar (Server offline?). "
+                        "Geöffnet wurde die zuletzt gespeicherte lokale Kopie – sie lässt sich "
+                        "ausführen und mit „Speichern unter“ woanders ablegen.\n")
+                elif err is not None:
+                    self._console.append_error(f"Datei konnte nicht geladen werden: {err}\n")
 
         tab.editor.set_context_actions(self._editor_context_actions())
         tab.editor.breakpoints_changed.connect(lambda t=tab: self._on_breakpoints_changed(t))
@@ -1540,6 +1560,8 @@ class MainWindow(QMainWindow):
         self._tabs.append(tab)
         idx = self._tab_widget.addTab(tab.editor, tab.display_name)
         self._tab_widget.setCurrentIndex(idx)
+        if tab.offline:
+            self._update_tab_title(tab)
         return tab
 
     def _editor_context_actions(self) -> list:
@@ -1591,6 +1613,8 @@ class MainWindow(QMainWindow):
         idx = self._tabs.index(tab)
         dirty = tab.editor.is_modified() or tab.device_dirty
         prefix = "📟 " if tab.device_path else ""
+        if tab.offline:
+            prefix += "⚠ "
         title = ("● " if dirty else "") + prefix + tab.display_name
         self._tab_widget.setTabText(idx, title)
         bar = self._tab_widget.tabBar()
@@ -1600,6 +1624,11 @@ class MainWindow(QMainWindow):
                 idx, f"Datei auf dem Controller ({tab.device_port}): /{tab.device_path}\n"
                      "Strg+S speichert direkt auf den Controller."
             )
+        elif tab.offline:
+            bar.setTabTextColor(idx, QColor(THEME["warning"]))
+            bar.setTabToolTip(
+                idx, f"{tab.filepath}\nServer nicht erreichbar – es gilt die lokale Kopie.\n"
+                     "Mit „Speichern unter“ lässt sich die Datei woanders ablegen.")
         else:
             bar.setTabTextColor(idx, QColor())
             bar.setTabToolTip(idx, tab.filepath or "")
@@ -1755,8 +1784,13 @@ class MainWindow(QMainWindow):
         try:
             # newline="\n": kein Umschreiben in \r\n auf Windows – die Datei
             # bleibt beim Laden/Speichern-Zyklus byte-identisch.
+            text = tab.editor.get_text()
+            offline_cache.store(path, text)   # zuerst lokal sichern – der Server kann hängen
             with open(path, "w", encoding="utf-8", newline="\n") as f:
-                f.write(tab.editor.get_text())
+                f.write(text)
+            if tab.offline:
+                tab.offline = False
+                self._console.append_success(f"Server wieder erreichbar – gespeichert: {path}\n")
             if hasattr(tab.editor, "sci"):
                 tab.editor.sci.setModified(False)
             if tab.device_path:
@@ -1771,7 +1805,21 @@ class MainWindow(QMainWindow):
             if not silent:
                 self._console.append_success(f"Gespeichert: {path}\n")
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Speichern", str(e))
+            first = not tab.offline
+            tab.offline = True
+            if silent:
+                # Kein Dialog bei Autosave/Ausführen: eine Meldung pro Ausfall genügt.
+                if first:
+                    self._console.append_error(
+                        f"Speichern auf {path} nicht möglich ({e}). Die Änderungen sind lokal "
+                        "gesichert; das Programm läuft von der lokalen Kopie. Mit „Speichern "
+                        "unter“ lässt es sich woanders ablegen.\n")
+            else:
+                QMessageBox.critical(
+                    self, "Fehler beim Speichern",
+                    f"{e}\n\nDie Änderungen sind lokal gesichert. Mit „Speichern unter“ "
+                    "kannst du die Datei an einem anderen Ort ablegen.")
+            self._update_tab_title(tab)
 
     # ──────────────────────────────────────────────────────────────────────
     # Bearbeiten-Aktionen
@@ -2094,11 +2142,20 @@ class MainWindow(QMainWindow):
             # Lautlos speichern – kein Popup, nur Statusleiste
             self._do_save(tab, tab.filepath, silent=True)
 
+        # Server nicht erreichbar → von der lokalen Zwischenkopie starten.
+        run_file = tab.filepath
+        if tab.offline:
+            local = offline_cache.cache_path(tab.filepath)
+            if local.is_file():
+                run_file = str(local)
+
         tab.editor.clear_error_markers()
         self._console.clear_output()
         self._console.append_info(
             f"{'🐞' if debug_step is not None else '▶'}  Starte{' mit Debugger' if debug_step is not None else ''}: {tab.filepath}\n")
-        self._last_run_file = tab.filepath
+        if run_file != tab.filepath:
+            self._console.append_info("   (Server nicht erreichbar – läuft von der lokalen Kopie)\n")
+        self._last_run_file = run_file
         # Fehler-Zustand für diesen Lauf zurücksetzen
         self._run_stderr_buf = []
         self._last_error_traceback = ""
@@ -2115,7 +2172,7 @@ class MainWindow(QMainWindow):
         self._retire_process()
         if self._mode == "python":
             python = self._get_python_executable()
-            cmd = [python, "-u", tab.filepath]
+            cmd = [python, "-u", run_file]
             # Ungepufferte, UTF-8-Ausgabe erzwingen – greift auch für
             # Subprozesse, die das Schüler-Programm selbst startet, sodass
             # Ausgaben/Fehler sofort statt verzögert erscheinen.
@@ -2123,16 +2180,16 @@ class MainWindow(QMainWindow):
             env["PYTHONUNBUFFERED"] = "1"
             env["PYTHONIOENCODING"] = "utf-8"
             if debug_step is not None:
-                cmd = self._debug_begin(tab, python, debug_step)
+                cmd = self._debug_begin(tab, python, debug_step, run_file)
                 if cmd is None:
                     return
-            self._process = ProcessRunner(cmd, cwd=os.path.dirname(tab.filepath), env=env)
+            self._process = ProcessRunner(cmd, cwd=os.path.dirname(run_file), env=env)
         else:
             # MicroPython: Raw-REPL über pyserial (stdin-Forwarding)
             port = self._get_serial_port()
             if not port:
                 return
-            self._process = MicroPythonRunner(port, tab.filepath)
+            self._process = MicroPythonRunner(port, run_file)
         self._process.output.connect(self._on_process_output)
         self._process.finished_run.connect(self._on_process_done)
         self._process.start()
@@ -2154,7 +2211,7 @@ class MainWindow(QMainWindow):
         else:
             self._debug_command(cmd)
 
-    def _debug_begin(self, tab, python: str, step: bool):
+    def _debug_begin(self, tab, python: str, step: bool, run_file: str | None = None):
         from .debugger import DebugSession, runner_script
         runner = runner_script()
         if not runner:
@@ -2177,7 +2234,7 @@ class MainWindow(QMainWindow):
         if len(sizes) == 3 and sizes[1] < 180:
             want = 240
             self._right_splitter.setSizes([max(120, sizes[0] - (want - sizes[1])), want, sizes[2]])
-        return [python, "-u", runner, str(session.port), tab.filepath]
+        return [python, "-u", runner, str(session.port), run_file or tab.filepath]
 
     def _debug_end(self):
         session, tab = self._debug_session, self._debug_tab
