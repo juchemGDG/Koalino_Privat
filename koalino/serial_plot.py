@@ -57,6 +57,7 @@ DEFAULT_CONFIG = {
     "x_mode": "sliding",  # "sliding" | "sweep" | "xy"
     "x_min": 0,
     "x_max": 500,
+    "style": "line",    # "line" | "scatter"
 }
 
 
@@ -187,10 +188,15 @@ class _PlotCanvas(QWidget):
             p.setPen(pen)
             prev = None
             i0, i1 = _visible_range(s)
+            scatter = self._plot._style == "scatter"
+            if scatter:
+                self._dot_pen(p, color)
             for i in range(i0, i1 + 1):
                 val = s.values[i]
                 x, y = x_at(s.start + i), y_at(val)
-                if prev is not None:
+                if scatter:
+                    p.drawPoint(int(x), int(y))
+                elif prev is not None:
                     p.drawLine(int(prev[0]), int(prev[1]), int(x), int(y))
                 prev = (x, y)
         p.setClipping(False)
@@ -235,6 +241,8 @@ class _PlotCanvas(QWidget):
             xL, xR = xL - 1, xR + 1
         xpad = (xR - xL) * 0.04
         xL, xR = xL - xpad, xR + xpad
+        if plot._xy_x_fixed and plot._xy_x_max > plot._xy_x_min:
+            xL, xR = plot._xy_x_min, plot._xy_x_max
 
         if plot._y_mode == "fixed":
             ymin, ymax = plot._y_min, plot._y_max
@@ -257,14 +265,19 @@ class _PlotCanvas(QWidget):
             pts = curves.get(name)
             if not pts:
                 continue
-            pen = QPen(QColor(_SERIES_COLORS[ci % len(_SERIES_COLORS)]))
-            pen.setWidth(2)
-            p.setPen(pen)
+            color = QColor(_SERIES_COLORS[ci % len(_SERIES_COLORS)])
+            scatter = plot._style == "scatter"
+            if scatter:
+                self._dot_pen(p, color)
+            else:
+                pen = QPen(color)
+                pen.setWidth(2)
+                p.setPen(pen)
             prev = None
             for xv, yv in pts:
                 x = left + (xv - xL) / xspan * pw
                 y = top + ph - (yv - ymin) / yspan * ph
-                if prev is not None:
+                if prev is not None and not scatter:
                     p.drawLine(int(prev[0]), int(prev[1]), int(x), int(y))
                 # Einzelpunkte sichtbar machen, solange noch keine Linie entsteht.
                 p.drawPoint(int(x), int(y))
@@ -298,6 +311,14 @@ class _PlotCanvas(QWidget):
         ])
 
     # ── Zeichen-Helfer ───────────────────────────────────────────────────────
+    @staticmethod
+    def _dot_pen(p: QPainter, color: QColor):
+        """Dicker runder Punkt für den Streuplot."""
+        pen = QPen(color)
+        pen.setWidth(5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+
     def _hint(self, p: QPainter, text: str):
         p.setPen(QColor(THEME["text_dim"]))
         p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, text)
@@ -380,6 +401,10 @@ class SerialPlot(QWidget):
         self._x_mode = DEFAULT_CONFIG["x_mode"]
         self._x_min = DEFAULT_CONFIG["x_min"]
         self._x_max = DEFAULT_CONFIG["x_max"]
+        self._style = DEFAULT_CONFIG["style"]
+        self._xy_x_fixed = False          # X-Y-Modus: X-Achse fest skalieren
+        self._xy_x_min = 0.0
+        self._xy_x_max = 10.0
         self._xy_key: str | None = None   # Kurve, die im X-Y-Modus die X-Werte liefert
         self._regression = False          # X-Y-Modus: Ausgleichsgerade einzeichnen
         self._build_ui()
@@ -446,11 +471,29 @@ class SerialPlot(QWidget):
         self._xy_combo = ThemedComboBox()
         self._setup_combo(self._xy_combo)
         bar.addWidget(self._xy_combo)
+        self._xy_fix_chk = QCheckBox("X fest")
+        self._xy_fix_chk.setToolTip("X-Achse der Kennlinie auf feste Grenzen setzen "
+                                    "(Y: oben bei „Y: Fest“)")
+        bar.addWidget(self._xy_fix_chk)
+        self._xy_xmin_spin = self._make_double_spin()
+        self._xy_xmax_spin = self._make_double_spin()
+        self._xy_xmin_spin.setValue(self._xy_x_min)
+        self._xy_xmax_spin.setValue(self._xy_x_max)
+        self._xy_dots = QLabel("…")
+        bar.addWidget(self._xy_xmin_spin)
+        bar.addWidget(self._xy_dots)
+        bar.addWidget(self._xy_xmax_spin)
         self._reg_chk = QCheckBox("Ausgleichsgerade")
         self._reg_chk.setToolTip("Lineare Regression je Kurve mit Gleichung und R² "
                                  "(z. B. Widerstand aus der U-I-Kennlinie)")
         self._reg_chk.toggled.connect(self._on_regression_toggled)
         bar.addWidget(self._reg_chk)
+
+        self._style_chk = QCheckBox("Nur Punkte")
+        self._style_chk.setToolTip("Streuplot: Messpunkte nicht mit Linien verbinden")
+        self._style_chk.setChecked(self._style == "scatter")
+        self._style_chk.toggled.connect(self._on_style_toggled)
+        bar.addWidget(self._style_chk)
 
         bar.addStretch()
         root.addWidget(_ToolbarScroll(bar_widget))
@@ -463,7 +506,9 @@ class SerialPlot(QWidget):
         self._y_combo.currentIndexChanged.connect(self._on_axis_controls_changed)
         self._x_combo.currentIndexChanged.connect(self._on_axis_controls_changed)
         self._xy_combo.currentIndexChanged.connect(self._on_axis_controls_changed)
-        for sp in (self._y_min_spin, self._y_max_spin, self._x_min_spin, self._x_max_spin):
+        self._xy_fix_chk.toggled.connect(self._on_axis_controls_changed)
+        for sp in (self._y_min_spin, self._y_max_spin, self._x_min_spin, self._x_max_spin,
+                   self._xy_xmin_spin, self._xy_xmax_spin):
             sp.valueChanged.connect(self._on_axis_controls_changed)
         self.refresh_theme()
 
@@ -493,7 +538,7 @@ class SerialPlot(QWidget):
 
     # ── Konfiguration ─────────────────────────────────────────────────────────
     def apply_config(self, *, y_mode=None, y_min=None, y_max=None,
-                     x_mode=None, x_min=None, x_max=None):
+                     x_mode=None, x_min=None, x_max=None, style=None):
         """Achsenkonfiguration übernehmen (z. B. Standardwerte aus den Einstellungen)."""
         if y_mode is not None:
             self._y_mode = y_mode
@@ -507,7 +552,16 @@ class SerialPlot(QWidget):
             self._x_min = int(x_min)
         if x_max is not None:
             self._x_max = int(x_max)
+        if style is not None:
+            self._style = "scatter" if style == "scatter" else "line"
+            self._style_chk.blockSignals(True)
+            self._style_chk.setChecked(self._style == "scatter")
+            self._style_chk.blockSignals(False)
         self._sync_controls_from_state()
+        self._canvas.update()
+
+    def _on_style_toggled(self, on: bool):
+        self._style = "scatter" if on else "line"
         self._canvas.update()
 
     def _sync_controls_from_state(self):
@@ -537,6 +591,10 @@ class SerialPlot(QWidget):
         self._xy_lbl.setVisible(xy)
         self._xy_combo.setVisible(xy)
         self._reg_chk.setVisible(xy)
+        for wgt in (self._xy_fix_chk, self._xy_xmin_spin, self._xy_dots, self._xy_xmax_spin):
+            wgt.setVisible(xy)
+        self._xy_xmin_spin.setEnabled(self._xy_x_fixed)
+        self._xy_xmax_spin.setEnabled(self._xy_x_fixed)
 
     def _on_axis_controls_changed(self, *_):
         """Live-Übersteuerung über die Plotter-Leiste (nicht persistent)."""
@@ -546,6 +604,9 @@ class SerialPlot(QWidget):
         self._y_max = self._y_max_spin.value()
         self._x_min = self._x_min_spin.value()
         self._x_max = self._x_max_spin.value()
+        self._xy_x_fixed = self._xy_fix_chk.isChecked()
+        self._xy_x_min = self._xy_xmin_spin.value()
+        self._xy_x_max = self._xy_xmax_spin.value()
         if self._xy_combo.count():
             self._xy_key = self._xy_combo.currentData()
         self._update_controls_enabled()
@@ -655,11 +716,14 @@ class SerialPlot(QWidget):
         lbl_style = f"color:{THEME['text']};"
         for c in (self._y_combo, self._x_combo, self._xy_combo,
                   self._y_min_spin, self._y_max_spin,
-                  self._x_min_spin, self._x_max_spin):
+                  self._x_min_spin, self._x_max_spin,
+                  self._xy_xmin_spin, self._xy_xmax_spin):
             c.setStyleSheet(ctrl_style)
-        for lbl in (self._y_lbl, self._x_lbl, self._xy_lbl):
+        for lbl in (self._y_lbl, self._x_lbl, self._xy_lbl, self._xy_dots):
             lbl.setStyleSheet(lbl_style)
         self._pause_chk.setStyleSheet(lbl_style)
         self._reg_chk.setStyleSheet(lbl_style)
+        self._xy_fix_chk.setStyleSheet(lbl_style)
+        self._style_chk.setStyleSheet(lbl_style)
         self.setStyleSheet(f"background:{THEME['terminal_bg']};")
         self._canvas.update()

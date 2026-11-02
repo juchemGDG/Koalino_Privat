@@ -902,6 +902,7 @@ class MainWindow(QMainWindow):
         self._settings_plot_x_mode: str = "sliding"   # "sliding" | "sweep" | "xy"
         self._settings_plot_x_min: int = 0
         self._settings_plot_x_max: int = 500
+        self._settings_plot_style: str = "line"       # "line" | "scatter"
         # Fehler finden (Cheatsheet)
         self._settings_debug_level: str = "kl10"        # "kl89" | "kl10" – nur noch Code-Generator/NiT_Coder
         # Fehlersuche (Konsole, Fehlerprotokoll, Hilfe, Infi) immer nach dem Cheatsheet Klasse 8/9 –
@@ -4448,6 +4449,7 @@ class MainWindow(QMainWindow):
             plot_x_mode=self._settings_plot_x_mode,
             plot_x_min=self._settings_plot_x_min,
             plot_x_max=self._settings_plot_x_max,
+            plot_style=self._settings_plot_style,
             ui_font_pt=self._settings_ui_font_pt,
             debug_level=self._settings_debug_level,
             debug_stepped=self._settings_debug_stepped,
@@ -4485,6 +4487,7 @@ class MainWindow(QMainWindow):
             self._settings_plot_x_mode = dlg.plot_x_mode
             self._settings_plot_x_min = dlg.plot_x_min
             self._settings_plot_x_max = dlg.plot_x_max
+            self._settings_plot_style = dlg.plot_style
             try:
                 self._apply_settings()
                 self._apply_sketchbook_root()
@@ -4610,6 +4613,7 @@ class MainWindow(QMainWindow):
         self._settings_plot_x_mode = str(self._settings_store.value("plot/x_mode", self._settings_plot_x_mode) or "sliding")
         self._settings_plot_x_min = self._settings_int("plot/x_min", self._settings_plot_x_min)
         self._settings_plot_x_max = self._settings_int("plot/x_max", self._settings_plot_x_max)
+        self._settings_plot_style = str(self._settings_store.value("plot/style", self._settings_plot_style) or "line")
         level = str(self._settings_store.value("debug/level", self._settings_debug_level) or "kl10")
         self._settings_debug_level = level if level in ("kl89", "kl10") else "kl10"
         raw_hidden = str(self._settings_store.value("ui/hidden_activity", "") or "")
@@ -4646,6 +4650,7 @@ class MainWindow(QMainWindow):
         self._settings_store.setValue("plot/x_mode", self._settings_plot_x_mode)
         self._settings_store.setValue("plot/x_min", self._settings_plot_x_min)
         self._settings_store.setValue("plot/x_max", self._settings_plot_x_max)
+        self._settings_store.setValue("plot/style", self._settings_plot_style)
         self._settings_store.setValue(
             "ui/hidden_activity", ",".join(sorted(self._settings_hidden_activity)))
         self._settings_store.setValue("debug/level", self._settings_debug_level)
@@ -4794,6 +4799,7 @@ class MainWindow(QMainWindow):
             "x_mode": self._settings_plot_x_mode,
             "x_min":  self._settings_plot_x_min,
             "x_max":  self._settings_plot_x_max,
+            "style":  self._settings_plot_style,
         })
         # Block-Editor ein-/ausblenden
         self._apply_blocks_enabled()

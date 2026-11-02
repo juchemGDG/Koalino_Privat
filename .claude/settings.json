@@ -97,7 +97,21 @@
       "Bash(sed -i 's/div\\\\.nitcode/div.koalino/g; s/class=.nitcode./class='\"'\"'koalino'\"'\"'/' koalino/debug_guide.py)",
       "Bash(sed -i 's#koalino/#koalino/#g; s#koalino/#koalino/#g; s#sync_from_koalino#sync_from_koalino#g; s#/workspaces/NIT_PyEd#/workspaces/NIT_PyEd#g' .claude/settings.json .claude/settings.local.json)",
       "Bash(python3 -m compileall -q koalino)",
-      "Bash(python3 -c \"import json;[json.load\\(open\\(f\\)\\) for f in \\('.claude/settings.json','.claude/settings.local.json'\\)]\")"
+      "Bash(python3 -c \"import json;[json.load\\(open\\(f\\)\\) for f in \\('.claude/settings.json','.claude/settings.local.json'\\)]\")",
+      "Bash(timeout 20 python3 -u host.py)",
+      "Bash(sed -i 's/stderr=subprocess.PIPE/stderr=None/' host.py)",
+      "Bash(timeout 15 python3 -u host.py)",
+      "Bash(timeout 30 python3 -u host.py)",
+      "Bash(timeout 40 python3 -u host.py)",
+      "Bash(timeout 120 python3 /tmp/claude-1000/-workspaces-NIT-PyEd/7ba3609c-8ba7-44fd-8c17-2375cb88be61/scratchpad/e2e.py /tmp/claude-1000/-workspaces-NIT-PyEd/7ba3609c-8ba7-44fd-8c17-2375cb88be61/scratchpad/prog2.py)",
+      "Bash(timeout 150 python3 /tmp/claude-1000/-workspaces-NIT-PyEd/7ba3609c-8ba7-44fd-8c17-2375cb88be61/scratchpad/e2e.py /tmp/claude-1000/-workspaces-NIT-PyEd/7ba3609c-8ba7-44fd-8c17-2375cb88be61/scratchpad/prog2.py)",
+      "Bash(timeout 150 python3 -u /tmp/claude-1000/-workspaces-NIT-PyEd/7ba3609c-8ba7-44fd-8c17-2375cb88be61/scratchpad/e2e.py /tmp/claude-1000/-workspaces-NIT-PyEd/7ba3609c-8ba7-44fd-8c17-2375cb88be61/scratchpad/prog2.py)",
+      "Bash(python3 -m py_compile koalino/micropython_dialogs.py release/launcher.py)",
+      "Bash(python3 -m pyflakes koalino/micropython_dialogs.py)",
+      "Bash(python3 -m pyflakes koalino/main_window.py koalino/file_panel.py koalino/device_upload.py)",
+      "Bash(python3 -m pyflakes koalino/*.py)",
+      "Bash(mkdir -p /tmp/claude-1000/-workspaces-NIT-PyEd/91871aba-98ab-47b6-93c2-ac8034b5eb5b/scratchpad/t/proj/lib/__pycache__)",
+      "Bash(touch proj/a.py proj/data.xyz proj/lib/b.mpy proj/lib/__pycache__/c.pyc other.bin)"
     ],
     "additionalDirectories": [
       "/workspaces/NIT_PyEd",

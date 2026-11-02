@@ -112,6 +112,7 @@ class SettingsDialog(QDialog):
         plot_x_mode: str = "sliding",
         plot_x_min: int = 0,
         plot_x_max: int = 500,
+        plot_style: str = "line",
         ui_font_pt: int = UI_FONT_PT_DEFAULT,
         debug_level: str = "kl10",
         debug_stepped: bool = True,
@@ -232,7 +233,7 @@ class SettingsDialog(QDialog):
                        tutor_mode, sketchbook_dir, git_exec, theme,
                        blocks_enabled,
                        plot_y_mode, plot_y_min, plot_y_max,
-                       plot_x_mode, plot_x_min, plot_x_max, ui_font_pt)
+                       plot_x_mode, plot_x_min, plot_x_max, plot_style, ui_font_pt)
 
     # ── Hilfsmethode: Abschnittsüberschrift ─────────────────────────────
     @staticmethod
@@ -267,6 +268,7 @@ class SettingsDialog(QDialog):
         plot_x_mode: str = "sliding",
         plot_x_min: int = 0,
         plot_x_max: int = 500,
+        plot_style: str = "line",
         ui_font_pt: int = UI_FONT_PT_DEFAULT,
     ):
         # Äußeres Layout: Scrollbereich (Inhalt) + feste Button-Leiste unten.
@@ -473,6 +475,13 @@ class SettingsDialog(QDialog):
         x_row.addWidget(self._spin_plot_xmax)
         x_row.addStretch()
         form_pl.addRow("X Min / Max:", x_row)
+
+        self._combo_plot_style = ThemedComboBox()
+        self._combo_plot_style.setFixedWidth(190)
+        self._combo_plot_style.addItem("Linie (Punkte verbunden)", "line")
+        self._combo_plot_style.addItem("Streuplot (nur Punkte)", "scatter")
+        self._combo_plot_style.setCurrentIndex(max(0, self._combo_plot_style.findData(plot_style)))
+        form_pl.addRow("Darstellung:", self._combo_plot_style)
 
         hint_pl = QLabel(
             "Standardwerte – im Plotter selbst jederzeit live umstellbar."
@@ -945,3 +954,7 @@ class SettingsDialog(QDialog):
     @property
     def plot_x_max(self) -> int:
         return self._spin_plot_xmax.value()
+
+    @property
+    def plot_style(self) -> str:
+        return self._combo_plot_style.currentData()
