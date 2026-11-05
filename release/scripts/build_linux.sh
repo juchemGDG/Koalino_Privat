@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+OUT_DIR="$ROOT_DIR/release/downloads/linux"
+# Tarball-Name an die Build-Architektur koppeln (x86_64 bzw. aarch64), damit
+# x86- und ARM-Pakete sich nicht gegenseitig überschreiben.
+ARCH="$(uname -m)"
+# Eingebettete Python-Runtime ist standardmaessig dabei; INCLUDE_RUNTIME=0 schaltet ab.
+INCLUDE_RUNTIME="${INCLUDE_RUNTIME:-1}"
+
+mkdir -p "$OUT_DIR"
+
+python -m pip install --upgrade pip
+python -m pip install -r "$ROOT_DIR/requirements.txt" -r "$ROOT_DIR/release/requirements-build.txt"
+
+pyinstaller "$ROOT_DIR/release/pyinstaller.spec" --noconfirm --clean
+
+if [[ "$INCLUDE_RUNTIME" == "1" ]]; then
+	echo "Erzeuge eingebettete Runtime (python_runtime/) ..."
+	bash "$ROOT_DIR/release/scripts/create_embedded_runtime.sh" --force
+	echo "Kopiere python_runtime ins Bundle ..."
+	rm -rf "$ROOT_DIR/dist/Koalino/python_runtime"
+	cp -R "$ROOT_DIR/python_runtime" "$ROOT_DIR/dist/Koalino/python_runtime"
+
+	echo "Pruefe gebuendelte Runtime (Python + pip) ..."
+	BUNDLED_PY="$ROOT_DIR/dist/Koalino/python_runtime/python/bin/python3"
+	PYTHONDONTWRITEBYTECODE=1 "$BUNDLED_PY" --version
+	PYTHONDONTWRITEBYTECODE=1 "$BUNDLED_PY" -m pip --version
+fi
+
+# Desktop-Installer mit ins Bundle legen, damit Nutzer Koalino per
+# ./install-desktop.sh ins Anwendungsmenü eintragen können.
+cp "$ROOT_DIR/release/scripts/install-desktop.sh" "$ROOT_DIR/dist/Koalino/install-desktop.sh"
+chmod +x "$ROOT_DIR/dist/Koalino/install-desktop.sh"
+
+tar -C "$ROOT_DIR/dist" -czf "$OUT_DIR/Koalino-linux-${ARCH}.tar.gz" "Koalino"
+
+echo "Linux-Paket erstellt: $OUT_DIR/Koalino-linux-${ARCH}.tar.gz"

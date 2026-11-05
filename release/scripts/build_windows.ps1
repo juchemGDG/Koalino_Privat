@@ -1,0 +1,87 @@
+param(
+    # Eingebettete Python-Runtime ist standardmaessig dabei; -SkipRuntime schaltet ab.
+    # -IncludeRuntime bleibt aus Kompatibilitaet erhalten (heute wirkungslos).
+    [switch]$IncludeRuntime,
+    [switch]$SkipRuntime
+)
+
+$ErrorActionPreference = 'Stop'
+
+$RootDir = (Resolve-Path "$PSScriptRoot/../..").Path
+$ReleaseDir = Join-Path $RootDir "release"
+$OutDir = Join-Path $RootDir "release/downloads/windows"
+
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+python -m pip install --upgrade pip
+python -m pip install -r "$RootDir/requirements.txt" -r "$RootDir/release/requirements-build.txt"
+
+pyinstaller "$RootDir/release/pyinstaller.spec" --noconfirm --clean
+
+if (-not $SkipRuntime) {
+    Write-Host "Erzeuge eingebettete Runtime (python_runtime/) ..."
+    & pwsh -File "$RootDir/release/scripts/create_embedded_runtime.ps1" -Force
+    if ($LASTEXITCODE -ne 0) {
+        throw "Erzeugen der eingebetteten Runtime ist fehlgeschlagen."
+    }
+    Write-Host "Kopiere python_runtime ins Bundle ..."
+    $DistRuntime = Join-Path $RootDir "dist/Koalino/python_runtime"
+    if (Test-Path $DistRuntime) {
+        Remove-Item $DistRuntime -Recurse -Force
+    }
+    Copy-Item "$RootDir/python_runtime" $DistRuntime -Recurse
+
+    Write-Host "Pruefe gebuendelte Runtime (Python + pip) ..."
+    $BundledPy = Join-Path $DistRuntime "python/python.exe"
+    & $BundledPy --version
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gebuendelte Runtime startet nicht: $BundledPy"
+    }
+    & $BundledPy -m pip --version
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip fehlt in der gebuendelten Runtime: $BundledPy"
+    }
+}
+
+$DistDir = Join-Path $RootDir "dist/Koalino"
+$ZipPath = Join-Path $OutDir "Koalino-windows.zip"
+
+if (Test-Path $ZipPath) {
+    Remove-Item $ZipPath -Force
+}
+
+Compress-Archive -Path "$DistDir/*" -DestinationPath $ZipPath
+
+Write-Host "Windows-ZIP erstellt: $ZipPath"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Installer (Setup.exe) via Inno Setup
+# Versionsnummer aus koalino/config.py (einzige Quelle der Wahrheit) lesen und
+# an das .iss-Skript durchreichen.
+# ──────────────────────────────────────────────────────────────────────────────
+$Version = (python -c "import sys; sys.path.insert(0, r'$RootDir'); from koalino.config import APP_VERSION; print(APP_VERSION)").Trim()
+Write-Host "App-Version: $Version"
+
+# ISCC.exe finden: erst PATH, dann Standard-Installationspfade.
+$Iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+if (-not $Iscc) {
+    foreach ($candidate in @(
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+    )) {
+        if ($candidate -and (Test-Path $candidate)) { $Iscc = $candidate; break }
+    }
+}
+
+if (-not $Iscc) {
+    Write-Warning "Inno Setup (ISCC.exe) nicht gefunden - Setup.exe wird uebersprungen. Nur das ZIP wurde erstellt."
+} else {
+    # VersionInfoVersion verlangt vier Zahlen (x.y.z.w): "1.10.0-beta.3" -> "1.10.0.0"
+    $NumericVersion = ($Version -split '-')[0]
+    while (($NumericVersion -split '\.').Count -lt 4) { $NumericVersion += ".0" }
+    & $Iscc "/DAppVersion=$Version" "/DAppVersionNumeric=$NumericVersion" (Join-Path $ReleaseDir "installer.iss")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup Compiler ist mit Fehlercode $LASTEXITCODE fehlgeschlagen."
+    }
+    Write-Host "Windows-Installer erstellt: $(Join-Path $OutDir 'Koalino-Setup.exe')"
+}

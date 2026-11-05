@@ -1,0 +1,261 @@
+{
+  "_info": "Lesetabelle für Fehlermeldungen (Cheatsheet „Fehler finden“). Die erste passende Regel gewinnt. 'fall' = Fall aus Schritt 3: code | hardware | wert | nichts (Bezeichnung je Stufe steht in debug_guide.py). 'belegt': false = Arbeitshypothese, bis die Messreihe am eigenen Gerät vorliegt. Felder mit Endung _kl89 ersetzen das Feld für Klasse 8/9.",
+  "regeln": [
+    {
+      "id": "enodev_start",
+      "typ": "OSError",
+      "meldung": [
+        "ENODEV",
+        "Errno 19\\b",
+        "^19$"
+      ],
+      "fall": "hardware",
+      "lesart": "Schon beim Start hat unter der angesprochenen I2C-Adresse kein Gerät geantwortet – der Sensor war von Anfang an nicht erreichbar.",
+      "verdaechtige": [
+        "Adresse im Code",
+        "SDA/SCL: Leitung, Vertauschung im Code oder am Kabel",
+        "Versorgung des Sensors (3V3, GND)",
+        "Sensor nicht angeschlossen"
+      ],
+      "verdaechtige_kl89": [
+        "① Pin: Passen die Pin-Nummern im Code zu den Kabeln?",
+        "② Adresse: Stimmt die Adresse im Code?",
+        "③ GND und Strom am Sensor?",
+        "④ Wackler: Sitzen alle Kabel fest?"
+      ],
+      "erster_test": "i2c.scan() ausführen. Liefert es [] (leere Liste): Pins im Code, Kabel und Versorgung prüfen. Liefert es eine Zahl, z. B. [118] (= 0x76): mit der Adresse im Code vergleichen.",
+      "aktion": "i2c_scan",
+      "belegt": true,
+      "traceback": [
+        "in __init__"
+      ]
+    },
+    {
+      "id": "enodev_lauf",
+      "typ": "OSError",
+      "meldung": [
+        "ENODEV",
+        "Errno 19\\b",
+        "^19$"
+      ],
+      "traceback": [
+        "nitbw_\\w+\\.py\", line \\d+, in (?!__init__)"
+      ],
+      "fall": "hardware",
+      "lesart": "Der Sensor hat zuerst geantwortet und dann nicht mehr – die Verbindung ist während des Betriebs weggefallen.",
+      "verdaechtige": [
+        "Wackelkontakt oder gelöstes Kabel (SDA, SCL)",
+        "Versorgung des Sensors wackelt (3V3, GND)",
+        "Steckverbindung am Sensor oder Steckbrett locker"
+      ],
+      "verdaechtige_kl89": [
+        "④ Wackler: Sitzen alle Kabel fest?",
+        "③ GND und Strom am Sensor?"
+      ],
+      "erster_test": "Bei getrenntem USB alle Steckverbindungen ansehen und leicht bewegen, danach neu starten. Tritt es nur manchmal auf, ist es meist ein Wackler.",
+      "aktion": "i2c_scan",
+      "belegt": true,
+      "traceback_nicht": [
+        "in __init__"
+      ]
+    },
+    {
+      "id": "enodev",
+      "typ": "OSError",
+      "meldung": [
+        "ENODEV",
+        "Errno 19\\b",
+        "^19$"
+      ],
+      "fall": "hardware",
+      "lesart": "Unter der angesprochenen I2C-Adresse hat kein Gerät geantwortet.",
+      "verdaechtige": [
+        "Adresse im Code",
+        "SDA/SCL: Leitung, Vertauschung im Code oder am Kabel",
+        "Versorgung des Sensors (3V3, GND)",
+        "Sensor nicht angeschlossen"
+      ],
+      "verdaechtige_kl89": [
+        "① Pin: Passen die Pin-Nummern im Code zu den Kabeln?",
+        "② Adresse: Stimmt die Adresse im Code?",
+        "③ GND und Strom am Sensor?",
+        "④ Wackler: Sitzen alle Kabel fest?"
+      ],
+      "erster_test": "i2c.scan() ausführen. Liefert es [] (leere Liste): Pins im Code, Kabel und Versorgung prüfen. Liefert es eine Zahl, z. B. [118] (= 0x76): mit der Adresse im Code vergleichen.",
+      "aktion": "i2c_scan",
+      "belegt": true
+    },
+    {
+      "id": "etimedout",
+      "typ": "OSError",
+      "meldung": [
+        "ETIMEDOUT",
+        "Errno 116\\b",
+        "^116$"
+      ],
+      "fall": "hardware",
+      "lesart": "Die Übertragung wurde nicht rechtzeitig fertig – der Bus wird festgehalten oder hängt: Eine Leitung (meist SCL) liegt auf LOW, und das Programm wartet vergeblich.",
+      "verdaechtige": [
+        "SCL (oder SDA) wird festgehalten – ein Gerät oder eine Leitung hält sie auf LOW",
+        "Wackelkontakt an SDA oder SCL",
+        "Leitung auf falschem Pegel (z. B. an GND oder 3V3 statt am Pin)",
+        "fehlende Pull-up-Widerstände"
+      ],
+      "verdaechtige_kl89": [
+        "④ Wackler: Sitzen alle Kabel fest?",
+        "① Pin: Stecken SDA und SCL an den richtigen Pins?",
+        "③ GND: Ist der Stromkreis geschlossen?"
+      ],
+      "erster_test": "USB trennen und die Verkabelung ansehen: Hängt eine Leitung an GND oder an einem anderen Gerät? Danach i2c.scan(): Findet es den Sensor wieder, wurde der Bus nur festgehalten.",
+      "aktion": "i2c_scan",
+      "belegt": false,
+      "_notiz": "Gemessen mit SoftI2C (timeout=20000 µs): SCL über einen Open-Drain-GPIO auf LOW gehalten → i2c.scan() liefert [], writeto() wirft [Errno 116] ETIMEDOUT; nach dem Loslassen scan [118]. Mit Hardware-I2C (I2C(0, …)) dagegen in allen Fällen ENODEV (Pins einzeln ab, SCL/SDA auf GND, freq geändert). Nur der Verdacht „festgehalten“ ist gemessen, daher belegt: false."
+    },
+    {
+      "id": "eio",
+      "typ": "OSError",
+      "meldung": [
+        "EIO",
+        "Errno 5\\b",
+        "^5$"
+      ],
+      "fall": "hardware",
+      "lesart": "Beim Datenaustausch mit der Hardware ist ein Übertragungsfehler aufgetreten.",
+      "verdaechtige": [
+        "Wackelkontakt",
+        "Versorgung des Sensors",
+        "zu lange oder gestörte Leitungen"
+      ],
+      "verdaechtige_kl89": [
+        "④ Wackler: Sitzen alle Kabel fest?",
+        "③ GND und Strom am Sensor?"
+      ],
+      "erster_test": "Verkabelung Glied für Glied prüfen, danach I2C-Scan.",
+      "aktion": "i2c_scan",
+      "belegt": false
+    },
+    {
+      "id": "enoent",
+      "typ": "OSError",
+      "meldung": [
+        "ENOENT",
+        "Errno 2\\b",
+        "^2$"
+      ],
+      "fall": "code",
+      "lesart": "Eine Datei oder ein Ordner wurde nicht gefunden. Das ist kein Hardwarefehler.",
+      "verdaechtige": [
+        "Schreibweise des Dateinamens",
+        "Pfad (liegt die Datei im richtigen Ordner?)",
+        "auf dem Controller: Datei überhaupt hochgeladen?"
+      ],
+      "erster_test": "Dateiname im Code mit der Dateiliste vergleichen.",
+      "belegt": true
+    },
+    {
+      "id": "bme280_chipid",
+      "typ": "RuntimeError",
+      "meldung": [
+        "BME280 nicht gefunden"
+      ],
+      "fall": "hardware",
+      "lesart": "Unter der Adresse antwortet zwar ein Gerät, aber es meldet sich nicht als BME280 (die Chip-ID passt nicht).",
+      "verdaechtige": [
+        "anderer Sensortyp, z. B. BMP280 (Chip-ID 0x58 statt 0x60)",
+        "anderes Gerät unter dieser Adresse",
+        "Adresse im Code"
+      ],
+      "erster_test": "I2C-Scan und Chip-ID lesen.",
+      "aktion": "i2c_scan",
+      "belegt": true
+    },
+    {
+      "id": "invalid_pin",
+      "typ": "ValueError",
+      "meldung": [
+        "invalid pin"
+      ],
+      "fall": "hardware",
+      "lesart": "MicroPython kennt diese Pin-Nummer auf diesem Board nicht – oder sie lässt sich hier nicht so verwenden.",
+      "verdaechtige": [
+        "Pin-Nummer im Code (gibt es sie auf deinem Board?)",
+        "Pin ist schon anders belegt"
+      ],
+      "verdaechtige_kl89": [
+        "① Pin: Passt die Nummer im Code zu einem Pin, den es auf dem Board gibt?"
+      ],
+      "erster_test": "Pin-Nummern im Code mit dem Pinbelegungsplan deines Boards vergleichen.",
+      "belegt": false
+    },
+    {
+      "id": "pwm_wertebereich",
+      "typ": "ValueError",
+      "meldung": [
+        "duty",
+        "freq"
+      ],
+      "fall": "code",
+      "lesart": "Der Wert für das PWM-Signal liegt außerhalb des erlaubten Bereichs: duty() nimmt ganze Zahlen von 0 bis 1023, die Frequenz muss im zulässigen Bereich der Hardware liegen.",
+      "verdaechtige": [
+        "Tastgrad in Prozent statt als duty-Wert (0–1023) übergeben, oder falsch umgerechnet",
+        "Berechneter Wert ist größer als 1023 oder negativ (Steigerung in der Schleife ohne Obergrenze?)",
+        "Wert ist eine Kommazahl statt einer ganzen Zahl",
+        "Frequenz außerhalb des zulässigen Bereichs"
+      ],
+      "verdaechtige_kl89": [
+        "① Wert für duty() muss zwischen 0 und 1023 liegen.",
+        "② Prozent oder duty-Wert verwechselt?"
+      ],
+      "erster_test": "Direkt vor der Zeile mit duty() ein print() des Werts setzen und mit dem Bereich 0–1023 vergleichen.",
+      "belegt": false
+    },
+    {
+      "id": "oserror_allgemein",
+      "typ": "OSError",
+      "meldung": [],
+      "fall": "hardware",
+      "lesart": "Ein Zugriff auf Hardware oder Dateisystem ist fehlgeschlagen.",
+      "verdaechtige": [
+        "Pin oder Bus im Code (Nummer, richtig initialisiert?)",
+        "Verkabelung",
+        "Adresse des Sensors",
+        "bei Dateien: Pfad"
+      ],
+      "verdaechtige_kl89": [
+        "① Pin: Passt die Nummer im Code zum Kabel?",
+        "② Richtung: Bauteil richtig herum?",
+        "③ GND: Ist der Stromkreis geschlossen?",
+        "④ Wackler: Sitzen alle Kabel fest?"
+      ],
+      "erster_test": "Die Fehlernummer in der Meldung notieren und die Verkabelung von einem Ende her prüfen.",
+      "belegt": true
+    }
+  ],
+  "adressen": {
+    "0x23": "BH1750 (Licht)",
+    "0x5c": "BH1750 (Licht, ADDR=1)",
+    "0x3c": "OLED-Display (SSD1306)",
+    "0x3d": "OLED-Display (SSD1306)",
+    "0x40": "INA219 (Strom/Spannung)",
+    "0x41": "INA219",
+    "0x44": "INA219",
+    "0x45": "INA219",
+    "0x48": "ADS1015/ADS1115 (AD-Wandler)",
+    "0x49": "ADS1015/ADS1115",
+    "0x4a": "ADS1015/ADS1115",
+    "0x4b": "ADS1015/ADS1115",
+    "0x27": "LCD mit I2C-Adapter (PCF8574)",
+    "0x3f": "LCD mit I2C-Adapter (PCF8574A)",
+    "0x68": "MPU6050 / DS3231 (RTC)",
+    "0x69": "MPU6050 (AD0=1)",
+    "0x76": "BME280 / BMP280",
+    "0x77": "BME280 / BMP280"
+  },
+  "chip_ids": {
+    "0x60": "BME280",
+    "0x58": "BMP280",
+    "0x56": "BMP280 (Muster)",
+    "0x57": "BMP280 (Muster)",
+    "0x61": "BME680"
+  }
+}

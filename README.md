@@ -1,0 +1,413 @@
+<p align="center"><img src="koalino/assets/brand/koalino-wortbild-hell.svg" alt="Koalino – Editor für Python und MicroPython auf dem ESP32" width="560"></p>
+
+# Koalino
+
+**Koalino** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).
+
+Downloads & Releases: https://github.com/juchemGDG/Koalino
+
+---
+
+## Features
+
+| Funktion | Beschreibung |
+|---|---|
+| **Python (lokal)** | Code schreiben und mit lokaler Python-Installation (`.venv`) ausführen |
+| **MicroPython** | Direktes Programmieren für ESP32, micro:bit (v1/v2), Raspberry Pi Pico 2 / Pico 2W |
+| **Firmware flashen** | MicroPython-Firmware von lokaler Datei oder micropython.org flashen |
+| **Bibliotheks-Manager** | Bibliotheken aus [NIT_Bibliotheken](https://github.com/juchemGDG/NIT_Bibliotheken) direkt auf den Controller laden – online oder (in Schulnetzen ohne Internet) offline aus einem entpackten ZIP-Ordner |
+| **Block-Editor** | Blockbasiert programmieren (wie Snap!/Scratch) und automatisch in lesbaren Python-/MicroPython-Code umwandeln – inkl. GPIO-, ADC-, DAC-, NeoPixel- und nitbw-Bibliotheks-Blöcken (u. a. OLED, LCD, Servo, Ultraschall, Wägezelle HX711, Beschleunigungssensor GY61, Strom-/Spannungssensor INA219, ADC ADS1015) |
+| **ESP32-Standalone-Blockly (Beta)** | Eigene Blockly-Oberfläche direkt auf dem ESP32 (WLAN-Accesspoint, kein Schulnetz nötig) – über „MicroPython → 📲 iPad-Blockly aufs Board spielen …" auf den Controller übertragen, ideal für iPads ohne Koalino-Installation |
+| **Serial Plotter** | Zahlenausgabe eines laufenden Programms live als Graph – ideal für Sensorwerte (Temperatur, Abstand, Helligkeit) und X-Y-Kennlinien (z. B. U-I-Kennlinie, optional mit Ausgleichsgerade und R²). Bei Bedarf über „Ausführen → 📈 Serial Plotter" einblendbar |
+| **Datenauswertung (CSV)** | Messreihen oder Umfragedaten aus einer CSV-Datei als Streu-, Linien-, Säulen-, Balken-, Kreisdiagramm, Histogramm oder Boxplot darstellen (auch je Kategorie), mit Kennwerten (Median, Quartile, Mittelwert, Spannweite …), Häufigkeitstabelle, Ausgleichsgerade mit R² und PNG-Export. Reiter „Statistik-Tests": Signifikanztest (Binomialtest mit Ablehnungsbereich), t-Test für eine und zwei Stichproben (Welch, gleiche Varianzen, verbunden) mit p-Wert, Konfidenzintervall und Effektstärke. „Als Python-Code" erzeugt ein lesbares Programm (csv + matplotlib), das dasselbe Diagramm zeichnet – direkt als neuer Editor-Tab. Export als PNG oder SVG, Beispieldaten zum Ausprobieren. Läuft offline; dieselbe App gibt es als [StatPlot](https://github.com/juchemGDG/StatPlot) auch im Browser (z. B. auf dem iPad) und als Desktop-Version. Über den Knopf **Datenauswertung** in der Seitenleiste oder „Visualisieren → 📊 Datenauswertung (CSV) …" |
+| **PAP-Editor** | Programmablaufpläne zeichnen – über den Knopf **PAP-Editor** rechts in der Menüleiste. Der fertige Plan landet mit „In Projekt übernehmen" als Bild in der Zwischenablage und kann direkt in Arbeitsblätter, Word oder LibreOffice eingefügt werden |
+| **Arbeitsblatt-Vorschau** | In Obsidian erstellte Markdown-Arbeitsblätter (Callouts, HTML-Layout-Vorlagen, Codeblöcke) direkt in Koalino korrekt formatiert anzeigen – Codeschnipsel lassen sich mit einem Klick kopieren oder an der Cursorposition in den Editor einfügen |
+| **KI-Codegenerator** | Schülerinnen und Schüler spezifizieren Eingabe/Ablauf/Ausgabe/Variablen, die KI setzt es in Code um (lokal via Ollama) |
+| **Git-Integration** | Repository klonen, Status, Commit, Push, Pull, Branch wechseln und Merge-Konflikte lösen – direkt aus dem Menü „Git" |
+| **Syntax-Highlighting** | Farbige Python-Syntax, Zeilennummern, Klammernabgleich, Auto-Vervollständigung (Jedi) |
+| **Suchen & Ersetzen** | Im Editor über `Strg+F` (Suchen) bzw. `Strg+H` (Suchen und Ersetzen) |
+| **Fehler-Links** | Fehler in rot, klickbar → Sprung zur Fehlerstelle im Editor |
+| **Fehler-Erklärung** | Verständliche deutsche Klartext-Hinweise zu Programmfehlern; auf Wunsch erklärt der KI-Tutor „Infi" den Fehler mit Bezug auf den eigenen Code |
+| **Dateibaum** | Ordner/Dateien verwalten, neue Dateien erstellen |
+| **Helles & dunkles Design** | Zwei Themes – klassisch-hell (Standard) und modern-dunkel, umschaltbar in den Einstellungen |
+| **KI-Tutor „Infi"** | Lokaler, kostenloser KI-Tutor für Python-Anfängerinnen und -Anfänger (optional, via Ollama) |
+
+---
+
+## Voraussetzungen
+
+- Für die **Download-Versionen**: keine Python-Installation erforderlich
+- Für MicroPython-Funktionen: Controller per USB anschließen
+
+---
+
+## Download & Installation (empfohlen)
+
+Aktuelle Versionen stehen auf der GitHub-Release-Seite bereit:
+
+- Release-Übersicht: https://github.com/juchemGDG/Koalino/releases/latest
+- **Windows (.exe):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino.exe
+- **macOS (.dmg):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino-macos.dmg
+- **Linux (.tar.gz):** https://github.com/juchemGDG/Koalino/releases/latest/download/Koalino-linux-x86_64.tar.gz
+
+### Schnellstart
+
+- **Windows:** `Koalino.exe` herunterladen und starten
+- **macOS:** `Koalino-macos.dmg` öffnen, App in Programme ziehen, dann starten
+- **Linux:** Archiv entpacken und die enthaltene Startdatei im Ordner `Koalino` ausführen
+
+### Linux: Zugriff auf den seriellen Port (MicroPython)
+
+Unter Linux gehören serielle Ports (z. B. `/dev/ttyUSB0`, `/dev/ttyACM0`) der
+Gruppe `dialout`. Ist der eigene Benutzer nicht in dieser Gruppe, scheitert die
+Verbindung zum Controller mit:
+
+```
+Verbindungsfehler: [Errno 13] could not open port /dev/ttyUSB0:
+[Errno 13] Permission denied: '/dev/ttyUSB0'
+```
+
+Den eigenen Benutzer **einmalig** zur Gruppe `dialout` hinzufügen:
+
+```bash
+sudo usermod -a -G dialout $USER
+```
+
+Anschließend **ab- und wieder anmelden** (oder neu starten), damit die
+Gruppenzugehörigkeit wirksam wird. Prüfen lässt sie sich mit dem Befehl `groups`
+(die Ausgabe muss `dialout` enthalten).
+
+> Wird der USB-Seriell-Adapter (CH340 o. ä.) gar nicht erkannt, kann unter Ubuntu
+> der Dienst `brltty` den Port belegen. Abhilfe: `sudo apt remove brltty`.
+
+---
+
+## KI-Tutor „Infi" (optional)
+
+Infi ist ein eingebauter, ermutigender Lern-Assistent für Python- und Arduino-Anfängerinnen und -Anfänger. Er läuft **vollständig lokal und kostenlos** über [Ollama](https://ollama.com) – es wird keine Internetverbindung und kein API-Schlüssel benötigt.
+
+Die Option erscheint in den Einstellungen nur, wenn Ollama auf dem Rechner installiert ist.
+
+### Installation (einmalig pro Rechner)
+
+#### Windows
+
+1. Installer herunterladen: [ollama.com/download](https://ollama.com/download/windows)
+2. Setup ausführen – Ollama startet danach automatisch im Hintergrund
+3. Eingabeaufforderung öffnen (`Win + R` → `cmd`) und Modell herunterladen:
+   ```cmd
+   ollama pull llama3.2
+   ```
+
+#### Linux
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.2
+```
+
+#### macOS
+
+```bash
+brew install ollama
+ollama pull llama3.2
+```
+
+> Alternativ: Installer unter [ollama.com/download](https://ollama.com/download/mac) herunterladen.
+
+### Empfohlene Modelle
+
+| Modell | Größe | Empfehlung |
+|---|---|---|
+| `llama3.2` | ~2 GB | Standard – gut und schnell |
+| `llama3.1:8b` | ~4,7 GB | Bessere Qualität, mehr RAM nötig |
+| `gemma2:2b` | ~1,6 GB | Für schwächere Schulrechner |
+
+### Infi aktivieren
+
+1. Koalino starten
+2. **Datei → Einstellungen** öffnen (oder `Strg+,`)
+3. Im Abschnitt **KI-TUTOR (INFI)** den Haken bei „Infi-Tutor aktivieren" setzen
+4. **Übernehmen** klicken – das Chat-Panel öffnet sich rechts
+
+> Das Modell kann im Einstellungs-Dialog jederzeit geändert werden (Feld „Modell").  
+> Ollama muss laufen, bevor Infi gestartet wird. Beim Fehler „Keine Verbindung" bitte in einer Eingabeaufforderung `ollama serve` ausführen.
+
+---
+
+## Fehler verstehen
+
+Stürzt ein Programm ab, zeigt Koalino unter der Fehlermeldung einen **verständlichen,
+deutschen Hinweis** an: was der Fehler bedeutet und worauf zu achten ist (z. B. bei
+`NameError`, `IndentationError`, `IndexError`, `TypeError` …). Das funktioniert
+vollständig lokal, ganz ohne KI.
+
+Ist zusätzlich der KI-Tutor **„Infi" aktiv**, erscheint der Knopf
+**🤖 Infi erklärt diesen Fehler**. Ein Klick schickt die Fehlermeldung zusammen mit
+dem eigenen Code an Infi, der den Fehler kindgerecht erklärt – mit Hinweisen statt
+fertiger Lösung, damit das eigene Nachdenken im Vordergrund bleibt.
+
+---
+
+## Block-Editor (blockbasiert programmieren)
+
+Über das Menü **Blöcke → Block-Editor öffnen** startet ein eigenes Fenster, in dem
+Programme – ähnlich wie in **Snap!** oder **Scratch** – aus Blöcken zusammengesteckt
+werden. Das ist besonders für Einsteigerinnen und Einsteiger (z. B. Klasse 7) geeignet,
+weil der Algorithmus im Vordergrund steht und keine Syntaxfehler entstehen.
+
+- Kategorien: Logik, Schleifen, Mathematik, Text, Listen, Tupel, Dictionary,
+  Variablen, Funktionen, Zeit
+- Mathematik enthält die **Typumwandlung** `int()`/`float()`/`str()` (z. B. für
+  `int(input(...))`); Text bietet String-Methoden (Großschreibung, Teilstring,
+  ersetzen, suchen …) und einen **Kommentar**-Block, Listen zusätzlich sortieren,
+  umdrehen, Teilliste u. a.
+- MicroPython-Blöcke: digitale Ein-/Ausgänge, ADC, DAC, PWM, NeoPixel
+- **nitbw-Bibliotheken** als Blöcke (OLED, LCD, Töne, Servo, Ultraschall u. v. m.)
+- Knopf **„In Python umwandeln"** erzeugt sauberen, lesbaren Code in einem Editor-Tab
+  (Aufbau: Bibliotheken → Instanzen → Variablen → Funktionen → Hauptprogramm)
+- Block-Programme lassen sich als `.nitblocks`-Datei speichern und laden
+
+> Wird ein bereits umgewandeltes Block-Programm erneut umgewandelt, aktualisiert
+> Koalino den bestehenden Tab, statt einen neuen zu öffnen.
+
+---
+
+## Serial Plotter (Werte live als Graph)
+
+Über **Ausführen → 📈 Serial Plotter** (oder den gleichnamigen Knopf in der
+Werkzeugleiste) lässt sich bei Bedarf ein Live-Graph einblenden. Er zeichnet die
+Zahlen, die ein laufendes Programm zeilenweise ausgibt – besonders praktisch für
+Sensorexperimente (Temperatur, Abstand, Helligkeit) am Controller.
+
+- **Eine Zahl pro Zeile** → eine Kurve: `print(temp)`
+- **Mehrere Zahlen pro Zeile** (Leerzeichen/Komma getrennt) → mehrere Kurven: `print(temp, feuchte)`
+- **Benannte Kurven** mit `name:wert` oder `name=wert`: `print(f"temp:{t}")`
+- Zeilen mit gemischtem Text werden ignoriert und erscheinen weiter im Ausgabe-Tab.
+
+Der Plotter ist standardmäßig **ausgeblendet** und erzeugt erst dann Aufwand, wenn er
+aktiviert wird. Bei jedem Programmstart beginnt er mit einem frischen Graph; mit
+**Pause** lässt sich der aktuelle Verlauf einfrieren und in Ruhe betrachten.
+
+**Achsen einstellen:** Die automatische Skalierung ist nicht immer erwünscht. Beide
+Achsen lassen sich daher umstellen – direkt in der Plotter-Leiste (sofort wirksam) und
+als gespeicherter Standard unter **Datei → Einstellungen → Serial Plotter**:
+
+- **Hochachse (Y):** *Automatisch* (gleitend) oder *Feste Grenzen* mit Min/Max.
+- **Rechtsachse (X):** *Gleitend* (zeigt die letzten Werte), *Sweep* – ein fester
+  Indexbereich von Min bis Max, der sich einmal füllt und dann stehen bleibt (wie eine
+  Einzelaufnahme) – oder **X-Y (Kennlinie)**: Eine Größe liefert die X-Werte, alle
+  übrigen werden dagegen aufgetragen, z. B. `print(U, I)` für eine U-I-Kennlinie.
+
+---
+
+## Arbeitsblatt-Vorschau (Obsidian-Markdown)
+
+In Obsidian erstellte Arbeitsblätter lassen sich direkt in Koalino korrekt
+formatiert anzeigen – über Rechtsklick auf eine `.md`-Datei im Dateibaum →
+**„Als Arbeitsblatt-Vorschau öffnen"**. Die Vorschau öffnet sich im rechten
+Panel und rendert echtes HTML/CSS (kein reiner Textmodus):
+
+- **Obsidian-Callouts** (`> [!hinweis]`, `> [!tipp]`, `> [!aufgabe]` u. a.,
+  inkl. aufklappbarer `+`/`-`-Callouts) werden farbig dargestellt.
+- **HTML-Layout-Vorlagen** (z. B. Kopfzeile, Grid-Layouts, Aufgabenkästen,
+  Schreib-/Zeichenflächen, Lückentext) werden mit passendem Layout gerendert,
+  nicht nur als Rohtext.
+- **Codeblöcke** erscheinen syntax-hervorgehoben; über die Knöpfe **📋 Kopieren**
+  und **⬇ In Editor einfügen** landet der Code direkt in der Zwischenablage
+  bzw. an der aktuellen Cursorposition im geöffneten Editor-Tab.
+- Die Vorschau bleibt bewusst immer hell („Papier-Look"), unabhängig vom
+  Koalino-Theme – wie in Obsidian bzw. beim Ausdruck.
+
+> Setzt PyQt6-WebEngine sowie die Pakete `markdown`, `Pygments` und
+> `obsidian-callouts` voraus (in den Download-Versionen bereits enthalten).
+
+---
+
+## PAP-Editor (Programmablaufpläne)
+
+Über den Knopf **PAP-Editor** rechts in der Menüleiste öffnet sich ein eigenes
+Fenster mit dem Editor von [pap.mint-checker.de](https://pap.mint-checker.de).
+Dort wird der Programmablaufplan mit den üblichen Bausteinen (Start/Stop,
+Anweisung, Entscheidung, Schleife, Funktion) zusammengesetzt.
+
+- Ein Klick auf **„In Projekt übernehmen"** legt den fertigen Plan als **PNG-Bild
+  in die Zwischenablage** – von dort mit `Strg+V` / `Cmd+V` direkt in ein
+  Arbeitsblatt, nach Word, LibreOffice oder in eine Dokumentation einfügen.
+- Das Bild wird in doppelter Auflösung erzeugt, bleibt also auch im Ausdruck scharf.
+- **💾 Bild speichern** legt das übernommene Diagramm als PNG-Datei ab – nötig für
+  Seiten, die kein Einfügen aus der Zwischenablage erlauben und eine Datei zum
+  Hochladen brauchen (z. B. der AIS-Chat). Wird das Fenster geschlossen, ohne dass
+  ein übernommenes Bild gespeichert wurde, fragt Koalino noch einmal nach.
+- **Speichern** (als `.json`, später weiterbearbeitbar) und die Exporte
+  (**PNG/JPG/SVG**) der Editor-Seite funktionieren ebenfalls; sie öffnen einen
+  Speichern-Dialog, der im eingestellten **Sketchbook-Ordner** startet.
+- Das Fenster merkt sich den gezeichneten Plan, solange Koalino läuft: nach dem
+  Schließen lässt es sich erneut öffnen und der Plan weiterbearbeiten.
+
+> Benötigt eine Internetverbindung und PyQt6-WebEngine (in den Download-Versionen
+> bereits enthalten).
+
+---
+
+## KI-Codegenerator (optional)
+
+Der Code-Generator arbeitet im **Auftragnehmer-Modus**: Die Schülerinnen und Schüler
+geben eine vollständige Spezifikation an (EINGABE, ABLAUF, AUSGABE, VARIABLEN), und die
+KI setzt **genau diesen** Algorithmus in Code um – ohne den Lösungsweg vorzugeben. Läuft
+lokal über [Ollama](https://ollama.com). So bleibt das Algorithmen-Entwerfen Aufgabe der
+Lernenden, während die reine Umsetzung in Syntax unterstützt wird.
+
+> Mit **„🧩 Als Blöcke öffnen"** lässt sich der erzeugte Code zusätzlich im Block-Editor
+> als Blöcke anzeigen – ideal für den Übergang vom Block- zum Textprogrammieren. Die
+> Umwandlung ist deterministisch; nicht erkannte Zeilen bleiben als Roh-Python-Block erhalten.
+
+---
+
+## Git-Integration
+
+Versionsverwaltung direkt aus dem Menü **„Git"** – ideal für Projektarbeit und das
+Verteilen/Einsammeln von Aufgaben:
+
+- Repository **klonen** und auswählen (HTTPS mit Zugangsdaten)
+- **Status**, **Commit**, **Push**, **Pull**, **Fetch**
+- **Branch** wechseln und **mergen**, inkl. geführter **Konfliktlösung**
+
+> Zugangsdaten werden sicher im Schlüsselspeicher des Betriebssystems abgelegt
+> (Windows Credential Manager / macOS Keychain / libsecret) – nicht im Klartext.
+
+---
+
+## Starten aus Quellcode (für Entwicklung)
+
+Für diese Variante ist **Python 3.10+** erforderlich.
+
+Koalino nutzt dabei einen **Hybrid-Startmodus**:
+
+- Wenn im Projektordner eine Runtime unter `python_runtime/` liegt, wird diese bevorzugt.
+- Andernfalls wird der vorhandene System-Interpreter verwendet.
+- Die eigentliche Laufumgebung wird als `.venv` angelegt (bei schreibgeschütztem Projektordner automatisch im Benutzerprofil unter `Koalino/.venv`).
+
+Optional kann das Verhalten per Umgebungsvariable gesteuert werden:
+
+- `NIT_PYTHON_MODE=auto` (Standard): bevorzugt `python_runtime/`, sonst System-Python
+- `NIT_PYTHON_MODE=bundled`: erzwingt `python_runtime/` (Fehler, wenn nicht vorhanden)
+- `NIT_PYTHON_MODE=system`: ignoriert `python_runtime/` und nutzt immer System-Python
+
+Eine mitlieferbare Runtime kann ueber die Release-Skripte erzeugt werden:
+
+- Linux/macOS: `bash release/scripts/create_embedded_runtime.sh --force`
+- Windows: `pwsh -File release/scripts/create_embedded_runtime.ps1 -Force`
+
+Fuer Release-Builds kann die Runtime direkt in die Pakete aufgenommen werden:
+
+- Linux: `INCLUDE_RUNTIME=1 bash release/scripts/build_linux.sh`
+- macOS: `INCLUDE_RUNTIME=1 bash release/scripts/build_macos.sh`
+- Windows: `pwsh -File release/scripts/build_windows.ps1 -IncludeRuntime`
+
+### Linux / macOS
+```bash
+chmod +x run.sh
+./run.sh
+```
+
+### Windows
+```
+run.bat
+```
+
+Beim ersten Start wird automatisch eine virtuelle Umgebung (`.venv`) erstellt und alle Abhängigkeiten installiert.
+
+---
+
+## Manuell starten (nach erster Installation)
+
+```bash
+python start.py
+```
+
+oder direkt:
+
+```bash
+.venv/bin/python -m koalino.main
+```
+
+---
+
+## Abhängigkeiten
+
+| Paket | Zweck |
+|---|---|
+| `PyQt6` | GUI-Framework |
+| `PyQt6-QScintilla` | Code-Editor mit Syntax-Highlighting |
+| `esptool` | ESP32 flashen |
+| `mpremote` | MicroPython-Controller-Kommunikation |
+| `pyserial` | Serielle Ports erkennen |
+| `requests` | GitHub API / Firmware-Downloads |
+| `PyQt6-WebEngine` | Arbeitsblatt-Vorschau (Obsidian-Markdown als echtes HTML/CSS) |
+| `markdown`, `obsidian-callouts`, `Pygments` | Markdown-Rendering, Obsidian-Callouts, Syntax-Highlighting in der Arbeitsblatt-Vorschau |
+
+---
+
+## Unterstützte Controller
+
+- **ESP32** (alle Varianten)
+- **micro:bit (v1/v2, automatische Firmware-Auswahl im Flash-Dialog)**
+- **Raspberry Pi Pico 2**
+- **Raspberry Pi Pico 2W**
+
+---
+
+## Schulnetze mit Proxy
+
+Viele Schulnetze leiten den Internetverkehr über einen Proxy, der eine
+Anmeldung verlangt. Downloads (Bibliotheken, Firmware, pip) schlagen dann mit
+`407 Proxy Authentication Required` fehl – der Browser meldet sich automatisch
+mit der Windows-Anmeldung an, Programme können das nicht. Koalino zeigt in dem
+Fall einen erklärenden Hinweis statt eines kryptischen Fehlers.
+
+Zwei Lösungswege:
+
+1. **Administrator gibt die benötigten Adressen am Proxy frei** (empfohlen):
+   `raw.githubusercontent.com`, `api.github.com`, `micropython.org`,
+   `pypi.org`, `files.pythonhosted.org`.
+2. **Offline-Installation der Bibliotheken:** Das Repository
+   [NIT_Bibliotheken](https://github.com/juchemGDG/NIT_Bibliotheken) einmal (z. B.
+   zu Hause) über „Code → Download ZIP“ herunterladen und entpacken. Im
+   Bibliotheks-Manager dann **„📁 Aus Ordner installieren …“** wählen und den
+   entpackten Ordner angeben – das läuft komplett ohne Internet.
+
+> Software-Rendering für den Block-Editor auf Terminal-/RDP-Servern lässt sich
+> bei Grafikproblemen mit der Umgebungsvariable `NIT_SOFTWARE_RENDER=1`
+> erzwingen (in RDP-Sitzungen erkennt Koalino das automatisch).
+
+---
+
+## Projektstruktur
+
+```
+Koalino/
+├── koalino/
+│   ├── main.py                 # Einstiegspunkt
+│   ├── main_window.py          # Hauptfenster (inkl. Git-Integration)
+│   ├── editor_widget.py        # Code-Editor (QScintilla)
+│   ├── completion.py           # Auto-Vervollständigung (Jedi)
+│   ├── file_panel.py           # Dateibaum
+│   ├── console_panel.py        # Konsole (Ausgabe)
+│   ├── block_panel.py          # Block-Editor-Fenster (Blockly)
+│   ├── coder_panel.py          # KI-Codegenerator
+│   ├── ais_chat_panel.py       # AIS-Schulchat
+│   ├── worksheet_panel.py      # Arbeitsblatt-Vorschau (Obsidian-Markdown)
+│   ├── worksheet_renderer.py   # Markdown→HTML-Rendering (Callouts, Codeblöcke)
+│   ├── micropython_dialogs.py  # Flash- & Bibliotheks-Dialog
+│   ├── tutor_panel.py          # KI-Tutor „Infi" (Ollama-Chat)
+│   ├── settings_dialog.py      # Einstellungen
+│   ├── config.py               # Konstanten & Themes (hell/dunkel)
+│   └── assets/
+│       └── blockly/            # Blockly offline + NIT-/nitbw-Blöcke
+├── firmware/                   # ESP32-Standalone-Blockly (Beta, eigener AP+Webserver)
+├── start.py                    # Bootstrap-Skript
+├── run.sh                      # Linux/macOS Starter
+├── run.bat                     # Windows Starter
+└── requirements.txt
+```

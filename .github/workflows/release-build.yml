@@ -1,0 +1,214 @@
+name: Build Release Packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/release-build.yml"
+      - "release/**"
+      - "requirements.txt"
+      - "start.py"
+
+# Tag-Builds laden ihre Pakete direkt an das GitHub-Release (als Entwurf) und
+# kommen damit ohne Actions-Artefakte aus. Der Umweg über upload-artifact +
+# download-artifact hatte den Artefakt-Speicher des Kontos vollgeschrieben
+# ("Artifact storage quota has been hit"), wodurch der komplette Release-Build
+# scheiterte. Der finalize-Job veröffentlicht das Release erst, wenn alle
+# Plattform-Builds erfolgreich waren – ein halbfertiges Release wird also nie
+# sichtbar. Artefakte gibt es nur noch bei Nicht-Tag-Builds (zum Testen), mit
+# einem Tag Aufbewahrung.
+#
+# Die Datenauswertung (StatPlot) lädt Koalino online; für den Offline-Fall
+# holt jeder Build den aktuellen StatPlot-Stand von GitHub (sync_statplot.sh).
+#
+# Minuten sparen (Actions-Kontingent):
+#  - Normale Pushes auf main bauen nur Linux x86_64 (1-faches Minuten-Gewicht).
+#  - macOS (10-fach), Windows (2-fach) und Linux ARM laufen nur bei
+#    Release-Tags (v*) oder manuellem Start (workflow_dispatch).
+#  - Neuere Pushes brechen laufende Nicht-Tag-Builds ab; Tag-Builds nie.
+#  - Jeder Job hat ein Zeitlimit, damit hängende Builds nicht ewig laufen.
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+jobs:
+  build-linux:
+    # Bei Tags/manuell: x86_64 + ARM. Bei normalen Pushes: nur x86_64.
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON((startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') && '[{"runner":"ubuntu-latest","arch":"x86_64"},{"runner":"ubuntu-24.04-arm","arch":"aarch64"}]' || '[{"runner":"ubuntu-latest","arch":"x86_64"}]') }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Checkout StatPlot
+        uses: actions/checkout@v7
+        with:
+          repository: juchemGDG/StatPlot
+          path: _statplot
+          fetch-depth: 0
+
+      # Offline-Kopie der Datenauswertung auf den aktuellen StatPlot-Stand
+      # bringen. Schlägt das fehl (z. B. StatPlot-Tests rot), bleibt die
+      # eingecheckte Kopie stehen – das Skript löscht erst nach den Tests.
+      - name: StatPlot übernehmen
+        continue-on-error: true
+        shell: bash
+        run: bash release/scripts/sync_statplot.sh _statplot
+
+      - name: Build Linux package
+        run: bash release/scripts/build_linux.sh
+        env:
+          INCLUDE_RUNTIME: "1"
+
+      - name: Upload Linux package to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bash release/scripts/upload_release_assets.sh release/downloads/linux
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/Koalino
+
+      - name: Upload Linux artifact (Testbuild)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: koalino-linux-${{ matrix.arch }}
+          path: release/downloads/linux/*
+          retention-days: 1
+
+  build-macos:
+    # Teuerster Runner (10-faches Gewicht): nur bei Release-Tags oder manuell.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    # Feste Runner-Version statt macos-latest, damit Build-Umgebungen stabil bleiben.
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Checkout StatPlot
+        uses: actions/checkout@v7
+        with:
+          repository: juchemGDG/StatPlot
+          path: _statplot
+          fetch-depth: 0
+
+      # Offline-Kopie der Datenauswertung auf den aktuellen StatPlot-Stand
+      # bringen. Schlägt das fehl (z. B. StatPlot-Tests rot), bleibt die
+      # eingecheckte Kopie stehen – das Skript löscht erst nach den Tests.
+      - name: StatPlot übernehmen
+        continue-on-error: true
+        shell: bash
+        run: bash release/scripts/sync_statplot.sh _statplot
+
+      - name: Build macOS package
+        run: bash release/scripts/build_macos.sh
+        env:
+          INCLUDE_RUNTIME: "1"
+
+      - name: Upload macOS package to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bash release/scripts/upload_release_assets.sh release/downloads/macos
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/Koalino
+
+      - name: Upload macOS artifact (Testbuild)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: koalino-macos
+          path: release/downloads/macos/*
+          retention-days: 1
+
+  build-windows:
+    # 2-faches Gewicht: nur bei Release-Tags oder manuell.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Checkout StatPlot
+        uses: actions/checkout@v7
+        with:
+          repository: juchemGDG/StatPlot
+          path: _statplot
+          fetch-depth: 0
+
+      # Offline-Kopie der Datenauswertung auf den aktuellen StatPlot-Stand
+      # bringen. Schlägt das fehl (z. B. StatPlot-Tests rot), bleibt die
+      # eingecheckte Kopie stehen – das Skript löscht erst nach den Tests.
+      - name: StatPlot übernehmen
+        continue-on-error: true
+        shell: bash
+        run: bash release/scripts/sync_statplot.sh _statplot
+
+      - name: Build Windows package
+        shell: pwsh
+        run: ./release/scripts/build_windows.ps1 -IncludeRuntime
+
+      - name: Upload Windows package to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: bash release/scripts/upload_release_assets.sh release/downloads/windows
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/Koalino
+
+      - name: Upload Windows artifact (Testbuild)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: koalino-windows
+          path: release/downloads/windows/*
+          retention-days: 1
+
+  publish-github-release:
+    # Veröffentlicht den Release-Entwurf, sobald alle Plattformen erfolgreich
+    # gebaut und hochgeladen haben.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Release veröffentlichen
+        run: bash release/scripts/publish_release.sh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/Koalino
