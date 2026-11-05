@@ -4423,7 +4423,20 @@ class MainWindow(QMainWindow):
             f"<p>Ein Python- und MicroPython-Editor für den Schulunterricht.</p>"
             f"<p>Unterstützte Controller:<br>"
             + "<br>".join(b["label"] for b in SUPPORTED_BOARDS.values())
-            + "</p>")
+            + "</p>"
+            '<p>Dieses Werkzeug wurde für '
+            '<a href="https://mint-checker.de">mint-checker.de</a> entwickelt '
+            'und steht unter der '
+            '<a href="https://opensource.org/license/mit">MIT-Lizenz</a> '
+            '(Lizenztext im <a href="https://github.com/juchemGDG">Repository</a>). '
+            'Bei der Entwicklung wurden KI-Werkzeuge unterstützend eingesetzt; '
+            'der Code wurde von uns geprüft und angepasst. '
+            'Die auf diesen Seiten eingebundenen Unterrichtsmaterialien stehen, '
+            'soweit nicht anders gekennzeichnet, unter '
+            '<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.de">'
+            'CC BY-NC-SA 4.0</a>. '
+            '<a href="https://py.nitbw.de/lizenz">Lizenzhinweis &amp; Namensnennung</a>'
+            "</p>")
         box.exec()
 
     def _open_settings(self):
