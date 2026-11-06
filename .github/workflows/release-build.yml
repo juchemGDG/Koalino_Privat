@@ -72,6 +72,20 @@ jobs:
         shell: bash
         run: bash release/scripts/sync_statplot.sh _statplot
 
+      # MicroPython-Bibliotheken (nitbw_*) mitliefern: Deploy und Bibliotheks-
+      # Installation brauchen so weder Internet noch die GitHub-API.
+      - name: Checkout NIT_Bibliotheken
+        uses: actions/checkout@v7
+        with:
+          repository: juchemGDG/NIT_Bibliotheken
+          path: _nit_lib
+          fetch-depth: 0
+
+      - name: NIT_Bibliotheken übernehmen
+        continue-on-error: true
+        shell: bash
+        run: bash release/scripts/sync_nit_lib.sh _nit_lib
+
       - name: Build Linux package
         run: bash release/scripts/build_linux.sh
         env:
@@ -124,6 +138,20 @@ jobs:
         shell: bash
         run: bash release/scripts/sync_statplot.sh _statplot
 
+      # MicroPython-Bibliotheken (nitbw_*) mitliefern: Deploy und Bibliotheks-
+      # Installation brauchen so weder Internet noch die GitHub-API.
+      - name: Checkout NIT_Bibliotheken
+        uses: actions/checkout@v7
+        with:
+          repository: juchemGDG/NIT_Bibliotheken
+          path: _nit_lib
+          fetch-depth: 0
+
+      - name: NIT_Bibliotheken übernehmen
+        continue-on-error: true
+        shell: bash
+        run: bash release/scripts/sync_nit_lib.sh _nit_lib
+
       - name: Build macOS package
         run: bash release/scripts/build_macos.sh
         env:
@@ -174,6 +202,20 @@ jobs:
         continue-on-error: true
         shell: bash
         run: bash release/scripts/sync_statplot.sh _statplot
+
+      # MicroPython-Bibliotheken (nitbw_*) mitliefern: Deploy und Bibliotheks-
+      # Installation brauchen so weder Internet noch die GitHub-API.
+      - name: Checkout NIT_Bibliotheken
+        uses: actions/checkout@v7
+        with:
+          repository: juchemGDG/NIT_Bibliotheken
+          path: _nit_lib
+          fetch-depth: 0
+
+      - name: NIT_Bibliotheken übernehmen
+        continue-on-error: true
+        shell: bash
+        run: bash release/scripts/sync_nit_lib.sh _nit_lib
 
       - name: Build Windows package
         shell: pwsh

@@ -3164,7 +3164,7 @@ class MainWindow(QMainWindow):
             "„Firmware flashen …“ ausführen.\n\nFortfahren?" % ssid_hint
         )
         cb = QCheckBox("Auch die Sensor-Bibliotheken (nitbw_) installieren – "
-                       "zum Importieren in eigenen Programmen, dauert einige Minuten")
+                       "zum Importieren in eigenen Programmen")
         cb.setChecked(True)
         box.setCheckBox(cb)
         box.setStandardButtons(
@@ -3179,7 +3179,8 @@ class MainWindow(QMainWindow):
         from .micropython_dialogs import IpadDeployWorker
         self._console.append_info("📲  Spiele die iPad-Oberfläche (MicroPython) auf den Controller …\n")
         worker = IpadDeployWorker(port, fw_dir, install_libs=install_libs,
-                                  board_name=board_name)
+                                  board_name=board_name,
+                                  lib_dir=Path(__file__).resolve().parent / "assets" / "nit_lib")
         worker.log.connect(self._console.append_info)
         worker.done.connect(self._on_ipad_deploy_done)
         self._track_aux_worker(worker)

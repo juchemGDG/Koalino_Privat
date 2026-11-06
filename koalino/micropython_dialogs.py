@@ -1090,9 +1090,11 @@ class IpadDeployWorker(QThread):
     done = pyqtSignal(bool, str)
 
     def __init__(self, port: str, firmware_dir, install_libs: bool = False,
-                 board_name: str = ""):
+                 board_name: str = "", lib_dir=None):
         super().__init__()
         self.port = port
+        # Mitgelieferte nitbw_-Module (koalino/assets/nit_lib); None -> GitHub
+        self.lib_dir = Path(lib_dir) if lib_dir else None
         self.firmware_dir = Path(firmware_dir)
         # nitbw_-Bibliotheken mitinstallieren (zum Importieren in eigenen Programmen)
         self.install_libs = install_libs
@@ -1224,6 +1226,21 @@ class IpadDeployWorker(QThread):
             return prefix + self.board_name
         return (prefix + chip_id) if chip_id else ""
 
+    def _install_bundled_libraries(self, files):
+        """Kopiert die mit Koalino gelieferten nitbw_-Module in einem Rutsch nach :lib.
+
+        Ohne Internet und ohne GitHub-API; eine einzige mpremote-Verbindung
+        statt einer pro Datei.
+        """
+        self.log.emit("Installiere %d nitbw_-Bibliotheken (mitgeliefert) ...\n" % len(files))
+        self.log.emit(_ensure_remote_lib_dir(self.port) + "\n")
+        ok, err = self._run("", [*tool_command("mpremote"), "connect", self.port,
+                                 "cp", *[str(f) for f in files], ":lib/"])
+        if not ok:
+            return False, "Fehler beim Kopieren der Bibliotheken: " + err
+        self.log.emit("✓ %d Bibliotheks-Dateien installiert.\n" % len(files))
+        return True, ""
+
     @staticmethod
     def _github_error(data) -> str:
         """Lesbare Meldung aus einer GitHub-API-Fehlerantwort (z. B. Rate-Limit)."""
@@ -1242,7 +1259,10 @@ class IpadDeployWorker(QThread):
         Download + Übertragung laufen über dieselben Helfer wie der
         Bibliotheks-Manager (:func:`_install_remote_lib`).
         """
-        self.log.emit("Installiere nitbw_-Bibliotheken ...\n")
+        bundled = sorted(self.lib_dir.glob("nitbw_*.py")) if self.lib_dir else []
+        if bundled:
+            return self._install_bundled_libraries(bundled)
+        self.log.emit("Mitgelieferte Bibliotheken nicht gefunden – lade von GitHub ...\n")
         try:
             resp = requests.get(LIB_REPO_API, timeout=15)
             resp.raise_for_status()
