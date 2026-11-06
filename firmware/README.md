@@ -79,7 +79,8 @@ Menü **MicroPython → 📲 iPad-Programmierung aufs Board spielen**. Kopiert `
 ihn neu – kein Terminal nötig. Der Dialog fragt nach einer **Nummer/Name für das
 Board** (→ WLAN-SSID, siehe unten) und kann per Häkchen zusätzlich die
 **Sensor-Bibliotheken (`nitbw_`)** nach `/lib` installieren (damit eigene
-Programme sie per `import` nutzen können; dauert einige Minuten, braucht Internet).
+Programme sie per `import` nutzen können; Quelle: aktueller Stand von GitHub per ZIP-Download,
+ohne Internet die mit Koalino gelieferten Module; dauert einige Minuten, braucht Internet).
 
 ### Weg B – manuell per mpremote
 

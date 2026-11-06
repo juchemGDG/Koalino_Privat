@@ -278,6 +278,8 @@ APP_VERSION = "1.13.2"
 
 # GitHub-Repository für Bibliotheken
 LIB_REPO_API = "https://api.github.com/repos/juchemGDG/NIT_Bibliotheken/contents"
+# ZIP des ganzen Repos: eine einzige Anfrage, ohne API und ohne deren Stundenlimit
+LIB_REPO_ZIP = "https://codeload.github.com/juchemGDG/NIT_Bibliotheken/zip/refs/heads/main"
 LIB_REPO_RAW = "https://raw.githubusercontent.com/juchemGDG/NIT_Bibliotheken/main"
 
 # MicroPython Download-Seite

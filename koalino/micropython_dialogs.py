@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QColor
 
 from .qt_utils import ThemedComboBox
-from .config import THEME, SUPPORTED_BOARDS, LIB_REPO_API, LIB_REPO_RAW, python_executable, tool_command
+from .config import THEME, SUPPORTED_BOARDS, LIB_REPO_ZIP, python_executable, tool_command
 from .net_hints import with_network_hint
 
 MICROBIT_V2_RELEASES_API = "https://api.github.com/repos/microbit-foundation/micropython-microbit-v2/releases/latest"
@@ -1226,86 +1226,46 @@ class IpadDeployWorker(QThread):
             return prefix + self.board_name
         return (prefix + chip_id) if chip_id else ""
 
-    def _install_bundled_libraries(self, files):
-        """Kopiert die mit Koalino gelieferten nitbw_-Module in einem Rutsch nach :lib.
+    def _install_libraries(self):
+        """Installiert die nitbw_-Bibliotheken nach ``:lib`` auf dem Controller.
 
-        Ohne Internet und ohne GitHub-API; eine einzige mpremote-Verbindung
-        statt einer pro Datei.
+        Zuerst der aktuelle Stand von GitHub (ein einziger ZIP-Download, ohne
+        API-Limit); schlaegt das fehl (kein Internet, GitHub gesperrt), die mit
+        Koalino gelieferten Module. Eigene Programme koennen sie dann per
+        ``from nitbw_xxx import ...`` importieren.
         """
-        self.log.emit("Installiere %d nitbw_-Bibliotheken (mitgeliefert) ...\n" % len(files))
+        import shutil, tempfile
+        tmp = tempfile.mkdtemp(prefix="nit_lib_")
+        try:
+            files, quelle = [], ""
+            self.log.emit("Lade aktuelle nitbw_-Bibliotheken von GitHub ...\n")
+            try:
+                root = download_lib_repo(tmp)
+                files = [p for e in list_lib_entries(root) for _, p in e["files"]
+                         if Path(p).name.startswith("nitbw_")]
+                quelle = "GitHub"
+            except Exception as e:
+                self.log.emit("⚠ GitHub nicht erreichbar (%s) – nehme die mit Koalino "
+                              "gelieferten Bibliotheken.\n" % str(e).splitlines()[0][:120])
+            if not files:
+                bundled = bundled_lib_dir() if self.lib_dir is None else self.lib_dir
+                files = [str(p) for p in sorted(Path(bundled).glob("nitbw_*.py"))]
+                quelle = "mitgeliefert"
+            if not files:
+                return False, "Keine Bibliotheken gefunden (weder GitHub noch mitgeliefert)."
+            return self._copy_libraries(files, quelle)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def _copy_libraries(self, files, quelle):
+        """Kopiert die Module in einem mpremote-Aufruf nach :lib (eine Verbindung statt einer pro Datei)."""
+        self.log.emit("Installiere %d nitbw_-Bibliotheken (%s) ...\n" % (len(files), quelle))
         self.log.emit(_ensure_remote_lib_dir(self.port) + "\n")
         ok, err = self._run("", [*tool_command("mpremote"), "connect", self.port,
                                  "cp", *[str(f) for f in files], ":lib/"])
         if not ok:
             return False, "Fehler beim Kopieren der Bibliotheken: " + err
         self.log.emit("✓ %d Bibliotheks-Dateien installiert.\n" % len(files))
-        return True, ""
-
-    @staticmethod
-    def _github_error(data) -> str:
-        """Lesbare Meldung aus einer GitHub-API-Fehlerantwort (z. B. Rate-Limit)."""
-        msg = data.get("message", "") if isinstance(data, dict) else str(data)
-        if "rate limit" in msg.lower():
-            return ("GitHub-Anfragelimit erreicht (zu viele Abrufe von dieser "
-                    "Internetadresse). Bitte in etwa einer Stunde erneut versuchen "
-                    "oder das Häkchen für die Bibliotheken weglassen.")
-        return msg or "unbekannte Antwort von GitHub"
-
-    def _install_libraries(self):
-        """Laedt alle nitbw_-Bibliotheken aus dem NIT-Repo und legt sie in :lib ab.
-
-        Noetig, damit eigene Programme per ``from nitbw_xxx import ...``
-        die Sensor-Bibliotheken auf dem Board importieren koennen.
-        Download + Übertragung laufen über dieselben Helfer wie der
-        Bibliotheks-Manager (:func:`_install_remote_lib`).
-        """
-        bundled = sorted(self.lib_dir.glob("nitbw_*.py")) if self.lib_dir else []
-        if bundled:
-            return self._install_bundled_libraries(bundled)
-        self.log.emit("Mitgelieferte Bibliotheken nicht gefunden – lade von GitHub ...\n")
-        try:
-            resp = requests.get(LIB_REPO_API, timeout=15)
-            resp.raise_for_status()
-            entries = resp.json()
-        except Exception as e:
-            return False, with_network_hint(e, "Bibliotheks-Liste konnte nicht geladen werden: ")
-        if not isinstance(entries, list):
-            return False, ("Bibliotheks-Liste konnte nicht geladen werden: "
-                           + self._github_error(entries))
-
-        self.log.emit(_ensure_remote_lib_dir(self.port) + "\n")
-
-        # .py-Dateien im Repo-Root und in Unterordnern sammeln (ohne Beispiele)
-        files = []  # (name, download_url)
-        for e in entries:
-            if e.get("type") == "file" and e["name"].endswith(".py"):
-                files.append((e["name"], e["download_url"]))
-            elif e.get("type") == "dir":
-                try:
-                    sub_resp = requests.get(e["url"], timeout=15)
-                    sub_resp.raise_for_status()
-                    sub = sub_resp.json()
-                except Exception as ex:
-                    return False, with_network_hint(
-                        ex, "Unterordner '%s' konnte nicht geladen werden: " % e.get("name", "?"))
-                if not isinstance(sub, list):
-                    return False, ("Unterordner '%s' konnte nicht geladen werden: %s"
-                                   % (e.get("name", "?"), self._github_error(sub)))
-                for f in sub:
-                    if (f.get("type") == "file" and f["name"].endswith(".py")
-                            and not f["name"].lower().startswith("beispiel")):
-                        files.append((f["name"], f["download_url"]))
-
-        if not files:
-            self.log.emit("⚠ Keine Bibliotheks-Dateien gefunden – übersprungen.\n")
-            return True, ""
-
-        for name, url in files:
-            ok, err = _install_remote_lib(self.port, name, url)
-            if not ok:
-                return False, f"Fehler bei lib/{name}: {err}"
-            self.log.emit(f"  ✓ lib/{name}\n")
-        self.log.emit(f"✓ {len(files)} Bibliotheks-Dateien installiert.\n")
         return True, ""
 
 
@@ -1354,31 +1314,6 @@ def _copy_to_remote_lib(port: str, name: str, local_path: str) -> tuple[bool, st
     if res.returncode != 0:
         return False, (res.stderr or "").strip() or "Übertragung fehlgeschlagen"
     return True, ""
-
-
-def _install_remote_lib(port: str, name: str, url: str) -> tuple[bool, str]:
-    """Lädt ``url`` herunter und kopiert die Datei nach ``:lib/<name>``.
-
-    Rückgabe ``(ok, fehlermeldung)``.
-    """
-    import tempfile
-    try:
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        with tempfile.NamedTemporaryFile(
-            suffix=os.path.splitext(name)[1] or ".py", delete=False
-        ) as tmp:
-            tmp.write(resp.content)
-            tmp_path = tmp.name
-    except Exception as e:
-        return False, with_network_hint(e)
-    try:
-        return _copy_to_remote_lib(port, name, tmp_path)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
 
 
 def collect_local_lib_files(folder) -> list[tuple[str, str]]:
@@ -1430,6 +1365,51 @@ def collect_local_lib_files(folder) -> list[tuple[str, str]]:
     return files
 
 
+def bundled_lib_dir() -> Path:
+    """Mit Koalino gelieferte nitbw_-Module (Rueckfall ohne Internet)."""
+    return Path(__file__).resolve().parent / "assets" / "nit_lib"
+
+
+def download_lib_repo(dest: str) -> Path:
+    """Laedt NIT_Bibliotheken als ZIP (eine Anfrage, kein API-Limit) und entpackt es.
+
+    Rueckgabe: Wurzelordner des entpackten Repos. Wirft bei Netzwerkfehlern.
+    """
+    import io, zipfile
+    resp = requests.get(LIB_REPO_ZIP, timeout=30)
+    resp.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        zf.extractall(dest)   # zipfile entfernt ".."/absolute Pfade selbst
+    subdirs = [d for d in Path(dest).iterdir() if d.is_dir()]
+    return subdirs[0] if len(subdirs) == 1 else Path(dest)
+
+
+def list_lib_entries(root) -> list[dict]:
+    """Bibliotheken eines entpackten Repos (oder des mitgelieferten Ordners).
+
+    Jeder Unterordner ist eine Bibliothek: ``{"name", "files": [(dateiname, pfad)],
+    "readme": pfad|None}``. Dateien: nitbw_*.py, sonst alle .py ausser Beispielen.
+    Liegen die Module direkt im Ordner (mitgeliefert), ist jedes Modul ein Eintrag.
+    """
+    root = Path(root)
+    entries = []
+    for d in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+        if d.name.startswith("."):
+            continue
+        if d.is_dir():
+            pys = [f for f in sorted(d.glob("*.py")) if not f.name.lower().startswith("beispiel")]
+            libs = [f for f in pys if f.name.startswith("nitbw_")] or pys
+            if not libs:
+                continue
+            readme = d / "README.md"
+            entries.append({"name": d.name,
+                            "files": [(f.name, str(f)) for f in libs],
+                            "readme": str(readme) if readme.is_file() else None})
+        elif d.suffix == ".py" and not d.name.lower().startswith("beispiel"):
+            entries.append({"name": d.stem, "files": [(d.name, str(d))], "readme": None})
+    return entries
+
+
 class LocalLibInstallWorker(QThread):
     """Installiert Bibliotheken aus einem lokalen Ordner auf den Controller.
 
@@ -1440,13 +1420,14 @@ class LocalLibInstallWorker(QThread):
     log  = pyqtSignal(str)
     done = pyqtSignal(bool, str)
 
-    def __init__(self, folder: str, port: str):
+    def __init__(self, folder: str, port: str, files=None):
         super().__init__()
         self.folder = folder
         self.port = port
+        self.files = files   # optional: fertige Liste (dateiname, pfad)
 
     def run(self):
-        files = collect_local_lib_files(self.folder)
+        files = self.files if self.files is not None else collect_local_lib_files(self.folder)
         if not files:
             self.done.emit(
                 False,
@@ -1469,96 +1450,26 @@ class LocalLibInstallWorker(QThread):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Bibliotheks-Worker
+# Bibliotheks-Liste fuer den Manager laden (ZIP von GitHub, sonst mitgeliefert)
 # ──────────────────────────────────────────────────────────────────────────────
-class LibInstallWorker(QThread):
-    log = pyqtSignal(str)
-    done = pyqtSignal(bool, str)
-
-    def __init__(self, files: list[dict], port: str):
-        super().__init__()
-        self.files = files   # [{"name": ..., "download_url": ...}]
-        self.port = port
+class _LibListWorker(QThread):
+    result = pyqtSignal(object, str, str)   # entries, tmp_dir, quelle
+    error = pyqtSignal(str)
 
     def run(self):
-        # Sicherstellen, dass der Ordner /lib auf dem Controller existiert.
-        self.log.emit("Stelle Ordner 'lib' auf dem Controller sicher ...\n")
-        self.log.emit(_ensure_remote_lib_dir(self.port) + "\n")
-
-        for finfo in self.files:
-            if finfo.get("type") == "dir":
-                # Unterordner: .py-Dateien (keine Beispiele) holen und installieren
-                dir_name = finfo["name"]
-                self.log.emit(f"📁 Lade Bibliothek '{dir_name}' ...\n")
-                try:
-                    resp = requests.get(finfo["url"], timeout=10)
-                    resp.raise_for_status()
-                    dir_contents = resp.json()
-                    # Bibliotheks-Dateien: .py ohne 'beispiel'
-                    lib_files = [
-                        f for f in dir_contents
-                        if f.get("type") == "file"
-                        and f["name"].endswith(".py")
-                        and not f["name"].lower().startswith("beispiel")
-                    ]
-                    if not lib_files:
-                        lib_files = [f for f in dir_contents
-                                     if f.get("type") == "file" and f["name"].endswith(".py")]
-                except Exception as e:
-                    self.log.emit(f"✗ Fehler beim Laden von '{dir_name}': {e}\n")
-                    self.done.emit(False, with_network_hint(e))
-                    return
-            else:
-                lib_files = [finfo]
-
-            for file_info in lib_files:
-                name = file_info["name"]
-                url = file_info["download_url"]
-                self.log.emit(f"Lade {name} herunter und übertrage nach lib/ ({self.port}) ...\n")
-                ok, err = _install_remote_lib(self.port, name, url)
-                if ok:
-                    self.log.emit(f"✓ lib/{name} erfolgreich übertragen.\n")
-                else:
-                    self.log.emit(f"✗ Fehler bei {name}: {err}\n")
-                    self.done.emit(False, f"Fehler bei {name}")
-                    return
-        self.done.emit(True, "Alle Bibliotheken übertragen.")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Hilfworker für HTTP-Requests (thread-sicher via pyqtSignal)
-# ──────────────────────────────────────────────────────────────────────────────
-class _HttpWorker(QThread):
-    result = pyqtSignal(object)   # beliebige Python-Objekte
-    error  = pyqtSignal(str)
-
-    def __init__(self, url: str, parent=None):
-        super().__init__(parent)
-        self._url = url
-
-    def run(self):
+        import tempfile
+        tmp = tempfile.mkdtemp(prefix="nit_lib_")
         try:
-            resp = requests.get(self._url, timeout=12)
-            resp.raise_for_status()
-            self.result.emit(resp.json())
+            root = download_lib_repo(tmp)
+            self.result.emit(list_lib_entries(root), tmp, "GitHub")
+            return
         except Exception as e:
             self.error.emit(with_network_hint(e))
+        bundled = bundled_lib_dir()
+        if bundled.is_dir():
+            self.result.emit(list_lib_entries(bundled), "", "mitgeliefert")
 
 
-class _ReadmeWorker(QThread):
-    text = pyqtSignal(str)
-
-    def __init__(self, url: str, parent=None):
-        super().__init__(parent)
-        self._url = url
-
-    def run(self):
-        try:
-            resp = requests.get(self._url, timeout=12)
-            resp.raise_for_status()
-            self.text.emit(resp.text[:4000])
-        except Exception as e:
-            self.text.emit(f"(Vorschau nicht verfügbar: {e})")
 class LibraryManagerDialog(QDialog):
     def __init__(self, port: str = "", parent=None):
         super().__init__(parent)
@@ -1567,10 +1478,9 @@ class LibraryManagerDialog(QDialog):
         self.setStyleSheet(_dialog_style())
         self._port = port
         self._files: list[dict] = []
-        self._worker = None   # LibInstallWorker | LocalLibInstallWorker
-        self._http_worker: _HttpWorker | None = None
-        self._preview_worker: _HttpWorker | None = None
-        self._readme_worker: _ReadmeWorker | None = None
+        self._worker = None   # LocalLibInstallWorker
+        self._list_worker: _LibListWorker | None = None
+        self._tmp_dir = ""    # entpacktes GitHub-ZIP (wird beim Schliessen geloescht)
         self._setup_ui()
         self._fetch_libs()
 
@@ -1582,17 +1492,19 @@ class LibraryManagerDialog(QDialog):
                 "Es läuft noch eine Installation – bitte warten, bis sie fertig ist.",
             )
             return
-        for attr in ("_http_worker", "_preview_worker", "_readme_worker"):
-            w = getattr(self, attr, None)
-            if w is not None and w.isRunning():
-                w.wait(3000)
+        if self._list_worker is not None and self._list_worker.isRunning():
+            self._list_worker.wait(5000)
+        if self._tmp_dir:
+            import shutil
+            shutil.rmtree(self._tmp_dir, ignore_errors=True)
+            self._tmp_dir = ""
         super().done(result)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
-        lbl = QLabel("Bibliotheken aus <b>NIT_Bibliotheken</b> (GitHub)")
+        lbl = QLabel("Bibliotheken aus <b>NIT_Bibliotheken</b> (GitHub, sonst mitgeliefert)")
         lbl.setStyleSheet(f"color:{THEME['accent']}; font-size:13px;")
         layout.addWidget(lbl)
 
@@ -1682,66 +1594,46 @@ class LibraryManagerDialog(QDialog):
                 self._port_combo.addItem(p)
 
     def _fetch_libs(self):
-        self._log.append("Lade Dateiliste von GitHub ...")
-        self._http_worker = _HttpWorker(LIB_REPO_API, self)
-        self._http_worker.result.connect(self._populate_list)
-        self._http_worker.error.connect(self._on_fetch_error)
-        self._http_worker.start()
+        self._log.append("Lade Bibliotheken von GitHub (ein ZIP-Download) ...")
+        self._list_worker = _LibListWorker(self)
+        self._list_worker.result.connect(self._populate_list)
+        self._list_worker.error.connect(self._on_fetch_error)
+        self._list_worker.start()
 
     def _on_fetch_error(self, msg: str):
-        self._log.append(f"Fehler: {msg}")
-        self._log.append(
-            "→ Ohne Internet geht es trotzdem: unten „📁 Aus Ordner "
-            "installieren …“ (entpacktes NIT_Bibliotheken-ZIP auswählen)."
-        )
+        self._log.append(f"GitHub nicht erreichbar: {msg}")
+        self._log.append("→ Es werden die mit Koalino gelieferten Bibliotheken angezeigt. "
+                         "Oder unten „📁 Aus Ordner installieren …“ nutzen.")
 
-    def _populate_list(self, data: list):
-        self._files = [
-            f for f in data
-            if f.get("type") == "dir" and not f["name"].startswith(".")
-        ]
+    def _populate_list(self, entries: list, tmp_dir: str, quelle: str):
+        self._tmp_dir = tmp_dir
+        self._files = entries
         self._list.clear()
-        for f in self._files:
-            item = QListWidgetItem(f["name"])
-            item.setData(Qt.ItemDataRole.UserRole, f)
+        for e in self._files:
+            item = QListWidgetItem(e["name"])
+            item.setData(Qt.ItemDataRole.UserRole, e)
             self._list.addItem(item)
         if self._files:
             self._btn_install.setEnabled(True)
-            self._log.append(f"{len(self._files)} Bibliotheken gefunden.")
+            self._log.append(f"{len(self._files)} Bibliotheken gefunden ({quelle}).")
         else:
             self._log.append("Keine Bibliotheken gefunden.")
 
     def _on_select(self, current, _):
         if not current:
             return
-        finfo = current.data(Qt.ItemDataRole.UserRole)
-        if not finfo or not finfo.get("url"):
+        e = current.data(Qt.ItemDataRole.UserRole)
+        if not e:
             return
-        # Verzeichnisinhalt laden und README / Dateiliste anzeigen
-        self._preview_worker = _HttpWorker(finfo["url"], self)
-        self._preview_worker.result.connect(self._show_preview)
-        self._preview_worker.error.connect(
-            lambda e: self._preview.setPlainText(f"Vorschau nicht verfügbar: {e}")
-        )
-        self._preview_worker.start()
-
-    def _show_preview(self, dir_contents: list):
-        readme = next(
-            (f for f in dir_contents if f["name"].lower() == "readme.md"),
-            None
-        )
-        if readme and readme.get("download_url"):
-            w = _HttpWorker(readme["download_url"], self)
-            w.result.connect(lambda _: None)   # JSON würde fehlschlagen
-            # README ist kein JSON – separaten Worker für Text bauen
-            self._readme_worker = _ReadmeWorker(readme["download_url"], self)
-            self._readme_worker.text.connect(self._preview.setPlainText)
-            self._readme_worker.start()
-        else:
-            py_files = [f["name"] for f in dir_contents if f["name"].endswith(".py")]
-            self._preview.setPlainText(
-                "Enthaltene Dateien:\n" + "\n".join(f"  • {n}" for n in py_files)
-            )
+        if e.get("readme"):
+            try:
+                self._preview.setPlainText(
+                    Path(e["readme"]).read_text(encoding="utf-8", errors="replace")[:4000])
+                return
+            except OSError:
+                pass
+        self._preview.setPlainText(
+            "Enthaltene Dateien:\n" + "\n".join(f"  • {n}" for n, _p in e["files"]))
 
     def _install_selected(self):
         selected = [item.data(Qt.ItemDataRole.UserRole)
@@ -1756,7 +1648,8 @@ class LibraryManagerDialog(QDialog):
             QMessageBox.warning(self, "Kein Port",
                                 "Bitte einen seriellen Port auswählen.")
             return
-        self._worker = LibInstallWorker(selected, port)
+        files = [f for e in selected for f in e["files"]]
+        self._worker = LocalLibInstallWorker("", port, files=files)
         self._start_install_worker(self._worker)
 
     def _install_from_folder(self):
