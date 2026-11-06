@@ -1224,6 +1224,16 @@ class IpadDeployWorker(QThread):
             return prefix + self.board_name
         return (prefix + chip_id) if chip_id else ""
 
+    @staticmethod
+    def _github_error(data) -> str:
+        """Lesbare Meldung aus einer GitHub-API-Fehlerantwort (z. B. Rate-Limit)."""
+        msg = data.get("message", "") if isinstance(data, dict) else str(data)
+        if "rate limit" in msg.lower():
+            return ("GitHub-Anfragelimit erreicht (zu viele Abrufe von dieser "
+                    "Internetadresse). Bitte in etwa einer Stunde erneut versuchen "
+                    "oder das Häkchen für die Bibliotheken weglassen.")
+        return msg or "unbekannte Antwort von GitHub"
+
     def _install_libraries(self):
         """Laedt alle nitbw_-Bibliotheken aus dem NIT-Repo und legt sie in :lib ab.
 
@@ -1239,6 +1249,9 @@ class IpadDeployWorker(QThread):
             entries = resp.json()
         except Exception as e:
             return False, with_network_hint(e, "Bibliotheks-Liste konnte nicht geladen werden: ")
+        if not isinstance(entries, list):
+            return False, ("Bibliotheks-Liste konnte nicht geladen werden: "
+                           + self._github_error(entries))
 
         self.log.emit(_ensure_remote_lib_dir(self.port) + "\n")
 
@@ -1249,9 +1262,15 @@ class IpadDeployWorker(QThread):
                 files.append((e["name"], e["download_url"]))
             elif e.get("type") == "dir":
                 try:
-                    sub = requests.get(e["url"], timeout=15).json()
-                except Exception:
-                    continue
+                    sub_resp = requests.get(e["url"], timeout=15)
+                    sub_resp.raise_for_status()
+                    sub = sub_resp.json()
+                except Exception as ex:
+                    return False, with_network_hint(
+                        ex, "Unterordner '%s' konnte nicht geladen werden: " % e.get("name", "?"))
+                if not isinstance(sub, list):
+                    return False, ("Unterordner '%s' konnte nicht geladen werden: %s"
+                                   % (e.get("name", "?"), self._github_error(sub)))
                 for f in sub:
                     if (f.get("type") == "file" and f["name"].endswith(".py")
                             and not f["name"].lower().startswith("beispiel")):
