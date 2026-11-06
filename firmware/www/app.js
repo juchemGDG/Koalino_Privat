@@ -246,7 +246,7 @@ async function runProgram() {
       body: code
     }, 10000);
     if (res.ok) {
-      setStatus('Läuft auf dem ESP32 …');
+      setStatus('Läuft auf dem uC …');
       logLine('▶ Programm gestartet\n', 'sys');
       startPolling();
     } else {
