@@ -8,6 +8,9 @@ Die Web-Oberfläche zeigt links den **Editor** (mit Tab-Taste, automatischer
 Einrückung nach `:` und einer Zusatztastenleiste für `( ) [ ] : " _ …` – die
 iPad-Tastatur versteckt diese Zeichen), rechts die **Konsole** mit Ausgaben und
 Fehlermeldungen des Programms (auf dem iPad hochkant untereinander).
+**Syntax-Highlighting** für Python (Schlüsselwörter, Strings, Kommentare, Zahlen,
+Funktionen) – das Farbschema folgt automatisch der iPad-Einstellung: hell =
+**Eclipse**, dunkel = **One Dark** (gilt auch für Konsole und Dialoge).
 Ausführen: Knopf „▶ Ausführen“ oder `Strg/Cmd + Enter`.
 
 ## Dateistruktur
@@ -109,7 +112,7 @@ echo -n "01" | mpremote connect /dev/ttyACM0 fs cp - :ap_name.txt   # oder Datei
    funktioniert nur, wenn die Module in `/lib` liegen (Deploy-Häkchen oder
    „Bibliotheken installieren …“). Reines MicroPython (`machine`, `time`, …)
    läuft ohne Zusatz.
-5. **Kein Syntax-Highlighting / keine Autovervollständigung** im Editor
+5. **Keine Autovervollständigung** im Editor
    (bewusst schlank gehalten, damit die Seite schnell vom Board lädt).
 
 ## Troubleshooting: „Verbindung fehlgeschlagen" auf dem iPad

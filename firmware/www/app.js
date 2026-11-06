@@ -1,9 +1,75 @@
-// app.js – iPad-MicroPython: Texteditor + Konsole (ohne Blockly)
+// app.js – iPad-MicroPython: Texteditor mit Syntax-Highlighting + Konsole
 
 const statusEl  = document.getElementById('status');
 const codeEl    = document.getElementById('code');
 const consoleEl = document.getElementById('console');
 const boardEl   = document.getElementById('board');
+
+// ── Syntax-Highlighting (Python) ───────────────────────────────────────────
+// Eigener kleiner Tokenizer; Farben kommen aus CSS-Variablen (hell = Eclipse,
+// dunkel = One Dark, automatisch nach iPad-Einstellung).
+const hlEl = document.getElementById('hl');
+const KW = new Set(['and','as','assert','async','await','break','class','continue','def','del',
+  'elif','else','except','finally','for','from','global','if','import','in','is','lambda',
+  'nonlocal','not','or','pass','raise','return','try','while','with','yield']);
+const CONSTS = new Set(['True','False','None','self','cls']);
+const BUILTINS = new Set(['print','len','range','int','float','str','bool','list','dict','tuple',
+  'set','abs','min','max','sum','round','sorted','enumerate','zip','map','filter','input','open',
+  'isinstance','type','bytes','bytearray','hex','bin','ord','chr','pow','divmod','any','all',
+  'Exception','ValueError','OSError','KeyboardInterrupt','Pin','ADC','PWM','I2C','SPI','UART','Timer','NeoPixel']);
+const TOKEN_RE = new RegExp([
+  /(#[^\n]*)/.source,                                                         // 1 Kommentar
+  /((?:[rRbBfFuU]{0,2})(?:"""[\s\S]*?(?:"""|$)|'''[\s\S]*?(?:'''|$)))/.source, // 2 Strings dreifach
+  /((?:[rRbBfFuU]{0,2})(?:"(?:\\.|[^"\\\n])*(?:"|$)|'(?:\\.|[^'\\\n])*(?:'|$)))/.source, // 3 Strings
+  /(@[A-Za-z_][\w.]*)/.source,                                                // 4 Dekorator
+  /(0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/.source, // 5 Zahl
+  /([A-Za-z_]\w*)/.source,                                                    // 6 Name
+].join('|'), 'g');
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function highlight(src) {
+  let out = '', last = 0, prevWord = '', m;
+  TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(src)) !== null) {
+    out += esc(src.slice(last, m.index));
+    const tok = m[0];
+    let cls = '';
+    if (m[1]) cls = 't-com';
+    else if (m[2] || m[3]) cls = 't-str';
+    else if (m[4]) cls = 't-dec';
+    else if (m[5]) cls = 't-num';
+    else if (m[6]) {
+      if (KW.has(tok)) cls = 't-kw';
+      else if (CONSTS.has(tok)) cls = 't-const';
+      else if (prevWord === 'def' || prevWord === 'class') cls = 't-def';
+      else if (BUILTINS.has(tok)) cls = 't-bi';
+      else if (/^ *\(/.test(src.slice(m.index + tok.length, m.index + tok.length + 8))) cls = 't-fn';
+    }
+    prevWord = m[6] ? tok : '';
+    out += cls ? '<span class="' + cls + '">' + esc(tok) + '</span>' : esc(tok);
+    last = m.index + tok.length;
+  }
+  return out + esc(src.slice(last));
+}
+
+let hlQueued = false;
+function renderHighlight() {
+  if (hlQueued) return;
+  hlQueued = true;
+  requestAnimationFrame(() => {
+    hlQueued = false;
+    // Abschließender Zeilenumbruch, damit eine leere letzte Zeile gleich hoch ist
+    hlEl.innerHTML = highlight(codeEl.value) + '\n';
+    syncScroll();
+  });
+}
+function syncScroll() {
+  hlEl.scrollTop = codeEl.scrollTop;
+  hlEl.scrollLeft = codeEl.scrollLeft;
+}
+codeEl.addEventListener('input', renderHighlight);
+codeEl.addEventListener('scroll', syncScroll);
 
 // ── Beispielprogramme ────────────────────────────────────────────────────
 const EXAMPLES = {
@@ -60,7 +126,7 @@ exSel.addEventListener('change', () => {
   if (!name) return;
   if (codeEl.value.trim() && !confirm('Das aktuelle Programm durch das Beispiel „' + name + '“ ersetzen?')) return;
   codeEl.value = EXAMPLES[name];
-  autosave();
+  autosave(); renderHighlight();
   setStatus('Beispiel geladen: ' + name);
 });
 
@@ -146,6 +212,7 @@ try {
   const auto = localStorage.getItem(AUTOSAVE_KEY);
   codeEl.value = auto !== null ? auto : EXAMPLES['LED blinken'];
 } catch (e) { codeEl.value = EXAMPLES['LED blinken']; }
+renderHighlight();
 
 function logLine(text, cls) {
   const span = document.createElement('span');
@@ -296,7 +363,7 @@ function renderProjects() {
     load.className = 'load'; load.textContent = 'Laden';
     load.addEventListener('click', () => {
       codeEl.value = projects[name];
-      autosave();
+      autosave(); renderHighlight();
       lastName = name; modal.hidden = true; setStatus('Geladen: ' + name);
     });
     const del = document.createElement('button');
@@ -329,7 +396,7 @@ fileInput.addEventListener('change', () => {
   const reader = new FileReader();
   reader.onload = () => {
     codeEl.value = String(reader.result);
-    autosave();
+    autosave(); renderHighlight();
     modal.hidden = true;
     setStatus('Datei geladen: ' + file.name);
   };

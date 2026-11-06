@@ -5,7 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>NIT ESP32 MicroPython</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden;
+  /* Farbschema folgt der iPad-Einstellung (Hell/Dunkel):
+     hell = Eclipse, dunkel = One Dark */
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #000000; --caret: #000000; --sel: rgba(173,214,255,.6);
+    --pane-head-bg: #eceff1; --pane-head-fg: #37474f; --border: #cfd8dc;
+    --key-bg: #ffffff; --key-fg: #263238; --key-border: #b0bec5;
+    --btn2-bg: #b0bec5; --btn2-fg: #263238;
+    --con-bg: #ffffff; --con-fg: #1e1e1e; --con-err: #c62828; --con-sys: #00796b;
+    --modal-bg: #ffffff; --modal-fg: #263238; --modal-line: #eeeeee;
+    --t-kw: #7f0055; --t-str: #2a00ff; --t-com: #3f7f5f; --t-num: #1a1a1a;
+    --t-bi: #7f0055; --t-fn: #000000; --t-def: #000000; --t-const: #7f0055; --t-dec: #646464;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #282c34; --fg: #abb2bf; --caret: #528bff; --sel: rgba(62,68,81,.9);
+      --pane-head-bg: #21252b; --pane-head-fg: #9da5b4; --border: #181a1f;
+      --key-bg: #2c313a; --key-fg: #abb2bf; --key-border: #3e4451;
+      --btn2-bg: #3e4451; --btn2-fg: #d7dae0;
+      --con-bg: #1e2127; --con-fg: #abb2bf; --con-err: #e06c75; --con-sys: #56b6c2;
+      --modal-bg: #282c34; --modal-fg: #d7dae0; --modal-line: #3e4451;
+      --t-kw: #c678dd; --t-str: #98c379; --t-com: #5c6370; --t-num: #d19a66;
+      --t-bi: #e5c07b; --t-fn: #61afef; --t-def: #61afef; --t-const: #d19a66; --t-dec: #e5c07b;
+    }
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
                font-family: -apple-system, Segoe UI, Arial, sans-serif; }
   #topbar {
     height: 52px; display: flex; align-items: center; gap: 10px;
@@ -29,56 +54,70 @@
   #main { position: absolute; top: 52px; bottom: 0; left: 0; right: 0; display: flex; }
   .pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   #codepane { flex: 1 1 60%; }
-  #consolepane { flex: 1 1 40%; border-left: 2px solid #cfd8dc; }
+  #consolepane { flex: 1 1 40%; border-left: 2px solid var(--border); }
   .pane-head {
     display: flex; align-items: center; gap: 8px; padding: 4px 8px;
-    background: #eceff1; font-size: 13px; font-weight: 600; color: #37474f;
+    background: var(--pane-head-bg); font-size: 13px; font-weight: 600; color: var(--pane-head-fg);
   }
   .pane-head span { flex: 1; }
-  .pane-head button { padding: 4px 10px; font-size: 12px; background: #b0bec5; color: #263238; }
-  #code {
-    flex: 1; width: 100%; box-sizing: border-box; border: none; resize: none;
-    padding: 8px; font-family: 'SF Mono', Consolas, monospace; font-size: 15px;
-    line-height: 1.5; tab-size: 4; outline: none; white-space: pre; overflow: auto;
+  .pane-head button { padding: 4px 10px; font-size: 12px; background: var(--btn2-bg); color: var(--btn2-fg); }
+  /* Editor mit Syntax-Highlighting: durchsichtiges Textfeld liegt exakt über
+     einer eingefärbten Kopie des Codes (#hl) */
+  #editor { position: relative; flex: 1; min-height: 0; background: var(--bg); }
+  #hl, #code {
+    position: absolute; inset: 0; margin: 0; box-sizing: border-box; border: 0;
+    padding: 8px; font: 16px/1.5 'SF Mono', Menlo, Consolas, monospace;
+    letter-spacing: 0; tab-size: 4; white-space: pre; word-wrap: normal;
   }
+  #hl { overflow: hidden; pointer-events: none; color: var(--fg); }
+  #code {
+    width: 100%; height: 100%; resize: none; outline: none; overflow: auto;
+    background: transparent; color: transparent; -webkit-text-fill-color: transparent;
+    caret-color: var(--caret);
+  }
+  #code::selection { background: var(--sel); }
+  .t-kw { color: var(--t-kw); font-weight: 600; } .t-str { color: var(--t-str); }
+  .t-com { color: var(--t-com); font-style: italic; } .t-num { color: var(--t-num); }
+  .t-bi { color: var(--t-bi); } .t-fn { color: var(--t-fn); } .t-def { color: var(--t-def); font-weight: 600; }
+  .t-const { color: var(--t-const); } .t-dec { color: var(--t-dec); }
   /* Zusatztasten: die iPad-Tastatur hat Tab, Klammern und _ nur versteckt */
-  #keys { display: flex; gap: 4px; padding: 4px 6px; background: #eceff1;
-          overflow-x: auto; border-top: 1px solid #cfd8dc; }
+  #keys { display: flex; gap: 4px; padding: 4px 6px; background: var(--pane-head-bg);
+          overflow-x: auto; border-top: 1px solid var(--border); }
   #keys button { padding: 8px 12px; font-size: 16px; min-width: 40px; flex: 0 0 auto;
-                 background: #fff; color: #263238; border: 1px solid #b0bec5;
+                 background: var(--key-bg); color: var(--key-fg); border: 1px solid var(--key-border);
                  font-family: 'SF Mono', Consolas, monospace; }
   #console {
-    flex: 1; margin: 0; padding: 8px; overflow: auto; background: #1e1e1e;
-    color: #d4d4d4; font-family: 'SF Mono', Consolas, monospace; font-size: 13px;
+    flex: 1; margin: 0; padding: 8px; overflow: auto; background: var(--con-bg);
+    color: var(--con-fg); font-family: 'SF Mono', Consolas, monospace; font-size: 13px;
     line-height: 1.45; white-space: pre-wrap; word-break: break-word;
   }
-  #console .err { color: #ff6b68; }
-  #console .sys { color: #7fd1b9; }
+  #console .err { color: var(--con-err); }
+  #console .sys { color: var(--con-sys); }
 
   /* Projekt-Dialog (Speichern/Laden im Browser) */
   #projModal { position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     display: flex; align-items: center; justify-content: center; z-index: 100; }
   #projModal[hidden] { display: none; }
-  .modal-box { background: #fff; border-radius: 10px; padding: 18px 20px;
+  .modal-box { background: var(--modal-bg); color: var(--modal-fg); border-radius: 10px; padding: 18px 20px;
     width: min(92%, 440px); max-height: 80%; overflow: auto;
     box-shadow: 0 8px 30px rgba(0,0,0,.3); }
-  .modal-box h2 { margin: 0 0 4px; font-size: 17px; color: #263238; }
+  .modal-box h2 { margin: 0 0 4px; font-size: 17px; color: inherit; }
   .modal-hint { margin: 0 0 12px; font-size: 12px; color: #78909c; }
   #projList { list-style: none; margin: 0 0 14px; padding: 0; }
   #projList li { display: flex; align-items: center; gap: 8px; padding: 7px 0;
-    border-bottom: 1px solid #eee; }
-  #projList .pname { flex: 1; font-weight: 600; color: #37474f; word-break: break-word; }
+    border-bottom: 1px solid var(--modal-line); }
+  #projList .pname { flex: 1; font-weight: 600; color: inherit; word-break: break-word; }
   #projList button { padding: 5px 10px; font-size: 12px; }
   #projList .load { background: #43a047; color: #fff; }
   #projList .del { background: #ef9a9a; color: #7f1d1d; }
   #projList .empty { color: #90a4ae; font-style: italic; }
   .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .modal-actions button { background: #b0bec5; color: #263238; }
+  .modal-actions button { background: var(--btn2-bg); color: var(--btn2-fg); }
 
   /* Hochkant (iPad Portrait): untereinander statt nebeneinander */
   @media (max-width: 820px) {
     #main { flex-direction: column; }
-    #consolepane { border-left: none; border-top: 2px solid #cfd8dc; }
+    #consolepane { border-left: none; border-top: 2px solid var(--border); }
     #status { display: none; }
   }
 </style>
@@ -101,8 +140,11 @@
 <div id="main">
   <div id="codepane" class="pane">
     <div class="pane-head"><span>Programm (MicroPython)</span></div>
-    <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off"
-              autocorrect="off" aria-label="MicroPython-Code"></textarea>
+    <div id="editor">
+      <pre id="hl" aria-hidden="true"></pre>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off"
+                autocorrect="off" aria-label="MicroPython-Code" wrap="off"></textarea>
+    </div>
     <div id="keys"></div>
   </div>
   <div id="consolepane" class="pane">
