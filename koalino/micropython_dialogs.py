@@ -1203,21 +1203,26 @@ class IpadDeployWorker(QThread):
     def _resolve_ssid(self, mp):
         """Ermittelt die SSID, die boot.py verwenden wird (Name bzw. Chip-ID)."""
         import subprocess
-        if self.board_name:
-            return "NIT-ESP32-" + self.board_name
-        # Automatisch: Chip-ID vom Board holen (gleiche Logik wie boot.py)
+        # Praefix und Chip-ID vom Board holen (gleiche Logik wie boot.py):
+        # Pico (Port rp2) -> NIT-PICO-, sonst NIT-ESP32-
+        prefix, chip_id = "NIT-ESP32-", ""
         try:
             proc = subprocess.run(
                 [*mp, "connect", self.port, "exec",
-                 "import machine,ubinascii;"
+                 "import sys,machine,ubinascii;"
+                 "print('PF='+('NIT-PICO-' if sys.platform=='rp2' else 'NIT-ESP32-'));"
                  "print('ID='+ubinascii.hexlify(machine.unique_id()).decode().upper()[-4:])"],
                 capture_output=True, text=True, timeout=30)
             for line in (proc.stdout or "").splitlines():
-                if line.startswith("ID="):
-                    return "NIT-ESP32-" + line[3:].strip()
+                if line.startswith("PF="):
+                    prefix = line[3:].strip()
+                elif line.startswith("ID="):
+                    chip_id = line[3:].strip()
         except Exception:
             pass
-        return ""
+        if self.board_name:
+            return prefix + self.board_name
+        return (prefix + chip_id) if chip_id else ""
 
     def _install_libraries(self):
         """Laedt alle nitbw_-Bibliotheken aus dem NIT-Repo und legt sie in :lib ab.

@@ -195,10 +195,13 @@ async def handle_client(reader, writer):
             await send_text(writer, payload, mime="application/json")
 
         elif method == "GET" and path == "/api/info":
-            try:
-                ssid = network.WLAN(network.AP_IF).config("essid")
-            except Exception:
-                ssid = ""
+            ssid = ""
+            for key in ("essid", "ssid"):   # Pico (CYW43) kennt je nach Version nur eine
+                try:
+                    ssid = network.WLAN(network.AP_IF).config(key)
+                    break
+                except Exception:
+                    pass
             await send_text(writer, json.dumps({"ssid": ssid}), mime="application/json")
 
         elif method == "GET":

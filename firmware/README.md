@@ -39,6 +39,23 @@ Analogwert, …). Die Arbeit wird **automatisch im Browser gesichert**
 > Hinweis: localStorage hängt am jeweiligen Gerät/Browser. Für ein echtes,
 > geräteübergreifendes Backup die `.py`-Datei exportieren.
 
+## Raspberry Pi Pico W / Pico 2 W
+
+`boot.py` erkennt den Pico automatisch (`sys.platform == "rp2"`) und nutzt die
+Optionen des CYW43-WLAN-Chips: `security` statt `authmode`, `ssid`/`essid` je
+nach MicroPython-Version, jede Option einzeln (ein unbekannter Schlüssel
+verwirft nicht mehr SSID und Passwort). Früher lief der Pico deshalb mit dem
+Standardnamen `MicroPython-xxxxxx` und dem Standardpasswort statt `mint2026`.
+Die SSID heißt beim Pico **`NIT-PICO-<Name>`** (sonst `NIT-ESP32-<Name>`).
+
+- Der Deploy (Koalino-Menü oder mpremote) ist identisch; Board vorher als
+  „Pico 2 W“ mit MicroPython-Firmware für **Pico W / Pico 2 W** (nicht die
+  Variante ohne „W“) flashen.
+- Nach dem Update das Board **einmal neu bespielen**; ein vorher am iPad
+  gespeichertes WLAN „MicroPython-…“ bitte vergessen.
+- Kein Kanal-/Stromspar-Unterschied nötig: Kanal 1/6/11 und `PM_NONE` werden
+  auch hier gesetzt, soweit die Firmware es unterstützt.
+
 ## Deployment auf den ESP32
 
 > **Wichtig:** Das braucht USB-Zugriff auf das Board und läuft deshalb **nur

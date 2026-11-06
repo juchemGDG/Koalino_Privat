@@ -3143,7 +3143,7 @@ class MainWindow(QMainWindow):
         # Board-Name/Nummer für die WLAN-SSID (eindeutig im Klassensatz).
         board_name, ok = QInputDialog.getText(
             self, "Board-Name",
-            "Nummer/Name für dieses Board (wird zur WLAN-SSID „NIT-ESP32-<Name>“).\n"
+            "Nummer/Name für dieses Board (wird zur WLAN-SSID „NIT-ESP32-<Name>“ bzw. „NIT-PICO-<Name>“).\n"
             "Leer lassen = automatisch eindeutige SSID aus der Chip-Kennung:"
         )
         if not ok:
@@ -3153,7 +3153,7 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setWindowTitle("iPad-Programmierung aufspielen")
         box.setIcon(QMessageBox.Icon.Question)
-        ssid_hint = ("„NIT-ESP32-%s“" % board_name) if board_name else "automatisch (Chip-Kennung)"
+        ssid_hint = ("„NIT-ESP32-%s“ (Pico: „NIT-PICO-%s“)" % (board_name, board_name)) if board_name else "automatisch (Chip-Kennung)"
         box.setText(
             "Auf dem angeschlossenen Controller werden boot.py, main.py und der "
             "Ordner www/ mit dem MicroPython-Editor angelegt bzw. überschrieben."
