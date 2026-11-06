@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>NIT ESP32 MicroPython</title>
+<title>NIT MicroPython</title>
 <style>
   /* Farbschema folgt der iPad-Einstellung (Hell/Dunkel):
      hell = Eclipse, dunkel = One Dark */
@@ -82,7 +82,9 @@
   .t-const { color: var(--t-const); } .t-dec { color: var(--t-dec); }
   /* Zusatztasten: die iPad-Tastatur hat Tab, Klammern und _ nur versteckt */
   #keys { flex: 0 0 auto; position: relative; z-index: 2; display: flex; gap: 4px; padding: 4px 6px; background: var(--pane-head-bg);
-          overflow-x: auto; border-top: 1px solid var(--border); }
+          overflow-x: auto; border-top: 1px solid var(--border);
+          scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  #keys::-webkit-scrollbar { display: none; }
   #keys button { padding: 8px 12px; font-size: 16px; min-width: 40px; flex: 0 0 auto;
                  background: var(--key-bg); color: var(--key-fg); border: 1px solid var(--key-border);
                  font-family: 'SF Mono', Consolas, monospace; }
@@ -125,7 +127,7 @@
 <body>
 
 <div id="topbar">
-  <h1>ESP32 · MicroPython</h1>
+  <h1>MicroPython · iPad</h1>
   <span id="board"></span>
   <span id="status">Bereit</span>
   <select id="examples" title="Beispielprogramm laden">
