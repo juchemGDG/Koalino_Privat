@@ -118,10 +118,15 @@ echo -n "01" | mpremote connect /dev/ttyACM0 fs cp - :ap_name.txt   # oder Datei
 
 1. **Ausführung im Hintergrund-Thread**: `main.py` startet den Nutzercode per
    `_thread`, fängt `print`-Ausgaben und Fehler ab (Ringpuffer) und liefert sie
-   über `/api/output`; der Webserver bleibt erreichbar. „Stopp" beendet das
-   Programm per Board-Reset. Einschränkung des einzelnen C3-Kerns: Eine reine
-   Endlosschleife **ohne** `time.sleep(_ms)` kann den Webserver ausbremsen –
-   in Schülerprogrammen ist praktisch immer ein `sleep` enthalten.
+   über `/api/output`; der Webserver bleibt erreichbar. **Stopp** beendet das
+   Programm *ohne Neustart* (das WLAN bleibt): `main.py` ersetzt das Modul `time`
+   durch eine Variante, deren `sleep*` abbrechbar ist, und prüft das Stopp-Flag
+   in jedem `print()`. Ein Programm **ganz ohne `print` und `sleep`** (reine
+   Busy-Loop) reagiert nicht – dann startet das Board nach 3 s als Notausgang
+   neu, das iPad verliert kurz das WLAN und die Seite wartet automatisch, bis
+   das Board wieder da ist. Zeitgeber (`Timer`) und Interrupts des Programms
+   laufen nach einem Stopp weiter, bis das Board neu startet. Einschränkung des
+   einzelnen Kerns: Eine Endlosschleife ohne `sleep` kann den Webserver bremsen.
 2. **Ein Client pro Board**: AP-Client-Limit ist bei 1:1-Zuordnung
    (ein ESP32 pro Schüler:in) unkritisch.
 3. **Kein Captive Portal** in V1 – man muss die IP manuell aufrufen.

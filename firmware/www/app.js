@@ -140,6 +140,14 @@ exSel.addEventListener('change', () => {
   } catch (e) { /* im Browser-Vorschaumodus ohne Board ignorieren */ }
 })();
 
+// fetch mit Zeitlimit: ohne WLAN haengt ein normales fetch ewig (Seite wirkt eingefroren)
+function fetchT(url, opts, ms) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms || 6000);
+  return fetch(url, Object.assign({}, opts, { signal: ctl.signal }))
+    .finally(() => clearTimeout(timer));
+}
+
 function setStatus(t) { statusEl.textContent = t; }
 
 // ── Editor: Tab, automatische Einrückung, Zusatztasten ─────────────────────
@@ -232,11 +240,11 @@ async function runProgram() {
   consoleEl.textContent = '';
   outputCursor = 0;
   try {
-    const res = await fetch('/api/run', {
+    const res = await fetchT('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: code
-    });
+    }, 10000);
     if (res.ok) {
       setStatus('Läuft auf dem ESP32 …');
       logLine('▶ Programm gestartet\n', 'sys');
@@ -253,16 +261,46 @@ async function runProgram() {
 }
 
 // ── Stopp ────────────────────────────────────────────────────────────────
+// Das Board beendet das Programm selbst (ohne Neustart, das WLAN bleibt). Nur
+// wenn es nicht reagiert (reine Endlosschleife ohne print/sleep), startet es neu –
+// dann verschwindet kurz das WLAN und das iPad muss sich neu verbinden.
 async function stopProgram() {
-  stopPolling();
   setStatus('Stoppe …');
   try {
-    await fetch('/api/stop', { method: 'POST' });
-    setStatus('Gestoppt – Board startet neu');
-    logLine('■ gestoppt\n', 'sys');
+    const res = await fetchT('/api/stop', { method: 'POST' }, 8000);
+    let info = {};
+    try { info = await res.json(); } catch (e) {}
+    if (info.reset) {
+      stopPolling();
+      setStatus('Board startet neu …');
+      logLine('■ Programm reagierte nicht – Board startet neu. Das WLAN ist kurz weg, ' +
+              'das iPad verbindet sich gleich wieder.\n', 'sys');
+      waitForBoard();
+    } else {
+      await fetchOutput();   // letzte Ausgaben ("■ Programm gestoppt") holen
+      stopPolling();
+      setStatus('Gestoppt');
+    }
   } catch (e) {
-    setStatus('Board nicht erreichbar');
+    // Antwort ging verloren (z. B. Board hat neu gestartet)
+    stopPolling();
+    setStatus('Board startet neu …');
+    logLine('■ keine Antwort vom Board – es startet evtl. neu\n', 'sys');
+    waitForBoard();
   }
+}
+
+// Nach einem Neustart pollt die Seite /api/info, bis das Board wieder da ist.
+async function waitForBoard() {
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 1500));
+    try {
+      const res = await fetchT('/api/info', {}, 2500);
+      if (res.ok) { setStatus('Bereit'); logLine('✓ Board wieder erreichbar\n', 'sys'); return; }
+    } catch (e) { /* noch nicht da */ }
+  }
+  setStatus('Board nicht erreichbar');
+  logLine('✗ Board nicht erreichbar – WLAN prüfen und Seite neu laden\n', 'err');
 }
 
 // ── Konsolen-Ausgabe pollen ─────────────────────────────────────────────
@@ -294,7 +332,7 @@ async function pollOnce(gen) {
 }
 async function fetchOutput() {
   try {
-    const res = await fetch('/api/output?since=' + outputCursor);
+    const res = await fetchT('/api/output?since=' + outputCursor, {}, 5000);
     if (!res.ok) return;
     const data = await res.json();   // { lines: [...], next: N, running: bool }
     if (Array.isArray(data.lines)) {

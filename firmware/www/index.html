@@ -63,7 +63,7 @@
   .pane-head button { padding: 4px 10px; font-size: 12px; background: var(--btn2-bg); color: var(--btn2-fg); }
   /* Editor mit Syntax-Highlighting: durchsichtiges Textfeld liegt exakt über
      einer eingefärbten Kopie des Codes (#hl) */
-  #editor { position: relative; flex: 1; min-height: 0; background: var(--bg); }
+  #editor { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; background: var(--bg); }
   #hl, #code {
     position: absolute; inset: 0; margin: 0; box-sizing: border-box; border: 0;
     padding: 8px; font: 16px/1.5 'SF Mono', Menlo, Consolas, monospace;
@@ -81,7 +81,7 @@
   .t-bi { color: var(--t-bi); } .t-fn { color: var(--t-fn); } .t-def { color: var(--t-def); font-weight: 600; }
   .t-const { color: var(--t-const); } .t-dec { color: var(--t-dec); }
   /* Zusatztasten: die iPad-Tastatur hat Tab, Klammern und _ nur versteckt */
-  #keys { display: flex; gap: 4px; padding: 4px 6px; background: var(--pane-head-bg);
+  #keys { flex: 0 0 auto; position: relative; z-index: 2; display: flex; gap: 4px; padding: 4px 6px; background: var(--pane-head-bg);
           overflow-x: auto; border-top: 1px solid var(--border); }
   #keys button { padding: 8px 12px; font-size: 16px; min-width: 40px; flex: 0 0 auto;
                  background: var(--key-bg); color: var(--key-fg); border: 1px solid var(--key-border);

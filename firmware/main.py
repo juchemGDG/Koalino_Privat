@@ -6,7 +6,8 @@
 #     abgefangen und in einem Ringpuffer gesammelt
 #  3) per GET /api/output?since=N neue Ausgabezeilen liefert (die Weboberflaeche
 #     pollt diesen Endpunkt und zeigt sie in der Konsole)
-#  4) per POST /api/stop das laufende Programm durch einen Reset beendet
+#  4) per POST /api/stop das laufende Programm kooperativ beendet (siehe unten);
+#     nur wenn es nicht reagiert, bleibt als Notausgang ein Board-Reset
 #
 # Der Webserver bleibt waehrend der Ausfuehrung erreichbar (eigener Thread).
 # Hinweis: Der ESP32-C3 hat nur einen Kern – ein Nutzerprogramm mit einer
@@ -25,6 +26,7 @@ import network
 
 STATIC_DIR = "/www"
 CODE_FILE = "/user_code.py"
+STOP_WAIT_MS = 3000   # so lange auf ein sauberes Ende warten, dann Reset
 MAX_LINES = 800   # Ringpuffer-Groesse fuer Konsolenausgaben
 MAX_BODY = 64 * 1024   # Obergrenze fuer POST-Bodies (RAM-Schutz des ESP32)
 
@@ -73,7 +75,56 @@ def _snapshot(since):
         return _out_lines[start:], total
 
 
+# ── Kooperatives Beenden ──────────────────────────────────────────────────
+# Ein MicroPython-Thread laesst sich nicht von aussen abbrechen. Statt das
+# Board zu resetten (das WLAN verschwindet, das iPad verliert die Verbindung
+# und der Browser haengt), setzt "Stopp" ein Flag. Das Nutzerprogramm prueft es
+# bei jedem print() und in time.sleep*() und beendet sich dann selbst.
+# Programme ganz ohne print/sleep (reine Busy-Loops) reagieren nicht -> Reset.
+_stop_requested = False
+
+
+class _Stopped(BaseException):
+    """Beendet das Nutzerprogramm (BaseException: ein 'except Exception' faengt es nicht)."""
+
+
+def _check_stop():
+    if _stop_requested:
+        raise _Stopped()
+
+
+class _TimeProxy:
+    """Ersetzt das Modul ``time`` fuer Nutzercode: sleep* ist abbrechbar."""
+
+    def __init__(self):
+        import time as _t
+        self._t = _t
+
+    def sleep_ms(self, ms):
+        end = self._t.ticks_add(self._t.ticks_ms(), int(ms))
+        while True:
+            _check_stop()
+            left = self._t.ticks_diff(end, self._t.ticks_ms())
+            if left <= 0:
+                return
+            self._t.sleep_ms(min(left, 50))
+
+    def sleep(self, secs):
+        self.sleep_ms(int(secs * 1000))
+
+    def sleep_us(self, us):
+        _check_stop()
+        self._t.sleep_us(us)
+
+    def __getattr__(self, name):
+        return getattr(self._t, name)
+
+
+sys.modules["time"] = _TimeProxy()
+
+
 def _user_print(*args, **kwargs):
+    _check_stop()
     sep = kwargs.get("sep", " ")
     end = kwargs.get("end", "\n")
     _append(sep.join(str(a) for a in args) + end)
@@ -81,11 +132,14 @@ def _user_print(*args, **kwargs):
 
 def _run_code(code):
     """Fuehrt den Nutzercode aus (im Hintergrund-Thread)."""
-    global _running
+    global _running, _stop_requested
+    _stop_requested = False
     _running = True
     try:
         g = {"__name__": "__main__", "print": _user_print}
         exec(code, g)
+    except _Stopped:
+        _append("■ Programm gestoppt\n")
     except Exception as e:
         buf = io.StringIO()
         sys.print_exception(e, buf)
@@ -233,8 +287,24 @@ async def handle_client(reader, writer):
                 await send_text(writer, "OK")
 
         elif method == "POST" and path == "/api/stop":
-            await send_text(writer, "OK - Board startet neu")
-            asyncio.create_task(reset_soon())
+            global _stop_requested
+            if not _running:
+                await send_text(writer, json.dumps({"stopped": True, "reset": False}),
+                                mime="application/json")
+            else:
+                _stop_requested = True
+                waited = 0
+                while _running and waited < STOP_WAIT_MS:
+                    await asyncio.sleep_ms(50)
+                    waited += 50
+                if not _running:
+                    await send_text(writer, json.dumps({"stopped": True, "reset": False}),
+                                    mime="application/json")
+                else:
+                    # Programm reagiert nicht (z. B. Busy-Loop): Notausgang Reset
+                    await send_text(writer, json.dumps({"stopped": True, "reset": True}),
+                                    mime="application/json")
+                    asyncio.create_task(reset_soon())
 
         else:
             await send_text(writer, "Not found", status="404 Not Found")
