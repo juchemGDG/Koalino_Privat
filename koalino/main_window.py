@@ -1063,7 +1063,7 @@ class MainWindow(QMainWindow):
             self._m_upy, "Firmware flashen …", self._flash_firmware
         )
         self._act_flash_ipad = self._add_action(
-            self._m_upy, "📲  iPad-Blockly aufs Board spielen …  (BETA)", self._deploy_ipad_firmware
+            self._m_upy, "📲  iPad-Programmierung aufs Board spielen …  (BETA)", self._deploy_ipad_firmware
         )
         self._act_libs = self._add_action(
             self._m_upy, "Bibliotheken installieren …", self._open_library_manager
@@ -3124,7 +3124,7 @@ class MainWindow(QMainWindow):
         return None
 
     def _deploy_ipad_firmware(self):
-        """Spielt die Standalone-Blockly-Oberfläche (firmware/) aufs Board.
+        """Spielt die Standalone-Oberfläche zum Programmieren in MicroPython (firmware/) aufs Board.
 
         Setzt ein bereits geflashtes MicroPython voraus; kopiert boot.py,
         main.py und www/ per mpremote und startet den Controller neu.
@@ -3136,7 +3136,7 @@ class MainWindow(QMainWindow):
         if fw_dir is None:
             QMessageBox.warning(
                 self, "Dateien nicht gefunden",
-                "Die iPad-Blockly-Dateien (Ordner 'firmware') konnten nicht "
+                "Die iPad-Dateien (Ordner 'firmware') konnten nicht "
                 "gefunden werden."
             )
             return
@@ -3151,12 +3151,12 @@ class MainWindow(QMainWindow):
         board_name = board_name.strip()
 
         box = QMessageBox(self)
-        box.setWindowTitle("iPad-Blockly aufspielen")
+        box.setWindowTitle("iPad-Programmierung aufspielen")
         box.setIcon(QMessageBox.Icon.Question)
         ssid_hint = ("„NIT-ESP32-%s“" % board_name) if board_name else "automatisch (Chip-Kennung)"
         box.setText(
             "Auf dem angeschlossenen Controller werden boot.py, main.py und der "
-            "Ordner www/ mit der Blockly-Oberfläche angelegt bzw. überschrieben."
+            "Ordner www/ mit dem MicroPython-Editor angelegt bzw. überschrieben."
         )
         box.setInformativeText(
             "WLAN-SSID dieses Boards: %s\n\n"
@@ -3164,7 +3164,7 @@ class MainWindow(QMainWindow):
             "„Firmware flashen …“ ausführen.\n\nFortfahren?" % ssid_hint
         )
         cb = QCheckBox("Auch die Sensor-Bibliotheken (nitbw_) installieren – "
-                       "nötig für die Sensor-Blöcke, dauert einige Minuten")
+                       "zum Importieren in eigenen Programmen, dauert einige Minuten")
         cb.setChecked(True)
         box.setCheckBox(cb)
         box.setStandardButtons(
@@ -3177,7 +3177,7 @@ class MainWindow(QMainWindow):
         if not self._acquire_port():
             return
         from .micropython_dialogs import IpadDeployWorker
-        self._console.append_info("📲  Spiele iPad-Blockly auf den Controller …\n")
+        self._console.append_info("📲  Spiele die iPad-Oberfläche (MicroPython) auf den Controller …\n")
         worker = IpadDeployWorker(port, fw_dir, install_libs=install_libs,
                                   board_name=board_name)
         worker.log.connect(self._console.append_info)

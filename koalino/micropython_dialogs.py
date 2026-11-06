@@ -1078,7 +1078,7 @@ class FlashDialog(QDialog):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Deploy-Worker: iPad-Blockly (Standalone-Firmware) auf den Controller spielen
+# Deploy-Worker: iPad-Programmierung (Standalone-Firmware, MicroPython-Editor) auf den Controller spielen
 # ──────────────────────────────────────────────────────────────────────────────
 class IpadDeployWorker(QThread):
     """Kopiert boot.py, main.py und den Ordner www/ per mpremote auf ein Board,
@@ -1094,7 +1094,7 @@ class IpadDeployWorker(QThread):
         super().__init__()
         self.port = port
         self.firmware_dir = Path(firmware_dir)
-        # nitbw_-Bibliotheken mitinstallieren (nötig, damit die Sensor-Blöcke laufen)
+        # nitbw_-Bibliotheken mitinstallieren (zum Importieren in eigenen Programmen)
         self.install_libs = install_libs
         # Board-Name für die SSID (NIT-ESP32-<Name>). Leer -> automatisch (Chip-ID).
         self.board_name = self._sanitize_name(board_name)
@@ -1140,7 +1140,15 @@ class IpadDeployWorker(QThread):
                             [*mp, "connect", self.port, "cp", boot_py, main_py, ":"])
         if not ok:
             self.done.emit(False, err); return
-        ok, err = self._run("Kopiere die Blockly-Oberflaeche (www/) – das dauert ~1 Minute ...",
+        # Reste der frueheren Blockly-Oberflaeche (www/blockly) vom Board entfernen,
+        # damit der Flash nicht unnoetig belegt bleibt. Fehler (nicht vorhanden) egal.
+        import subprocess
+        try:
+            subprocess.run([*mp, "connect", self.port, "fs", "rm", "-r", ":www/blockly"],
+                           capture_output=True, text=True, timeout=60)
+        except Exception:
+            pass
+        ok, err = self._run("Kopiere die Oberflaeche (www/) ...",
                             [*mp, "connect", self.port, "cp", "-r", www_dir, ":"])
         if not ok:
             self.done.emit(False, err); return
@@ -1164,7 +1172,7 @@ class IpadDeployWorker(QThread):
         wlan = ssid or "NIT-ESP32-…"
         self.done.emit(
             True,
-            "iPad-Blockly wurde aufgespielt. WLAN dieses Boards: '{}'. "
+            "iPad-Programmierung (MicroPython) wurde aufgespielt. WLAN dieses Boards: '{}'. "
             "Board am besten damit beschriften. Verbinde Laptop/iPad mit diesem "
             "WLAN und oeffne http://192.168.4.1/".format(wlan),
         )
@@ -1214,12 +1222,12 @@ class IpadDeployWorker(QThread):
     def _install_libraries(self):
         """Laedt alle nitbw_-Bibliotheken aus dem NIT-Repo und legt sie in :lib ab.
 
-        Noetig, damit der von den Sensor-Bloecken erzeugte Code
-        (``from nitbw_xxx import ...``) auf dem Board importierbar ist.
+        Noetig, damit eigene Programme per ``from nitbw_xxx import ...``
+        die Sensor-Bibliotheken auf dem Board importieren koennen.
         Download + Übertragung laufen über dieselben Helfer wie der
         Bibliotheks-Manager (:func:`_install_remote_lib`).
         """
-        self.log.emit("Installiere nitbw_-Bibliotheken (für die Sensor-Blöcke) ...\n")
+        self.log.emit("Installiere nitbw_-Bibliotheken ...\n")
         try:
             resp = requests.get(LIB_REPO_API, timeout=15)
             resp.raise_for_status()

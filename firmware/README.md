@@ -1,64 +1,40 @@
-# NIT ESP32 Blockly – Prototyp
+# NIT ESP32 MicroPython – iPad-Programmierung
 
 Standalone-IDE auf dem ESP32: Board als eigener Accesspoint, Oberfläche wird
-direkt vom Board ausgeliefert, kein Schulnetz/Internet nötig.
+direkt vom Board ausgeliefert, kein Schulnetz/Internet nötig. Programmiert wird
+**textuell in MicroPython** (keine Blöcke).
 
-Die Web-Oberfläche zeigt drei Bereiche nebeneinander (auf dem iPad hochkant
-untereinander): links die **Blöcke**, rechts oben den **Python-Code** (live aus
-den Blöcken erzeugt, per „✏️ bearbeiten“ auch manuell editierbar) und rechts
-unten eine **Konsole** mit den Ausgaben und Fehlermeldungen des Programms.
+Die Web-Oberfläche zeigt links den **Editor** (mit Tab-Taste, automatischer
+Einrückung nach `:` und einer Zusatztastenleiste für `( ) [ ] : " _ …` – die
+iPad-Tastatur versteckt diese Zeichen), rechts die **Konsole** mit Ausgaben und
+Fehlermeldungen des Programms (auf dem iPad hochkant untereinander).
+Ausführen: Knopf „▶ Ausführen“ oder `Strg/Cmd + Enter`.
 
 ## Dateistruktur
 
 ```
-boot.py                          Richtet WLAN-Accesspoint ein
-main.py                          Webserver (uasyncio): liefert /www aus, führt Code im Thread aus, sammelt Ausgaben
-www/index.html                   Oberfläche: Blöcke + Python-Editor + Konsole (Toolbox aus Koalino)
-www/app.js                       Live-Codegen, Ausführen -> /api/run, Konsole pollt /api/output, Stopp -> /api/stop
-www/blockly/*.js                 Blockly-Core + geteilte Blockdefinitionen (nit_blocks.js, nitbw_blocks.js)
-www/blockly/msg/de.js            Deutsche Übersetzung
-www/blockly/media/               Sprites/Sounds (offline)
-sync_from_koalino.py            Hält www/ mit koalino/assets/blockly/ synchron
+boot.py        Richtet WLAN-Accesspoint ein
+main.py        Webserver (uasyncio): liefert /www aus, führt Code im Thread aus, sammelt Ausgaben
+www/index.html Oberfläche: Editor + Konsole
+www/app.js     Editor-Hilfen, Beispiele, Ausführen -> /api/run, Konsole pollt /api/output, Stopp -> /api/stop
 ```
 
-## Blöcke: eine gemeinsame Quelle
+Die Oberfläche ist eigenständig (kein Blockly, keine externen Dateien) und
+damit nur wenige KB groß.
 
-Der iPad-Modus nutzt **dieselben Blöcke wie der Koalino-Block-Editor** – exakt
-die Dateien aus `koalino/assets/blockly/` (`nit_blocks.js`, `nitbw_blocks.js`)
-und dieselbe Toolbox aus `editor.html`. `www/blockly/` ist eine gespiegelte
-Kopie davon; die Oberfläche ist damit komplett offline lauffähig.
+## Beispiele, Speichern & Laden (im Browser)
 
-Wenn du in Koalino Blöcke oder die Toolbox änderst, danach einmal ausführen:
-
-```bash
-python firmware/sync_from_koalino.py
-```
-
-Das kopiert Binaries + Blockdefinitionen und übernimmt die Toolbox in
-`index.html`. So ist jeder neue Block **automatisch auch im iPad-Modus** da –
-keine Doppelpflege.
-
-Das Sync-Skript **entfernt für den iPad-Modus die Kategorie „Funk (ESP-NOW /
-MQTT)"** (Liste `EXCLUDE_CATEGORIES`): Das WLAN dient hier als Accesspoint fürs
-iPad, deshalb funktionieren MQTT und ESP-NOW nicht. Der Desktop-Editor behält
-diese Blöcke.
-
-> **Sensor-Blöcke** (BME280, OLED, Servo, …) erzeugen `from nitbw_xxx import …`
-> und laufen nur, wenn die passenden `nitbw_`-Bibliotheken in `/lib` auf dem
-> Board liegen. Der Deploy (Weg A) kann sie auf Wunsch mitinstallieren.
-
-## Speichern & Laden (im Browser)
-
-Die Arbeit wird **automatisch im Browser gesichert** (localStorage) und beim
-erneuten Öffnen wiederhergestellt – ein Reload verliert also nichts. Zusätzlich:
+Das Auswahlfeld **Beispiele …** lädt kleine Starterprogramme (Blinken, Taster,
+Analogwert, …). Die Arbeit wird **automatisch im Browser gesichert**
+(localStorage) und beim erneuten Öffnen wiederhergestellt. Zusätzlich:
 
 - **💾 Speichern** – legt das aktuelle Programm unter einem Namen ab.
 - **📂 Projekte** – Liste der gespeicherten Programme zum Laden/Löschen; darin
-  auch **„Als Datei sichern"** (lädt eine `.blocks`-Datei zum Mitnehmen herunter)
-  und **„Datei laden"** (importiert eine solche Datei).
+  auch **„Als Datei sichern“** (lädt eine `.py`-Datei zum Mitnehmen herunter)
+  und **„Datei laden“** (importiert eine `.py`-Datei).
 
 > Hinweis: localStorage hängt am jeweiligen Gerät/Browser. Für ein echtes,
-> geräteübergreifendes Backup die `.blocks`-Datei exportieren.
+> geräteübergreifendes Backup die `.py`-Datei exportieren.
 
 ## Deployment auf den ESP32
 
@@ -78,12 +54,12 @@ esptool --chip esp32c3 --port /dev/ttyACM0 --baud 460800 \
 
 ### Weg A – direkt in Koalino (empfohlen)
 
-Menü **MicroPython → 📲 iPad-Blockly aufs Board spielen**. Kopiert `boot.py`,
+Menü **MicroPython → 📲 iPad-Programmierung aufs Board spielen**. Kopiert `boot.py`,
 `main.py` und `www/` automatisch auf den angeschlossenen Controller und startet
 ihn neu – kein Terminal nötig. Der Dialog fragt nach einer **Nummer/Name für das
 Board** (→ WLAN-SSID, siehe unten) und kann per Häkchen zusätzlich die
-**Sensor-Bibliotheken (`nitbw_`)** nach `/lib` installieren (nötig, damit die
-Sensor-Blöcke laufen; dauert einige Minuten, braucht Internet).
+**Sensor-Bibliotheken (`nitbw_`)** nach `/lib` installieren (damit eigene
+Programme sie per `import` nutzen können; dauert einige Minuten, braucht Internet).
 
 ### Weg B – manuell per mpremote
 
@@ -129,10 +105,12 @@ echo -n "01" | mpremote connect /dev/ttyACM0 fs cp - :ap_name.txt   # oder Datei
    (ein ESP32 pro Schüler:in) unkritisch.
 3. **Kein Captive Portal** in V1 – man muss die IP manuell aufrufen.
    Lässt sich später per simplem DNS-Spoofing nachrüsten.
-4. **Sensor-Blöcke brauchen Bibliotheken auf dem Board**: Die `nitbw_`-Blöcke
-   (BME280, OLED, Servo, …) erzeugen `import nitbw_...`; die zugehörigen Module
-   müssen in `/lib` liegen (Deploy-Häkchen oder „Bibliotheken installieren …“).
-   Reine MicroPython-Blöcke (GPIO, PWM, ADC, NeoPixel) laufen ohne Zusatz.
+4. **Sensor-Bibliotheken brauchen Module auf dem Board**: `import nitbw_...`
+   funktioniert nur, wenn die Module in `/lib` liegen (Deploy-Häkchen oder
+   „Bibliotheken installieren …“). Reines MicroPython (`machine`, `time`, …)
+   läuft ohne Zusatz.
+5. **Kein Syntax-Highlighting / keine Autovervollständigung** im Editor
+   (bewusst schlank gehalten, damit die Seite schnell vom Board lädt).
 
 ## Troubleshooting: „Verbindung fehlgeschlagen" auf dem iPad
 
@@ -156,12 +134,3 @@ Bleibt es instabil:
   überdeckt die schwachen ESP32-Signale; notfalls Boards näher ans iPad.
 - **iPad-Seite**: Netzwerk einmal „ignorieren" und neu verbinden, falls iOS
   einen alten Zustand gespeichert hat.
-
-## Integration in Koalino (später)
-
-Denkbarer Weg: Koalino bekommt einen "Firmware"-Modus, in dem die hier
-gebaute www/-Struktur + main.py/boot.py als flashbares Firmware-Image
-bereitgestellt wird (z. B. per esptool + vorgefertigtem Filesystem-Image).
-Nutzer:in flasht einmalig, verbindet sich danach direkt mit dem ESP32-WLAN
-und programmiert über dieselbe Blockly-Oberfläche wie in Koalino –
-ohne Server, ohne Internet, auch vom iPad aus nutzbar.

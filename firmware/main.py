@@ -1,6 +1,6 @@
 # main.py
 # Laeuft nach boot.py. Startet einen Webserver, der
-#  1) die Blockly-/Editor-Oberflaeche aus /www ausliefert
+#  1) die Editor-Oberflaeche (Text, MicroPython) aus /www ausliefert
 #  2) per POST /api/run Python-Code entgegennimmt und ihn in einem
 #     Hintergrund-Thread ausfuehrt – print-Ausgaben und Fehler werden
 #     abgefangen und in einem Ringpuffer gesammelt

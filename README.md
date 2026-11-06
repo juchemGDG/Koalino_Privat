@@ -17,7 +17,7 @@ Downloads & Releases: https://github.com/juchemGDG/Koalino
 | **Firmware flashen** | MicroPython-Firmware von lokaler Datei oder micropython.org flashen |
 | **Bibliotheks-Manager** | Bibliotheken aus [NIT_Bibliotheken](https://github.com/juchemGDG/NIT_Bibliotheken) direkt auf den Controller laden – online oder (in Schulnetzen ohne Internet) offline aus einem entpackten ZIP-Ordner |
 | **Block-Editor** | Blockbasiert programmieren (wie Snap!/Scratch) und automatisch in lesbaren Python-/MicroPython-Code umwandeln – inkl. GPIO-, ADC-, DAC-, NeoPixel- und nitbw-Bibliotheks-Blöcken (u. a. OLED, LCD, Servo, Ultraschall, Wägezelle HX711, Beschleunigungssensor GY61, Strom-/Spannungssensor INA219, ADC ADS1015) |
-| **ESP32-Standalone-Blockly (Beta)** | Eigene Blockly-Oberfläche direkt auf dem ESP32 (WLAN-Accesspoint, kein Schulnetz nötig) – über „MicroPython → 📲 iPad-Blockly aufs Board spielen …" auf den Controller übertragen, ideal für iPads ohne Koalino-Installation |
+| **ESP32-Standalone-MicroPython (Beta)** | Eigener Texteditor (MicroPython) direkt auf dem ESP32 (WLAN-Accesspoint, kein Schulnetz nötig) – über „MicroPython → 📲 iPad-Programmierung aufs Board spielen …" auf den Controller übertragen, ideal für iPads ohne Koalino-Installation. Programmieren per Text, keine Blöcke |
 | **Serial Plotter** | Zahlenausgabe eines laufenden Programms live als Graph – ideal für Sensorwerte (Temperatur, Abstand, Helligkeit) und X-Y-Kennlinien (z. B. U-I-Kennlinie, optional mit Ausgleichsgerade und R²). Bei Bedarf über „Ausführen → 📈 Serial Plotter" einblendbar |
 | **Datenauswertung (CSV)** | Messreihen oder Umfragedaten aus einer CSV-Datei als Streu-, Linien-, Säulen-, Balken-, Kreisdiagramm, Histogramm oder Boxplot darstellen (auch je Kategorie), mit Kennwerten (Median, Quartile, Mittelwert, Spannweite …), Häufigkeitstabelle, Ausgleichsgerade mit R² und PNG-Export. Reiter „Statistik-Tests": Signifikanztest (Binomialtest mit Ablehnungsbereich), t-Test für eine und zwei Stichproben (Welch, gleiche Varianzen, verbunden) mit p-Wert, Konfidenzintervall und Effektstärke. „Als Python-Code" erzeugt ein lesbares Programm (csv + matplotlib), das dasselbe Diagramm zeichnet – direkt als neuer Editor-Tab. Export als PNG oder SVG, Beispieldaten zum Ausprobieren. Läuft offline; dieselbe App gibt es als [StatPlot](https://github.com/juchemGDG/StatPlot) auch im Browser (z. B. auf dem iPad) und als Desktop-Version. Über den Knopf **Datenauswertung** in der Seitenleiste oder „Visualisieren → 📊 Datenauswertung (CSV) …" |
 | **PAP-Editor** | Programmablaufpläne zeichnen – über den Knopf **PAP-Editor** rechts in der Menüleiste. Der fertige Plan landet mit „In Projekt übernehmen" als Bild in der Zwischenablage und kann direkt in Arbeitsblätter, Word oder LibreOffice eingefügt werden |
@@ -405,7 +405,7 @@ Koalino/
 │   ├── config.py               # Konstanten & Themes (hell/dunkel)
 │   └── assets/
 │       └── blockly/            # Blockly offline + NIT-/nitbw-Blöcke
-├── firmware/                   # ESP32-Standalone-Blockly (Beta, eigener AP+Webserver)
+├── firmware/                   # ESP32-Standalone (MicroPython-Editor fürs iPad, Beta; AP+Webserver)
 ├── start.py                    # Bootstrap-Skript
 ├── run.sh                      # Linux/macOS Starter
 ├── run.bat                     # Windows Starter
