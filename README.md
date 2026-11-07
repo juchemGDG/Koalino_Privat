@@ -358,6 +358,18 @@ oder direkt:
 
 ---
 
+## Datenschutz und Lizenz
+
+- **Lokal:** Koalino läuft als Programm auf dem eigenen Rechner. Projekte, Dateien und Einstellungen bleiben dort. Im Quelltext sind keine Telemetrie- oder Statistikfunktionen enthalten, und es gibt keine Benutzerkonten.
+- **KI optional und lokal:** Der KI-Tutor „Infi“ und der Code-Generator laufen über [Ollama](https://ollama.com) auf dem eigenen Rechner. Es gehen keine Eingaben an einen KI-Dienst im Internet.
+- **Verbindungen ins Internet nur auf Anforderung:** Bibliotheken aus [NIT_Bibliotheken](https://github.com/juchemGDG/NIT_Bibliotheken) (`api.github.com`, `raw.githubusercontent.com`), MicroPython-Firmware (`micropython.org`) und Python-Pakete (`pypi.org`, `files.pythonhosted.org`). Dabei sieht der jeweilige Anbieter die IP-Adresse. Ohne Internet geht es über den Ordner-Import der Bibliotheken (siehe „Schulnetze mit Proxy“). Das Git-Menü spricht mit dem Server, den man selbst als Remote einträgt.
+- **Schülerdaten:** Keine Namen, Noten oder Fotos von Schülerinnen und Schülern in Programme, Kommentare oder KI-Eingaben schreiben.
+- **Lizenz:** Code unter der [MIT-Lizenz](LICENSE). Unterrichtsmaterialien, soweit nicht anders gekennzeichnet, unter [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.de). Hinweise zur Namensnennung: [py.nitbw.de/lizenz](https://py.nitbw.de/lizenz).
+- **Entstehung:** Bei der Entwicklung wurden KI-Werkzeuge unterstützend eingesetzt; der Code wurde von den Autoren geprüft und angepasst.
+- Datenschutzerklärung und Impressum der Begleitseite: [mint-checker.de/datenschutz.php](https://mint-checker.de/datenschutz.php), [mint-checker.de/impressum.php](https://mint-checker.de/impressum.php).
+
+---
+
 ## Schulnetze mit Proxy
 
 Viele Schulnetze leiten den Internetverkehr über einen Proxy, der eine
