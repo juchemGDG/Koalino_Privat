@@ -8,13 +8,15 @@ from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, QFrame,
-    QComboBox, QLineEdit, QFileDialog, QButtonGroup, QRadioButton, QWidget, QScrollArea, QGridLayout,
+    QComboBox, QLineEdit, QFileDialog, QButtonGroup, QRadioButton, QWidget, QScrollArea,
+    QGridLayout, QMessageBox,
 )
 
+from . import local_data
 from .qt_utils import UI_FONT_PT_DEFAULT, UI_FONT_PT_RANGE
 from .qt_utils import ThemedComboBox
 from .config import (
-    CODE_SCHEME_LABELS, MONO_FONTS, THEME, THEMES,
+    CODE_SCHEME_LABELS, MONO_FONTS, THEME,
     detect_python_interpreters, python_version_label, python_has_tkinter,
 )
 
@@ -58,6 +60,14 @@ def detect_git_executables() -> list[str]:
 
 
 # ── Hintergrund-Thread: Python-Interpreter suchen ───────────────────────────
+class _LocalSizeScanner(QThread):
+    """Ermittelt die Größe der lokalen Datenablagen, ohne die UI zu blockieren."""
+    sizes = pyqtSignal(dict)   # {key: bytes}
+
+    def run(self):
+        self.sizes.emit({s.key: local_data.size_of(s.path()) for s in local_data.STORES})
+
+
 class _PythonScanner(QThread):
     """Sucht installierte Python-Interpreter samt Version, ohne die UI zu blockieren."""
     found = pyqtSignal(list)   # list[tuple[str, str, bool]]  (pfad, version, hat_tkinter)
@@ -114,6 +124,7 @@ class SettingsDialog(QDialog):
         plot_x_max: int = 500,
         plot_style: str = "line",
         ui_font_pt: int = UI_FONT_PT_DEFAULT,
+        statplot_offline: bool = False,
         debug_level: str = "kl10",
         debug_stepped: bool = True,
         debug_change_hint: bool = True,
@@ -233,7 +244,8 @@ class SettingsDialog(QDialog):
                        tutor_mode, sketchbook_dir, git_exec, theme,
                        blocks_enabled,
                        plot_y_mode, plot_y_min, plot_y_max,
-                       plot_x_mode, plot_x_min, plot_x_max, plot_style, ui_font_pt)
+                       plot_x_mode, plot_x_min, plot_x_max, plot_style, ui_font_pt,
+                       statplot_offline)
 
     # ── Hilfsmethode: Abschnittsüberschrift ─────────────────────────────
     @staticmethod
@@ -270,6 +282,7 @@ class SettingsDialog(QDialog):
         plot_x_max: int = 500,
         plot_style: str = "line",
         ui_font_pt: int = UI_FONT_PT_DEFAULT,
+        statplot_offline: bool = False,
     ):
         # Äußeres Layout: Scrollbereich (Inhalt) + feste Button-Leiste unten.
         outer = QVBoxLayout(self)
@@ -341,6 +354,20 @@ class SettingsDialog(QDialog):
         hint_blocks.setWordWrap(True)
         hint_blocks.setStyleSheet(f"color:{THEME['text_dim']}; font-size:10px;")
         form_func.addRow("", hint_blocks)
+
+        self._chk_statplot_offline = QCheckBox("  Datenauswertung immer offline (mitgelieferte Kopie)")
+        self._chk_statplot_offline.setChecked(statplot_offline)
+        self._chk_statplot_offline.setToolTip(
+            "Die Datenauswertung (StatPlot) lädt dann nie statplot.mint-checker.de, "
+            "sondern nur die in Koalino enthaltene Kopie. Kein Kontakt zum Server, "
+            "dafür kommen Verbesserungen erst mit dem nächsten Koalino-Update.")
+        form_func.addRow("", self._chk_statplot_offline)
+        hint_sp = QLabel(
+            "Standard: online zuerst, ohne Netz automatisch die Kopie. "
+            "Wirkt beim nächsten Öffnen der Datenauswertung.")
+        hint_sp.setWordWrap(True)
+        hint_sp.setStyleSheet(f"color:{THEME['text_dim']}; font-size:10px;")
+        form_func.addRow("", hint_sp)
 
         root.addLayout(form_func)
         root.addSpacing(6)
@@ -691,6 +718,44 @@ class SettingsDialog(QDialog):
             form_ai.addRow("Chatbot:" if key == "none" else "", rb)
         self._tutor_radios.get(tutor_mode, self._tutor_radios["none"]).setChecked(True)
         root.addLayout(form_ai)
+        root.addSpacing(6)
+
+        # ── Abschnitt: Lokale Daten ──────────────────────────────────────
+        # Was Koalino im Benutzerprofil ablegt, mit Größe und Löschknopf
+        # (docs/datenschutz.md). Größen im Hintergrund, der Dialog wartet nicht.
+        title_ld, sep_ld = self._section("LOKALE DATEN")
+        root.addWidget(title_ld)
+        root.addWidget(sep_ld)
+        hint_ld = QLabel(
+            "Koalino speichert diese Daten nur auf diesem Rechner im Benutzerprofil. "
+            "Sie werden nie gesendet.")
+        hint_ld.setWordWrap(True)
+        hint_ld.setStyleSheet(f"color:{THEME['text_dim']}; font-size:10px;")
+        root.addWidget(hint_ld)
+        grid_ld = QGridLayout()
+        grid_ld.setHorizontalSpacing(10)
+        grid_ld.setVerticalSpacing(6)
+        self._local_size_labels: dict[str, QLabel] = {}
+        for row, store in enumerate(local_data.STORES):
+            name = QLabel(store.label)
+            name.setToolTip(store.hint)
+            size = QLabel("…")
+            size.setStyleSheet(f"color:{THEME['text_dim']};")
+            size.setMinimumWidth(70)
+            size.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            btn = QPushButton("Löschen …")
+            btn.setObjectName("browse")
+            btn.setToolTip(store.hint)
+            btn.clicked.connect(lambda _=False, s=store: self._clear_local_store(s))
+            grid_ld.addWidget(name, row, 0)
+            grid_ld.addWidget(size, row, 1)
+            grid_ld.addWidget(btn, row, 2)
+            self._local_size_labels[store.key] = size
+        grid_ld.setColumnStretch(0, 1)
+        root.addLayout(grid_ld)
+        self._size_scanner = _LocalSizeScanner()
+        self._size_scanner.sizes.connect(self._on_local_sizes)
+        self._size_scanner.start()
 
         root.addStretch()
 
@@ -725,7 +790,30 @@ class SettingsDialog(QDialog):
     def done(self, result: int):
         if self._py_scanner and self._py_scanner.isRunning():
             self._py_scanner.wait(1500)
+        if self._size_scanner.isRunning():
+            self._size_scanner.wait(1500)
         super().done(result)
+
+    # ── Lokale Daten ─────────────────────────────────────────────────────────
+    def _on_local_sizes(self, sizes: dict):
+        for key, n in sizes.items():
+            lbl = self._local_size_labels.get(key)
+            if lbl is not None:
+                lbl.setText(local_data.format_size(n))
+
+    def _clear_local_store(self, store):
+        answer = QMessageBox.question(
+            self, f"{store.label} löschen",
+            f"{store.hint}\n\n{store.label} jetzt löschen? Das lässt sich nicht rückgängig machen.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        store.clear()
+        lbl = self._local_size_labels.get(store.key)
+        if lbl is not None:
+            lbl.setText(local_data.format_size(local_data.size_of(store.path())))
 
     # ── Hilfsmethoden ───────────────────────────────────────────────────────
 
@@ -876,6 +964,10 @@ class SettingsDialog(QDialog):
     @property
     def hidden_activity(self) -> set:
         return {k for k, chk in self._chk_activity.items() if not chk.isChecked()}
+
+    @property
+    def statplot_offline(self) -> bool:
+        return self._chk_statplot_offline.isChecked()
 
     @property
     def blocks_enabled(self) -> bool:

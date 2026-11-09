@@ -14,8 +14,10 @@ Einstufung: 🔴 sollte zeitnah erledigt werden · 🟠 lohnt sich · 🟢 Kosme
 **Erledigt am 2026-11-09:** 1.1 (Ollama-Pfad entfernt, Entscheidung: nicht reaktivieren),
 2.1 und der Dokumentationsteil von 2.4 (→ `docs/datenschutz.md`, verlinkt aus README und
 Über-Dialog), 2.2 (prune beim Start, `prune_orphans`, Tests in `tests/test_prune.py`),
-2.3 (IP aus der Mail, Hinweis und feste Vorschau im Dialog). Offen aus 2.4: die Option
-„Datenauswertung immer offline“. Nebenbefund beim Testen: Stände, die in derselben
+2.3 (IP aus der Mail, Hinweis und feste Vorschau im Dialog), 2.4 komplett (Option
+„Datenauswertung immer offline“ unter Funktionen) und 2.5 (Abschnitt „Lokale Daten“ mit
+Größe und Löschknopf, Modul `local_data.py`, Tests in `tests/test_local_data.py`).
+Nebenbefund beim Testen: Stände, die in derselben
 Millisekunde entstanden, bekamen dieselbe ID (behoben in `snapshots.add`). Zweiter
 Nebenbefund: Schlug das Aufwärmen von Jedi fehl, stürzte der Vervollständigungs-Thread
 mit `UnboundLocalError` ab (behoben in `completion.py`).
@@ -254,7 +256,7 @@ immer (nicht ausblendbar), damit klar ist, was mitgeht. Passe den Modul-Docstrin
 (er verweist noch auf server/bugreport.php).
 ```
 
-### 2.4 🟠 Eingebettete Fremddienste ohne Hinweis (Teil 1 und 2 erledigt, Offline-Option offen)
+### 2.4 ✅ Eingebettete Fremddienste ohne Hinweis (erledigt 2026-11-09)
 
 **Befund.** Koalino bettet sieben externe Seiten ein: app.ais-chat.schule, tools.fobizz.com,
 py.nitbw.de, pap.mint-checker.de, ibd.mint-checker.de, schaltlab.mint-checker.de,
@@ -283,7 +285,7 @@ Checkbox „Datenauswertung immer offline (mitgelieferte Kopie)"; bei True wird 
 erst online geladen.
 ```
 
-### 2.5 🟠 Keine Funktion „Lokale Daten löschen“
+### 2.5 ✅ Keine Funktion „Lokale Daten löschen“ (erledigt 2026-11-09)
 
 **Befund.** Es gibt keinen Weg in der Oberfläche, `offline_cache`, `staende`, `crash.log`
 oder die QSettings zu leeren, etwa am Ende eines Schuljahres oder beim Rechnerwechsel.
@@ -449,10 +451,11 @@ und dokumentiere die Abweichung in einem Kommentar.
 
 ## Vorgeschlagene Reihenfolge
 
-1. **2.2** (prune aufrufen) und **2.3** (IP aus der Mail, Hinweis im Dialog): klein,
-   datenschutzrelevant, keine Nebenwirkungen.
-2. **1.1** entscheiden und umsetzen: größter Hebel für Kürze und Klarheit.
-3. **3.3** README abgleichen (ggf. zusammen mit 1.1).
-4. **2.4** `docs/datenschutz.md` und Offline-Option für StatPlot.
-5. **3.1** Tests, danach erst **1.2** und **1.3** (Umbauten mit Netz).
-6. Rest nach Gelegenheit.
+Abschnitt 1.1, 2.1 bis 2.5 und 3.3 sind erledigt (2026-11-09). Für den Rest:
+
+1. **3.1** Tests ausbauen (Grundgerüst in `tests/` steht), danach erst **1.2** und
+   **1.3** (Umbauten mit Netz).
+2. **3.2** Lock-Datei für reproduzierbare Builds.
+3. **3.4** Firmware-Passwort im Deploy-Dialog, **3.5** Claude-Terminal hinter
+   Umgebungsvariable.
+4. **1.4**, **1.5**, **3.6** nach Gelegenheit.

@@ -37,7 +37,7 @@ seine Datenschutzerklärung gilt.
 | PAP-Editor | pap.mint-checker.de | Knopf „PAP-Editor“ | Das gezeichnete Diagramm bleibt im Browser-Fenster; „In Projekt übernehmen“ legt es nur lokal in die Zwischenablage | Nein |
 | IBD-Editor | ibd.mint-checker.de | Menü „IBD-Editor“ | wie PAP-Editor | Nein |
 | SchaltLab | schaltlab.mint-checker.de | Menü „SchaltLab“ | wie PAP-Editor | Nein |
-| StatPlot (Datenauswertung) | statplot.mint-checker.de | Knopf „Datenauswertung“ | Die geöffnete **CSV-Datei wird per `postMessage` an die Seite übergeben** und dort im Browser ausgewertet. Sie wird nicht hochgeladen, aber der ausführende JavaScript-Code kommt vom Server. Ohne Netz läuft die mitgelieferte Offline-Kopie | Nein |
+| StatPlot (Datenauswertung) | statplot.mint-checker.de | Knopf „Datenauswertung“ | Die geöffnete **CSV-Datei wird per `postMessage` an die Seite übergeben** und dort im Browser ausgewertet. Sie wird nicht hochgeladen, aber der ausführende JavaScript-Code kommt vom Server. Ohne Netz läuft die mitgelieferte Offline-Kopie; mit der Einstellung „Datenauswertung immer offline“ (Einstellungen → Funktionen) wird der Server gar nicht kontaktiert | Nein |
 | GitHub | api.github.com, codeload.github.com, raw.githubusercontent.com | Bibliotheks-Manager (NIT_Bibliotheken), micro:bit-Firmware | nur Downloads | Nein |
 | micropython.org | micropython.org | Firmware flashen | nur Downloads | Nein |
 | PyPI | pypi.org, files.pythonhosted.org | Pip-Manager | nur Downloads | Nein |
@@ -77,8 +77,11 @@ Außerhalb des Benutzerprofils:
 | Fehlerprotokoll (`<programm>.fehlerprotokoll.md`) | neben der Programmdatei | Gehört zum Lernprodukt (Debugging-Landkarte) und wandert mit dem Programm in Git-Repos oder auf Netzlaufwerke. Das Panel zeigt den Speicherort an |
 | Git-Zugangsdaten | Schlüsselspeicher des Betriebssystems (Windows Credential Manager, macOS Keychain, libsecret) | siehe 3. |
 
-Alle diese Daten lassen sich durch Löschen des Ordners `koalino/` im Benutzerprofil
-entfernen. Eine Funktion dafür in der Oberfläche ist geplant (Code-Check 2.5).
+Unter **Datei → Einstellungen → Lokale Daten** stehen Offline-Kopien, gesicherte
+Stände und Absturzprotokoll mit ihrer aktuellen Größe und je einem Knopf „Löschen …“
+(mit Rückfrage). Das Absturzprotokoll wird dabei auf die laufende Sitzung gekürzt,
+weil die Datei während des Betriebs offen bleibt. Wer alles entfernen will, löscht den
+Ordner `koalino/` im Benutzerprofil bei geschlossenem Programm.
 
 ## 3. Git-Zugangsdaten
 
@@ -135,4 +138,4 @@ Code-Check 3.4).
 
 | Datum | Änderung |
 |---|---|
-| 2026-11-09 | Erstfassung nach dem Code-Check (docs/code_review_2026-11.md). Löschfristen für Offline-Kopien und Stände aktiviert, IP-Adresse aus dem Fehlerbericht entfernt, Ollama-Pfad entfernt. |
+| 2026-11-09 | Erstfassung nach dem Code-Check (docs/code_review_2026-11.md). Löschfristen für Offline-Kopien und Stände aktiviert, IP-Adresse aus dem Fehlerbericht entfernt, Ollama-Pfad entfernt. Neu: Abschnitt „Lokale Daten“ in den Einstellungen und Option „Datenauswertung immer offline“. |

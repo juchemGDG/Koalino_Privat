@@ -882,6 +882,7 @@ class MainWindow(QMainWindow):
         self._settings_python_exec: str = ""
         self._settings_scrollback: int = 5000
         self._settings_blocks_enabled: bool = True    # Block-Editor, Standard: an
+        self._settings_statplot_offline: bool = False  # Datenauswertung nur aus der mitgelieferten Kopie
         self._settings_hidden_activity: set[str] = set()   # ausgeblendete Knöpfe der Seitenleiste
         self._settings_tutor_mode: str = "none"    # Chatbot: "none" | "aischat" | "fobizz"
         self._settings_sketchbook: str = str(Path.home())
@@ -2026,7 +2027,8 @@ class MainWindow(QMainWindow):
         """Öffnet die Datenauswertung (StatPlot); die Datei lädt man im Fenster selbst."""
         win = getattr(self, "_csv_window", None)
         if win is None:
-            win = StatPlotWindow(self, sketchbook_dir=lambda: self._settings_sketchbook)
+            win = StatPlotWindow(self, sketchbook_dir=lambda: self._settings_sketchbook,
+                                 offline_first=self._settings_statplot_offline)
             win.set_code_sink(self._open_code_in_new_tab)
             self._csv_window = win
         win.show()
@@ -4417,6 +4419,7 @@ class MainWindow(QMainWindow):
             theme=self._settings_theme,
             code_scheme=self._settings_code_scheme,
             blocks_enabled=self._settings_blocks_enabled,
+            statplot_offline=self._settings_statplot_offline,
             plot_y_mode=self._settings_plot_y_mode,
             plot_y_min=self._settings_plot_y_min,
             plot_y_max=self._settings_plot_y_max,
@@ -4453,6 +4456,15 @@ class MainWindow(QMainWindow):
             self._settings_theme = dlg.theme
             self._settings_code_scheme = dlg.code_scheme
             self._settings_blocks_enabled = dlg.blocks_enabled
+            if dlg.statplot_offline != self._settings_statplot_offline:
+                # Das Fenster lädt die Seite beim Erzeugen – mit neuer Einstellung
+                # beim nächsten Öffnen neu aufbauen.
+                self._settings_statplot_offline = dlg.statplot_offline
+                win = getattr(self, "_csv_window", None)
+                if win is not None:
+                    win.close()
+                    win.deleteLater()
+                    self._csv_window = None
             self._settings_hidden_activity = dlg.hidden_activity
             self._settings_plot_y_mode = dlg.plot_y_mode
             self._settings_plot_y_min = dlg.plot_y_min
@@ -4550,6 +4562,7 @@ class MainWindow(QMainWindow):
             self._settings_blocks_enabled = True
             self._settings_store.setValue("blocks/enabled", True)
             self._settings_store.setValue("blocks/default_on_migrated", True)
+        self._settings_statplot_offline = self._settings_bool("statplot/offline_first", self._settings_statplot_offline)
         self._settings_tutor_mode = str(self._settings_store.value("tutor/mode", self._settings_tutor_mode) or "none")
         if self._settings_tutor_mode not in ("none", "aischat", "fobizz"):
             self._settings_tutor_mode = "none"   # Ollama-Modi (bis 1.14) gibt es nicht mehr
@@ -4608,6 +4621,7 @@ class MainWindow(QMainWindow):
         self._settings_store.setValue("editor/highlight_line", self._settings_highlight_line)
         self._settings_store.setValue("editor/autosave_secs", self._settings_autosave_secs)
         self._settings_store.setValue("blocks/enabled", self._settings_blocks_enabled)
+        self._settings_store.setValue("statplot/offline_first", self._settings_statplot_offline)
         self._settings_store.setValue("python/executable", self._settings_python_exec)
         self._settings_store.setValue("console/scrollback", self._settings_scrollback)
         self._settings_store.setValue("tutor/mode", self._settings_tutor_mode)

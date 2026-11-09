@@ -95,20 +95,40 @@ class StatPlotWindow(PapEditorWindow):
     _NO_CONNECTION = "bitte Koalino neu starten."
     _HINT = "„Als Python-Code“ öffnet das Programm in einem neuen Editor-Tab."
     _OFFLINE_HINT = "Offline-Version der Datenauswertung (keine Verbindung zu statplot.mint-checker.de)."
+    _OFFLINE_FIRST_HINT = "Offline-Version der Datenauswertung (laut Einstellung immer offline)."
     _ONLINE_TIMEOUT_MS = 8000
 
-    def __init__(self, parent=None, sketchbook_dir=None):
+    def __init__(self, parent=None, sketchbook_dir=None, offline_first: bool = False):
         # Vor super().__init__: dort wird die Host-Seite schon geladen.
         self._ORIGIN = STATPLOT_ORIGIN
         self._URL = STATPLOT_URL
         self._offline = False
+        self._offline_first = offline_first       # Einstellung „immer offline“
         self._code_sink = None
         self._last_load: dict | None = None      # nach „Neu laden“ erneut schicken
         self._csv_dir: str | None = None
+        # Einstellung „Datenauswertung immer offline“: gar nicht erst online laden
+        # (Datenschutz: kein Kontakt zu statplot.mint-checker.de, kein fremder
+        # JavaScript-Code). Fehlt die Kopie, bleibt nur die Online-Version.
+        if offline_first and not self._use_offline_copy():
+            self._offline_first = False
         super().__init__(parent, sketchbook_dir=sketchbook_dir)
         self.resize(1240, 840)
         # Gibt es hier nie (save:false) – nur Platz in der Werkzeugleiste.
         self._act_save_png.setVisible(False)
+        if offline_first and not self._offline:
+            self._set_status("Die Offline-Version fehlt in dieser Installation – "
+                             "es wird die Online-Version geladen.", kind="error")
+
+    def _use_offline_copy(self) -> bool:
+        """Schaltet auf die mitgelieferte Kopie um; False, wenn sie fehlt."""
+        origin = _local_origin()
+        if origin is None:
+            return False
+        self._offline = True
+        self._ORIGIN = origin
+        self._URL = origin + "/index.html?embed=1"
+        return True
 
     def _load_host_page(self):
         super()._load_host_page()
@@ -119,15 +139,11 @@ class StatPlotWindow(PapEditorWindow):
         """Online-Version meldet sich nicht → mitgelieferte Kopie laden."""
         if self._connected or self._offline or self._view is None:
             return
-        origin = _local_origin()
-        if origin is None:
+        if not self._use_offline_copy():
             self._set_status("Keine Verbindung zu statplot.mint-checker.de, und die "
                              "Offline-Version fehlt in dieser Installation "
                              "(koalino/assets/statplot).", kind="error")
             return
-        self._offline = True
-        self._ORIGIN = origin
-        self._URL = origin + "/index.html?embed=1"
         self._load_host_page()
 
     def set_code_sink(self, sink):
@@ -150,7 +166,7 @@ class StatPlotWindow(PapEditorWindow):
     # ── Ereignisse der Seite ─────────────────────────────────────────────
     def _on_ready(self):
         if self._offline:
-            self._set_status(self._OFFLINE_HINT)
+            self._set_status(self._OFFLINE_FIRST_HINT if self._offline_first else self._OFFLINE_HINT)
         if self._last_load:
             self._send(self._last_load)
 
