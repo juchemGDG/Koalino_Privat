@@ -150,6 +150,19 @@ frischen venv `pip freeze` – dann fehlen aber die Plattform-Marker (`pefile`,
 > (Linux x86_64 und ARM, macOS, Windows): Actions → *Build Release Packages* →
 > *Run workflow*. Erst wenn alle Builds gruen sind und die App startet, committen.
 
+## Datenschutz-Hinweise im Release-Repo
+
+Der Über-Dialog verlinkt auf `https://github.com/juchemGDG/Koalino/blob/main/docs/datenschutz.md`.
+Bei **Tag-Builds** (`v*`) kopiert der Workflow nach dem Veroeffentlichen des Releases
+`docs/datenschutz.md` per GitHub-API in den Branch `main` von `juchemGDG/Koalino`
+(`release/scripts/sync_public_docs.sh`, gleiches Token `RELEASE_REPO_TOKEN` wie der
+Upload). Nur bei geaendertem Inhalt entsteht ein Commit. Der Schritt ist
+`continue-on-error`: Scheitert er (z. B. geschuetzter Branch), bleibt das Release
+gueltig, und die Datei muss von Hand nachgezogen werden.
+
+Weitere Dateien lassen sich im Workflow-Schritt als zusaetzliche Argumente angeben.
+Das Token braucht dafuer Schreibrecht auf den **Inhalt** von `juchemGDG/Koalino`.
+
 ## GitHub Actions
 
 Die Workflow-Datei liegt in `.github/workflows/release-build.yml` und baut die Artefakte automatisch fuer alle drei Plattformen:

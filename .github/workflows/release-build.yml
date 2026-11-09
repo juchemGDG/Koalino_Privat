@@ -258,3 +258,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
           RELEASE_REPO: juchemGDG/Koalino
+
+      # Der Datenschutz-Link im Über-Dialog zeigt auf das Release-Repo. Die Datei
+      # dort an den veröffentlichten Stand angleichen. Schlägt das fehl (z. B.
+      # geschützter Branch), bleibt das bereits veröffentlichte Release gültig.
+      - name: Datenschutz-Hinweise im Release-Repo aktualisieren
+        continue-on-error: true
+        run: bash release/scripts/sync_public_docs.sh docs/datenschutz.md
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO: juchemGDG/Koalino
