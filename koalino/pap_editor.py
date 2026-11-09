@@ -39,24 +39,18 @@ import json
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QByteArray, QMimeData, QTimer, QUrl
+from PyQt6.QtCore import QByteArray, QMimeData, QTimer, QUrl
 from PyQt6.QtGui import QAction, QGuiApplication, QImage
 from PyQt6.QtWidgets import (
     QFileDialog, QLabel, QMainWindow, QMessageBox, QToolBar, QVBoxLayout, QWidget,
 )
-
-try:
-    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    HAS_WEBENGINE = True
-except Exception:
-    HAS_WEBENGINE = False
 
 from .config import (
     IBD_EDITOR_ORIGIN, IBD_EDITOR_URL, PAP_EDITOR_ORIGIN, PAP_EDITOR_URL,
     SCHALTLAB_ORIGIN, SCHALTLAB_URL, THEME,
 )
 from .pap_import import PAP_MIME
+from .webview import RenderCrashHandler, make_offtherecord_view, webengine_missing_label
 
 # Auflösung des erzeugten PNG (2× = scharf genug für Arbeitsblätter/Word)
 _PNG_SCALE = 2
@@ -224,7 +218,6 @@ class PapEditorWindow(QMainWindow):
         self._last_png: bytes | None = None
         self._last_png_saved = False
         self._connected = False
-        self._render_retry_done = False
         self._build_ui()
 
         # Der Klick passiert in einer fremden Seite; abgeholt wird das Ergebnis
@@ -258,25 +251,14 @@ class PapEditorWindow(QMainWindow):
         self._status.setWordWrap(False)
         tb.addWidget(self._status)
 
-        self._view = None
-        if HAS_WEBENGINE:
-            # Wie im Block-Editor bewusst in try/except: auf stark
-            # eingeschränkten Schulrechnern schlägt die WebEngine-Init
-            # gelegentlich fehl – dann Hinweis statt Absturz.
-            try:
-                # Off-the-record-Profil (kein Name → keine Profildaten auf der
-                # Platte). Profil als erstes Kind, View danach: Qt löscht
-                # Kinder rückwärts, also View (+ Page) vor dem Profil.
-                self._profile = QWebEngineProfile(self)
-                self._view = QWebEngineView(self)
-                page = QWebEnginePage(self._profile, self._view)
-                self._view.setPage(page)
-                page.renderProcessTerminated.connect(self._on_render_crashed)
-                self.setCentralWidget(self._view)
-                self._load_host_page()
-            except Exception:
-                self._view = None
-        if self._view is None:
+        # Schlägt die WebEngine-Init fehl, ist die View None → Hinweis statt Absturz.
+        self._view = make_offtherecord_view(
+            self,
+            on_render_crashed=RenderCrashHandler(self, self._NAME, self._reload))
+        if self._view is not None:
+            self.setCentralWidget(self._view)
+            self._load_host_page()
+        else:
             self.setCentralWidget(self._fallback_widget())
             self._act_reload.setEnabled(False)
         self.apply_theme()
@@ -284,15 +266,7 @@ class PapEditorWindow(QMainWindow):
     def _fallback_widget(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
-        lbl = QLabel(
-            f"Der {self._NAME} ist nicht verfügbar.\n\n"
-            "Er benötigt PyQt6-WebEngine:\n\n"
-            "    pip install PyQt6-WebEngine"
-        )
-        lbl.setWordWrap(True)
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet(f"color:{THEME['text']}; font-size:13px; padding:24px;")
-        lay.addWidget(lbl)
+        lay.addWidget(webengine_missing_label(self._NAME))
         return w
 
     def _load_host_page(self):
@@ -315,22 +289,6 @@ class PapEditorWindow(QMainWindow):
         self._set_status(
             f"Keine Verbindung zu {self._HOST} – {self._NO_CONNECTION}",
             kind="error",
-        )
-
-    def _on_render_crashed(self, _status, _exit_code):
-        """Chromium-Renderprozess abgestürzt (typisch: GPU-Problem auf Servern)."""
-        if not self._render_retry_done:
-            self._render_retry_done = True
-            self._reload()
-            return
-        QMessageBox.warning(
-            self, self._NAME,
-            f"Die Anzeige des {self._NAME} ist abgestürzt (Grafik-Problem).\n\n"
-            "Unter Windows ist Software-Rendering bereits automatisch aktiv.\n"
-            "Falls der Fehler weiter auftritt, Koalino neu starten.\n\n"
-            "Optionaler Override:\n"
-            "    NIT_SOFTWARE_RENDER=1\n"
-            "(erzwingt Software-Rendering vor dem Start).",
         )
 
     # ── Ergebnis abholen ─────────────────────────────────────────────────────

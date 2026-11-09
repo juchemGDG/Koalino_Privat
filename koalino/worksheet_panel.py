@@ -6,13 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QUrl, QUrlQuery, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-try:
-    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineSettings
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    _WEBENGINE_AVAILABLE = True
-except ImportError:
-    _WEBENGINE_AVAILABLE = False
-
+from .webview import HAS_WEBENGINE, QWebEnginePage, make_offtherecord_view
 from .worksheet_renderer import HAS_MARKDOWN, pygments_css, render_worksheet
 
 _PAGE_TEMPLATE = """<!DOCTYPE html>
@@ -314,7 +308,7 @@ figure.bild figcaption { font-size: 0.85em; font-style: italic; text-align: cent
 """
 
 
-class _WorksheetPage(QWebEnginePage if _WEBENGINE_AVAILABLE else object):
+class _WorksheetPage(QWebEnginePage if HAS_WEBENGINE else object):
     """Fängt Klicks auf koalino://insert?id=… ab, statt sie zu navigieren."""
 
     insert_requested = pyqtSignal(str)  # block_id
@@ -338,7 +332,7 @@ class WorksheetPanel(QWidget):
         super().__init__(parent)
         self._path = None
         self._blocks = {}
-        self._available = _WEBENGINE_AVAILABLE and HAS_MARKDOWN
+        self._available = HAS_WEBENGINE and HAS_MARKDOWN
         self._build_ui()
 
     def _build_ui(self):
@@ -364,26 +358,21 @@ class WorksheetPanel(QWidget):
         hlay.addWidget(self._close_btn)
         layout.addWidget(self._header)
 
-        if self._available:
-            # Reihenfolge wie bei AisChatPanel: Profile zuerst als Kind anlegen,
-            # View danach – Qt räumt Kinder in umgekehrter Reihenfolge auf, so
-            # wird die View (+ Page) vor dem Profile zerstört.
-            self._profile = QWebEngineProfile(self)
-            self._view = QWebEngineView(self)
-            page = _WorksheetPage(self._profile, self._view)
-            settings = page.settings()
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanPaste, True)
-            page.insert_requested.connect(self._on_page_insert_requested)
-            self._view.setPage(page)
+        self._view = (make_offtherecord_view(self, clipboard=True, page_class=_WorksheetPage)
+                      if self._available else None)
+        if self._view is not None:
+            self._view.page().insert_requested.connect(self._on_page_insert_requested)
             layout.addWidget(self._view, stretch=1)
         else:
-            self._view = None
+            # Auch wenn die WebEngine-Initialisierung scheiterte: Vorschau abschalten
+            self._available = False
             missing = []
-            if not _WEBENGINE_AVAILABLE:
+            if not HAS_WEBENGINE:
                 missing.append("PyQt6-WebEngine")
             if not HAS_MARKDOWN:
                 missing.append("markdown / obsidian-callouts / Pygments")
+            if not missing:
+                missing.append("Start der WebEngine fehlgeschlagen")
             fallback = QLabel(
                 "Arbeitsblatt-Vorschau nicht verfügbar.\n(Fehlt: " + ", ".join(missing) + ")"
             )

@@ -1,19 +1,7 @@
 """AIS-Chat-Panel – eingebettete Web-Ansicht von app.ais-chat.schule."""
 import time
 
-from PyQt6.QtCore import QTimer
-
-try:
-    from PyQt6.QtCore import QUrl
-    from PyQt6.QtWebEngineCore import (
-        QWebEnginePage,
-        QWebEngineProfile,
-        QWebEngineSettings,
-    )
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    _WEBENGINE_AVAILABLE = True
-except ImportError:
-    _WEBENGINE_AVAILABLE = False
+from PyQt6.QtCore import QTimer, QUrl
 
 _MOBILE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
@@ -24,6 +12,7 @@ _MOBILE_UA = (
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget
 
 from .config import AIS_CHAT_URL, THEME
+from .webview import make_offtherecord_view, webengine_missing_label
 
 # Einstellbarer Breitenbereich des AIS-Panels + Zoom-Faktor für mobile Darstellung
 PANEL_MIN_WIDTH = 400
@@ -83,25 +72,10 @@ class AisChatPanel(QWidget):
         hlay.addWidget(self._home_btn)
         layout.addWidget(self._header)
 
-        if _WEBENGINE_AVAILABLE:
-            # Off-the-record Profil: kein Name → kein Persistenzordner auf Disk
-            # Reihenfolge: Profile als erstes Kind, View als zweites Kind des Panels.
-            # Qt löscht Kinder in umgekehrter Reihenfolge → View (+ Page) vor Profile → korrekte Cleanup-Reihenfolge.
-            self._profile = QWebEngineProfile(self)
-            self._profile.setHttpUserAgent(_MOBILE_UA)
-
-            self._view = QWebEngineView(self)
-            page = QWebEnginePage(self._profile, self._view)
-            # Zwischenablage für JavaScript freigeben, damit die Copy-Buttons
-            # der Webseite (navigator.clipboard / execCommand('copy')) funktionieren.
-            settings = page.settings()
-            settings.setAttribute(
-                QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True
-            )
-            settings.setAttribute(
-                QWebEngineSettings.WebAttribute.JavascriptCanPaste, True
-            )
-            self._view.setPage(page)
+        # Zwischenablage für JavaScript freigeben, damit die Copy-Buttons der
+        # Webseite (navigator.clipboard / execCommand('copy')) funktionieren.
+        self._view = make_offtherecord_view(self, clipboard=True, user_agent=_MOBILE_UA)
+        if self._view is not None:
             self._view.loadFinished.connect(self._inject_viewport)
             self._view.urlChanged.connect(self._on_url_changed)
             self._portal_timer = QTimer(self)
@@ -114,17 +88,7 @@ class AisChatPanel(QWidget):
                 self._view.setUrl(QUrl(self._url))
             layout.addWidget(self._view, stretch=1)
         else:
-            info = QLabel(
-                "PyQt6-WebEngine ist nicht installiert.\n\n"
-                "Bitte im Terminal ausführen:\n\n"
-                "pip install PyQt6-WebEngine"
-            )
-            info.setStyleSheet(
-                f"color:{THEME['text_dim']}; font-size:12px; padding:20px;"
-            )
-            info.setWordWrap(True)
-            layout.addWidget(info)
-            layout.addStretch()
+            layout.addWidget(webengine_missing_label("Chat-Panel"), stretch=1)
         self.refresh_theme()
 
     def showEvent(self, event):

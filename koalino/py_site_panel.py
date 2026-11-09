@@ -8,14 +8,8 @@ from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-try:
-    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    HAS_WEBENGINE = True
-except Exception:
-    HAS_WEBENGINE = False
-
 from .config import PY_SITE_URL, THEME
+from .webview import make_offtherecord_view
 
 
 class PySitePanel(QWidget):
@@ -44,16 +38,10 @@ class PySitePanel(QWidget):
         hl.addWidget(self._tool_button("✕", "Schließen", self.close_requested.emit))
         lay.addWidget(head)
 
-        if HAS_WEBENGINE:
-            try:
-                # Off-the-record-Profil wie bei PAP/IBD-Editor (keine Daten auf der Platte).
-                self._profile = QWebEngineProfile(self)
-                self._view = QWebEngineView(self)
-                self._view.setPage(QWebEnginePage(self._profile, self._view))
-                lay.addWidget(self._view, 1)
-            except Exception:
-                self._view = None
-        if self._view is None:
+        self._view = make_offtherecord_view(self)
+        if self._view is not None:
+            lay.addWidget(self._view, 1)
+        else:
             self._btn_reload.setEnabled(False)
             msg = QLabel("Die Seite kann hier nicht angezeigt werden.\n"
                          "Sie benötigt PyQt6-WebEngine.")
