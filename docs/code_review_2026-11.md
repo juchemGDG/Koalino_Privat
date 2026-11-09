@@ -459,3 +459,4 @@ Abschnitt 1.1, 2.1 bis 2.5 und 3.3 sind erledigt (2026-11-09). Für den Rest:
 3. **3.4** Firmware-Passwort im Deploy-Dialog, **3.5** Claude-Terminal hinter
    Umgebungsvariable.
 4. **1.4**, **1.5**, **3.6** nach Gelegenheit.
+
