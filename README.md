@@ -22,15 +22,15 @@ Downloads & Releases: https://github.com/juchemGDG/Koalino
 | **Datenauswertung (CSV)** | Messreihen oder Umfragedaten aus einer CSV-Datei als Streu-, Linien-, Säulen-, Balken-, Kreisdiagramm, Histogramm oder Boxplot darstellen (auch je Kategorie), mit Kennwerten (Median, Quartile, Mittelwert, Spannweite …), Häufigkeitstabelle, Ausgleichsgerade mit R² und PNG-Export. Reiter „Statistik-Tests": Signifikanztest (Binomialtest mit Ablehnungsbereich), t-Test für eine und zwei Stichproben (Welch, gleiche Varianzen, verbunden) mit p-Wert, Konfidenzintervall und Effektstärke. „Als Python-Code" erzeugt ein lesbares Programm (csv + matplotlib), das dasselbe Diagramm zeichnet – direkt als neuer Editor-Tab. Export als PNG oder SVG, Beispieldaten zum Ausprobieren. Läuft offline; dieselbe App gibt es als [StatPlot](https://github.com/juchemGDG/StatPlot) auch im Browser (z. B. auf dem iPad) und als Desktop-Version. Über den Knopf **Datenauswertung** in der Seitenleiste oder „Visualisieren → 📊 Datenauswertung (CSV) …" |
 | **PAP-Editor** | Programmablaufpläne zeichnen – über den Knopf **PAP-Editor** rechts in der Menüleiste. Der fertige Plan landet mit „In Projekt übernehmen" als Bild in der Zwischenablage und kann direkt in Arbeitsblätter, Word oder LibreOffice eingefügt werden |
 | **Arbeitsblatt-Vorschau** | In Obsidian erstellte Markdown-Arbeitsblätter (Callouts, HTML-Layout-Vorlagen, Codeblöcke) direkt in Koalino korrekt formatiert anzeigen – Codeschnipsel lassen sich mit einem Klick kopieren oder an der Cursorposition in den Editor einfügen |
-| **KI-Codegenerator** | Schülerinnen und Schüler spezifizieren Eingabe/Ablauf/Ausgabe/Variablen, die KI setzt es in Code um (lokal via Ollama) |
+| **Chatbot-Panel** | ais.chat (Schule) oder fobizz.com als Seitenleiste neben dem Editor; unter „Hilfe → NiT_Coder (ais.chat)“ liegt die Vorlage, um den Code-Generator **NiT_Coder** als eigenen Dialogpartner auf ais.chat anzulegen |
 | **Git-Integration** | Repository klonen, Status, Commit, Push, Pull, Branch wechseln und Merge-Konflikte lösen – direkt aus dem Menü „Git" |
 | **Syntax-Highlighting** | Farbige Python-Syntax, Zeilennummern, Klammernabgleich, Auto-Vervollständigung (Jedi) |
 | **Suchen & Ersetzen** | Im Editor über `Strg+F` (Suchen) bzw. `Strg+H` (Suchen und Ersetzen) |
 | **Fehler-Links** | Fehler in rot, klickbar → Sprung zur Fehlerstelle im Editor |
-| **Fehler-Erklärung** | Verständliche deutsche Klartext-Hinweise zu Programmfehlern; auf Wunsch erklärt der KI-Tutor „Infi" den Fehler mit Bezug auf den eigenen Code |
+| **Fehler-Erklärung** | Verständliche deutsche Klartext-Hinweise zu Programmfehlern, in Stufen nach dem Cheatsheet „Fehler finden: Schritt für Schritt“ – ganz ohne KI |
 | **Dateibaum** | Ordner/Dateien verwalten, neue Dateien erstellen |
-| **Helles & dunkles Design** | Zwei Themes – klassisch-hell (Standard) und modern-dunkel, umschaltbar in den Einstellungen |
-| **KI-Tutor „Infi"** | Lokaler, kostenloser KI-Tutor für Python-Anfängerinnen und -Anfänger (optional, via Ollama) |
+| **Designs & Farbschemata** | Vier Oberflächen-Designs (modern hell/dunkel, klassisch hell, hoher Kontrast) und zehn Code-Farbschemata (u. a. Eclipse, Thonny, IDLE, Okabe-Ito für Farbenblinde), umschaltbar in den Einstellungen |
+| **Debugging-Landkarte** | Stände jedes Programmlaufs (✓/✗) mit „Zurück zum letzten funktionierenden Stand“, Kontrollpunkte, Fehlerprotokoll neben dem Programm, Absturzprotokoll |
 
 ---
 
@@ -82,56 +82,23 @@ Gruppenzugehörigkeit wirksam wird. Prüfen lässt sie sich mit dem Befehl `grou
 
 ---
 
-## KI-Tutor „Infi" (optional)
+## Chatbot (optional)
 
-Infi ist ein eingebauter, ermutigender Lern-Assistent für Python- und Arduino-Anfängerinnen und -Anfänger. Er läuft **vollständig lokal und kostenlos** über [Ollama](https://ollama.com) – es wird keine Internetverbindung und kein API-Schlüssel benötigt.
+Unter **Datei → Einstellungen → Chatbot** lässt sich rechts neben dem Editor ein
+Chatbot einblenden: **ais.chat** (der schulische KI-Chat von SCHULE@BW, Anmeldung
+über VIDIS) oder **fobizz.com**. Beide laufen als eingebettete Web-Seite; Koalino
+speichert dabei keine Anmeldedaten (siehe [Datenschutz](docs/datenschutz.md)).
 
-Die Option erscheint in den Einstellungen nur, wenn Ollama auf dem Rechner installiert ist.
+Für ais.chat gibt es unter **Hilfe → NiT_Coder (ais.chat)** eine Vorlage, mit der
+Lehrkräfte den **NiT_Coder** als eigenen Dialogpartner anlegen: einen Code-Generator
+im Auftragnehmer-Modus, der vollständige Spezifikationen (EINGABE, ABLAUF, AUSGABE,
+VARIABLEN) in Code umsetzt, aber nie selbst den Algorithmus entwirft. Die
+Instruktionen gibt es in zwei Stufen (Klasse 8/9 ohne `main()`, Klasse 10/KS mit
+`main()` und IBD).
 
-### Installation (einmalig pro Rechner)
-
-#### Windows
-
-1. Installer herunterladen: [ollama.com/download](https://ollama.com/download/windows)
-2. Setup ausführen – Ollama startet danach automatisch im Hintergrund
-3. Eingabeaufforderung öffnen (`Win + R` → `cmd`) und Modell herunterladen:
-   ```cmd
-   ollama pull llama3.2
-   ```
-
-#### Linux
-
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3.2
-```
-
-#### macOS
-
-```bash
-brew install ollama
-ollama pull llama3.2
-```
-
-> Alternativ: Installer unter [ollama.com/download](https://ollama.com/download/mac) herunterladen.
-
-### Empfohlene Modelle
-
-| Modell | Größe | Empfehlung |
-|---|---|---|
-| `llama3.2` | ~2 GB | Standard – gut und schnell |
-| `llama3.1:8b` | ~4,7 GB | Bessere Qualität, mehr RAM nötig |
-| `gemma2:2b` | ~1,6 GB | Für schwächere Schulrechner |
-
-### Infi aktivieren
-
-1. Koalino starten
-2. **Datei → Einstellungen** öffnen (oder `Strg+,`)
-3. Im Abschnitt **KI-TUTOR (INFI)** den Haken bei „Infi-Tutor aktivieren" setzen
-4. **Übernehmen** klicken – das Chat-Panel öffnet sich rechts
-
-> Das Modell kann im Einstellungs-Dialog jederzeit geändert werden (Feld „Modell").  
-> Ollama muss laufen, bevor Infi gestartet wird. Beim Fehler „Keine Verbindung" bitte in einer Eingabeaufforderung `ollama serve` ausführen.
+> Bis Version 1.14 enthielt Koalino einen lokalen KI-Tutor („Infi“) und einen
+> Code-Generator über Ollama. Beides hat sich im Schulbetrieb nicht bewährt und
+> wurde entfernt.
 
 ---
 
@@ -142,10 +109,9 @@ deutschen Hinweis** an: was der Fehler bedeutet und worauf zu achten ist (z. B. 
 `NameError`, `IndentationError`, `IndexError`, `TypeError` …). Das funktioniert
 vollständig lokal, ganz ohne KI.
 
-Ist zusätzlich der KI-Tutor **„Infi" aktiv**, erscheint der Knopf
-**🤖 Infi erklärt diesen Fehler**. Ein Klick schickt die Fehlermeldung zusammen mit
-dem eigenen Code an Infi, der den Fehler kindgerecht erklärt – mit Hinweisen statt
-fertiger Lösung, damit das eigene Nachdenken im Vordergrund bleibt.
+Mit **Ausführen → Fehler finden** stehen dazu die Stände des Programms, Kontrollpunkte
+(`print("K1")  # Kontrollpunkt`) und ein Fehlerprotokoll bereit, das neben dem Programm
+als Markdown gespeichert wird.
 
 ---
 
@@ -247,20 +213,6 @@ Anweisung, Entscheidung, Schleife, Funktion) zusammengesetzt.
 
 > Benötigt eine Internetverbindung und PyQt6-WebEngine (in den Download-Versionen
 > bereits enthalten).
-
----
-
-## KI-Codegenerator (optional)
-
-Der Code-Generator arbeitet im **Auftragnehmer-Modus**: Die Schülerinnen und Schüler
-geben eine vollständige Spezifikation an (EINGABE, ABLAUF, AUSGABE, VARIABLEN), und die
-KI setzt **genau diesen** Algorithmus in Code um – ohne den Lösungsweg vorzugeben. Läuft
-lokal über [Ollama](https://ollama.com). So bleibt das Algorithmen-Entwerfen Aufgabe der
-Lernenden, während die reine Umsetzung in Syntax unterstützt wird.
-
-> Mit **„🧩 Als Blöcke öffnen"** lässt sich der erzeugte Code zusätzlich im Block-Editor
-> als Blöcke anzeigen – ideal für den Übergang vom Block- zum Textprogrammieren. Die
-> Umwandlung ist deterministisch; nicht erkannte Zeilen bleiben als Roh-Python-Block erhalten.
 
 ---
 
@@ -395,6 +347,15 @@ Zwei Lösungswege:
 
 ---
 
+## Datenschutz
+
+Koalino sendet keine Nutzungsdaten. Welche Verbindungen beim Öffnen eingebetteter
+Web-Seiten (ais.chat, fobizz, PAP-Editor, StatPlot …) entstehen, was lokal im
+Benutzerprofil gespeichert wird und wie lange, und was ein Fehlerbericht enthält,
+steht in [docs/datenschutz.md](docs/datenschutz.md).
+
+---
+
 ## Projektstruktur
 
 ```
@@ -407,17 +368,19 @@ Koalino/
 │   ├── file_panel.py           # Dateibaum
 │   ├── console_panel.py        # Konsole (Ausgabe)
 │   ├── block_panel.py          # Block-Editor-Fenster (Blockly)
-│   ├── coder_panel.py          # KI-Codegenerator
+│   ├── coder_prompt.py         # Instruktionen des NiT_Coders (für ais.chat)
 │   ├── ais_chat_panel.py       # AIS-Schulchat
 │   ├── worksheet_panel.py      # Arbeitsblatt-Vorschau (Obsidian-Markdown)
 │   ├── worksheet_renderer.py   # Markdown→HTML-Rendering (Callouts, Codeblöcke)
 │   ├── micropython_dialogs.py  # Flash- & Bibliotheks-Dialog
-│   ├── tutor_panel.py          # KI-Tutor „Infi" (Ollama-Chat)
+│   ├── ais_prompt_dialog.py    # Vorlage „NiT_Coder auf ais.chat"
 │   ├── settings_dialog.py      # Einstellungen
 │   ├── config.py               # Konstanten & Themes (hell/dunkel)
 │   └── assets/
 │       └── blockly/            # Blockly offline + NIT-/nitbw-Blöcke
 ├── firmware/                   # ESP32-Standalone (MicroPython-Editor fürs iPad, Beta; AP+Webserver)
+├── docs/                       # Pläne, Code-Check, Datenschutz
+├── tests/                      # pytest (ohne Qt lauffähig)
 ├── start.py                    # Bootstrap-Skript
 ├── run.sh                      # Linux/macOS Starter
 ├── run.bat                     # Windows Starter

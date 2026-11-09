@@ -146,8 +146,7 @@ def render_worksheet(markdown_text: str, dark: bool):
     """Markdown → (HTML-Fragment, {block_id: roher Code}).
 
     Erfordert HAS_MARKDOWN. Ein frisches Markdown()-Objekt pro Aufruf – kein
-    md.reset() nötig, passt zum bestehenden „bei jeder Änderung alles neu
-    aufbauen"-Muster (vgl. MermaidPreview._reload_shell in coder_panel.py).
+    md.reset() nötig, bei jeder Änderung wird alles neu aufgebaut.
     """
     blocks: dict = {}
     style_name = "monokai" if dark else "default"

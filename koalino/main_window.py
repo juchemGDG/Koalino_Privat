@@ -55,7 +55,6 @@ from . import offline_cache
 from .block_panel import BlockEditorWindow
 from .parsons_panel import ParsonsWindow
 from .ais_chat_panel import AisChatPanel
-from .coder_panel import CoderPanel
 from .worksheet_panel import WorksheetPanel
 from .help_dialog import HelpDialog, guide_path
 from .pap_editor import IbdEditorWindow, PapEditorWindow, SchaltLabWindow
@@ -63,7 +62,6 @@ from .statplot_window import StatPlotWindow
 from .settings_dialog import ACTIVITY_TOGGLEABLE, SettingsDialog
 from .terminal_panel import ClaudeTerminalPanel, find_claude_binary, pty_available
 from .toolbar_widgets import ModeSwitch, PortPicker
-from .tutor_panel import TutorPanel
 from .net_hints import git_network_hint
 
 
@@ -872,7 +870,7 @@ class MainWindow(QMainWindow):
         self._aux_workers: list = []   # kurzlebige Hilfs-Threads (Port-Scan, Geräte-Listing)
         self._port_scan_busy = False   # verhindert überlappende Port-Scans
         self._run_stderr_buf: list[str] = []   # stderr des laufenden Programms (für Fehlerhinweis)
-        self._last_error_traceback = ""        # letzter Traceback (für „Infi erklärt")
+        self._last_error_traceback = ""        # letzter Traceback (Fehlerhilfe, Protokoll)
         self._last_run_file: str | None = None  # zuletzt gestartete Datei (für <stdin>-Tracebacks)
         self._user_stopped = False             # True wenn Lauf per Stopp-Knopf beendet
         self._port_busy = False     # verhindert gleichzeitige mpremote-Prozesse
@@ -885,9 +883,7 @@ class MainWindow(QMainWindow):
         self._settings_scrollback: int = 5000
         self._settings_blocks_enabled: bool = True    # Block-Editor, Standard: an
         self._settings_hidden_activity: set[str] = set()   # ausgeblendete Knöpfe der Seitenleiste
-        self._settings_tutor_mode: str = "none"
-        self._settings_tutor_url: str = ""
-        self._settings_tutor_model: str = ""
+        self._settings_tutor_mode: str = "none"    # Chatbot: "none" | "aischat" | "fobizz"
         self._settings_sketchbook: str = str(Path.home())
         self._settings_git_executable: str = ""
         self._settings_git_repo: str = ""
@@ -904,8 +900,8 @@ class MainWindow(QMainWindow):
         self._settings_plot_x_max: int = 500
         self._settings_plot_style: str = "line"       # "line" | "scatter"
         # Fehler finden (Cheatsheet)
-        self._settings_debug_level: str = "kl10"        # "kl89" | "kl10" – nur noch Code-Generator/NiT_Coder
-        # Fehlersuche (Konsole, Fehlerprotokoll, Hilfe, Infi) immer nach dem Cheatsheet Klasse 8/9 –
+        self._settings_debug_level: str = "kl10"        # "kl89" | "kl10" – nur noch für die NiT_Coder-Vorlage
+        # Fehlersuche (Konsole, Fehlerprotokoll, Hilfe) immer nach dem Cheatsheet Klasse 8/9 –
         # für die SuS einfacher; die Daten für 10/KS bleiben in debug_guide erhalten.
         self._debug_level: str = "kl89"
         self._settings_debug_stepped: bool = True       # Fehlerhilfe in Stufen
@@ -935,9 +931,22 @@ class MainWindow(QMainWindow):
         # currentIndexChanged feuerte beim addItem noch nicht (Signal erst danach verbunden)
         # → Modus einmalig manuell initialisieren
         QTimer.singleShot(0, lambda: self._on_mode_changed("python"))
+        # Alte Zwischenkopien und Stände aufräumen – nach dem Start, damit er nicht wartet.
+        QTimer.singleShot(5000, self._prune_local_data)
         # Beim Start übergebene Datei öffnen (z. B. Doppelklick auf .py in Windows).
         if initial_file and os.path.isfile(initial_file):
             self._open_file_path(initial_file)
+
+    def _prune_local_data(self):
+        """Löscht lange unbenutzte Offline-Kopien und Stände (Fristen in config.py)."""
+        try:
+            from .snapshots import prune_orphans
+            n_cache = offline_cache.prune()
+            n_snap = prune_orphans()
+            if n_cache or n_snap:
+                _note(f"Aufgeräumt: {n_cache} Zwischenkopien, {n_snap} Stände-Ordner")
+        except Exception as exc:
+            _note(f"Aufräumen der lokalen Daten fehlgeschlagen: {exc}")
 
     # ──────────────────────────────────────────────────────────────────────
     # Fenster
@@ -1288,10 +1297,9 @@ class MainWindow(QMainWindow):
         self._sync_activity_bar()
 
     def _ai_page_visible(self) -> bool:
-        """True, wenn rechts ein KI-Panel (Infi, AIS-Chat, Code-Generator) zu sehen ist."""
+        """True, wenn rechts ein Chatbot-Panel (ais.chat, fobizz) zu sehen ist."""
         return (not self._ai_stack.isHidden()
-                and self._ai_stack.currentWidget() in (self._tutor_panel, self._aischat_panel,
-                                                       self._coder_panel, self._fobizz_panel))
+                and self._ai_stack.currentWidget() in (self._aischat_panel, self._fobizz_panel))
 
     def _py_site_visible(self) -> bool:
         return (not self._ai_stack.isHidden()
@@ -1317,7 +1325,7 @@ class MainWindow(QMainWindow):
         else:
             if self._debug_log_visible():
                 self._debug_log_panel.save()
-            self._show_tutor_panel()
+            self._show_chatbot_panel()
         self._sync_activity_bar()
 
     def _toggle_py_site(self):
@@ -1407,7 +1415,6 @@ class MainWindow(QMainWindow):
         # Konsole
         self._console = ConsolePanel()
         self._console.error_link_clicked.connect(self._jump_to_error)
-        self._console.explain_requested.connect(self._explain_error_with_infi)
         self._console.action_requested.connect(self._on_console_action)
         self._device_panel.refresh_started.connect(self._on_device_refresh_start)
         self._device_panel.refresh_done.connect(self._on_device_refresh_done)
@@ -1419,37 +1426,29 @@ class MainWindow(QMainWindow):
         self._right_splitter.setSizes([520, 0, 200])
         self._main_splitter.addWidget(self._right_splitter)
 
-        # KI-Panel: TutorPanel (Ollama), AisChatPanel, CoderPanel im Stack
+        # Rechter Bereich: Chatbots, Arbeitsblatt-Vorschau, Fehlerprotokoll, py.nitbw.de
+        # im Stapel – Zugriff immer über setCurrentWidget, nie über Indizes.
         self._ai_stack = QStackedWidget()
-        self._tutor_panel    = TutorPanel()
-        self._tutor_panel.set_code_provider(self._current_editor_text)
         self._aischat_panel  = AisChatPanel()
-        self._coder_panel    = CoderPanel()
         self._fobizz_panel   = AisChatPanel(url=FOBIZZ_URL, title="🎓  fobizz", portal_fix=False, lazy=True)
         self._claude_terminal_panel = ClaudeTerminalPanel()
         self._worksheet_panel = WorksheetPanel()
-        self._ai_stack.addWidget(self._tutor_panel)          # Index 0 → Infi/Ollama
-        self._ai_stack.addWidget(self._aischat_panel)        # Index 1 → AIS-Chat
-        self._ai_stack.addWidget(self._coder_panel)          # Index 2 → Code-Generator
-        self._ai_stack.addWidget(self._claude_terminal_panel)  # Index 3 → Claude-Terminal (Easter Egg)
-        self._ai_stack.addWidget(self._worksheet_panel)        # Index 4 → Arbeitsblatt-Vorschau
+        self._ai_stack.addWidget(self._aischat_panel)
+        self._ai_stack.addWidget(self._claude_terminal_panel)  # Claude-Terminal (Easter Egg)
+        self._ai_stack.addWidget(self._worksheet_panel)
         from .debug_log_panel import DebugLogPanel
         self._debug_log_panel = DebugLogPanel()
         self._debug_log_panel.set_level(self._debug_level)
         self._debug_log_panel.set_mode(self._mode)
-        self._coder_panel.set_level(self._settings_debug_level)
-        self._coder_panel.set_local(self._mode == "python")
-        self._ai_stack.addWidget(self._debug_log_panel)        # Index 5 → Fehlerprotokoll
+        self._ai_stack.addWidget(self._debug_log_panel)
         self._debug_log_panel.close_requested.connect(self._close_debug_log)
         from .py_site_panel import PySitePanel
         self._py_site_panel = PySitePanel()
-        self._ai_stack.addWidget(self._py_site_panel)          # Index 6 → py.nitbw.de
+        self._ai_stack.addWidget(self._py_site_panel)
         self._py_site_panel.close_requested.connect(self._toggle_py_site)
-        self._ai_stack.addWidget(self._fobizz_panel)           # Index 7 → fobizz.com
+        self._ai_stack.addWidget(self._fobizz_panel)
         self._debug_log_panel.restore_requested.connect(self._restore_last_good)
         self._debug_log_panel.pin_requested.connect(self._pin_snapshot)
-        self._coder_panel.insert_code_requested.connect(self._on_insert_generated_code)
-        self._coder_panel.open_as_blocks_requested.connect(self._open_blocks_from_code)
         self._worksheet_panel.insert_into_editor_requested.connect(self._on_worksheet_insert_code)
         self._worksheet_panel.close_requested.connect(self._close_worksheet_preview)
         self._ai_stack.setVisible(False)
@@ -1916,7 +1915,6 @@ class MainWindow(QMainWindow):
         self._debug_btn_act.setVisible(not is_upy)
         if hasattr(self, "_debug_log_panel"):
             self._debug_log_panel.set_mode(self._mode)   # Leitfaden: lokal ohne Hardware-Schritte
-            self._coder_panel.set_local(not is_upy)
         if is_upy:
             self._debug_end()
         self._port_sep_act.setVisible(is_upy)
@@ -2059,8 +2057,6 @@ class MainWindow(QMainWindow):
         enabled = self._settings_blocks_enabled
         if hasattr(self, "_m_blocks"):
             self._m_blocks.menuAction().setVisible(enabled)
-        if hasattr(self, "_coder_panel"):
-            self._coder_panel.set_blocks_feature_enabled(enabled)
         # Falls deaktiviert und ein Block-Fenster offen ist: schließen.
         if not enabled:
             win = getattr(self, "_block_window", None)
@@ -2070,10 +2066,9 @@ class MainWindow(QMainWindow):
     def _blocks_from_current_code(self):
         """Menü „Blöcke": Code des aktiven Editor-Tabs als Blöcke anzeigen.
 
-        Nutzt denselben deterministischen Python→Blockly-Umwandler wie
-        „Coder → Blockly" (py2blockly, AST-basiert – keine KI nötig). Nicht
-        abbildbare Zeilen landen in Roh-Python-Blöcken, das Programm bleibt
-        dadurch immer vollständig.
+        Deterministischer Python→Blockly-Umwandler (py2blockly, AST-basiert –
+        keine KI nötig). Nicht abbildbare Zeilen landen in Roh-Python-Blöcken,
+        das Programm bleibt dadurch immer vollständig.
         """
         code = self._current_editor_text().strip()
         if not code:
@@ -2087,7 +2082,7 @@ class MainWindow(QMainWindow):
         self._open_blocks_from_code(code)
 
     def _open_blocks_from_code(self, code: str):
-        """Coder → Blockly: erzeugten Python-Code als Blöcke im Block-Editor zeigen."""
+        """Python-Code als Blöcke im Block-Editor zeigen."""
         from .py2blockly import python_to_block_state
         try:
             state = python_to_block_state(code)
@@ -2161,7 +2156,6 @@ class MainWindow(QMainWindow):
         self._run_stderr_buf = []
         self._last_error_traceback = ""
         self._user_stopped = False
-        self._console.set_explain_visible(False)
         self._debug_before_run(tab)
 
         # Vorhersage-Modus für diesen Lauf aktivieren (Ausgabe sammeln + vergleichen)
@@ -2324,7 +2318,7 @@ class MainWindow(QMainWindow):
         self._main_splitter.setCollapsible(2, False)
         self._ai_stack.setMinimumWidth(0)
         self._ai_stack.setMaximumWidth(16777215)
-        self._ai_stack.setCurrentIndex(3)
+        self._ai_stack.setCurrentWidget(self._claude_terminal_panel)
         self._ai_stack.setVisible(True)
         sizes = self._main_splitter.sizes()
         if sizes[2] == 0:
@@ -2335,11 +2329,11 @@ class MainWindow(QMainWindow):
 
     def _open_worksheet_preview(self, path: str):
         """Arbeitsblatt-Vorschau öffnen – unabhängig vom eingestellten
-        KI-Tutor-Modus (Settings bleiben unverändert)."""
+        Chatbot-Modus (Settings bleiben unverändert)."""
         self._main_splitter.setCollapsible(2, False)
         self._ai_stack.setMinimumWidth(0)
         self._ai_stack.setMaximumWidth(16777215)
-        self._ai_stack.setCurrentIndex(4)
+        self._ai_stack.setCurrentWidget(self._worksheet_panel)
         self._ai_stack.setVisible(True)
         sizes = self._main_splitter.sizes()
         if sizes[2] == 0:
@@ -2362,35 +2356,9 @@ class MainWindow(QMainWindow):
         self._update_tab_title(tab)
 
     def _current_editor_text(self) -> str:
-        """Liefert den Code des aktuell aktiven Editor-Tabs (für Infis „Code zeigen")."""
+        """Liefert den Code des aktuell aktiven Editor-Tabs."""
         tab = self._current_tab()
         return tab.editor.get_text() if tab else ""
-
-    def _explain_error_with_infi(self):
-        """Schickt den letzten Fehler mit dem Schülercode an den Tutor „Infi"."""
-        tb = self._last_error_traceback
-        if not tb.strip():
-            return
-        if self._settings_tutor_mode != "ollama":
-            QMessageBox.information(
-                self, "Infi",
-                "Der KI-Tutor „Infi“ ist nicht aktiv.\n"
-                "Aktiviere ihn unter Datei → Einstellungen → KI-Tutor (Infi).",
-            )
-            return
-        tab = self._current_tab()
-        code = tab.editor.get_text() if tab else ""
-        from .error_hints import build_infi_error_prompt
-        prompt = build_infi_error_prompt(code, tb, self._last_hint, self._debug_level)
-        # Infi-Panel sicher einblenden (Index 0) – auch wenn der Splitter kollabiert war.
-        self._ai_stack.setCurrentIndex(0)
-        self._ai_stack.setVisible(True)
-        sizes = self._main_splitter.sizes()
-        if len(sizes) == 3 and sizes[2] == 0:
-            total = sum(sizes)
-            self._main_splitter.setSizes([sizes[0], max(200, total - sizes[0] - 320), 320])
-        self._tutor_panel.ask(prompt)
-        self._console.set_explain_visible(False)
 
     def _on_process_output(self, text: str, kind: str):
         self._debug_track_output(text, kind)
@@ -2443,8 +2411,7 @@ class MainWindow(QMainWindow):
         ResultDialog(self._prediction or "", actual, matches, self).exec()
 
     def _handle_program_error(self):
-        """Nach einem Absturz: verständlichen Hinweis zeigen und (falls Infi aktiv)
-        den „Infi erklärt diesen Fehler"-Knopf anbieten."""
+        """Nach einem Absturz: verständlichen Hinweis zeigen (Fehlerhilfe in Stufen)."""
         if self._user_stopped:
             return   # vom Nutzer abgebrochen – kein echter Programmfehler
         traceback_text = "".join(self._run_stderr_buf).strip()
@@ -2473,9 +2440,6 @@ class MainWindow(QMainWindow):
             if not stepped:
                 for st in range(2, final + 1):
                     self._show_hint_stage(st, with_links=(st == final))
-        # KI-Erklärung nur anbieten, wenn der Ollama-Tutor (Infi) eingerichtet ist.
-        if self._settings_tutor_mode == "ollama":
-            self._console.set_explain_visible(True)
 
     # ──────────────────────────────────────────────────────────────────────
     # Fehler finden (Fehlerhilfe, Stände, Kontrollpunkte, Protokoll)
@@ -2740,7 +2704,7 @@ class MainWindow(QMainWindow):
         self._main_splitter.setCollapsible(2, False)
         self._ai_stack.setMinimumWidth(0)
         self._ai_stack.setMaximumWidth(16777215)
-        self._ai_stack.setCurrentIndex(5)
+        self._ai_stack.setCurrentWidget(self._debug_log_panel)
         self._ai_stack.setVisible(True)
         sizes = self._main_splitter.sizes()
         if sizes[2] == 0:
@@ -4245,14 +4209,6 @@ class MainWindow(QMainWindow):
             tab.editor.mark_error_line(lineno)
 
     # ──────────────────────────────────────────────────────────────────────
-    # Code-Generator: generierten Code in neuen Tab einfügen
-    # ──────────────────────────────────────────────────────────────────────
-    def _on_insert_generated_code(self, code: str):
-        tab = self._new_tab()
-        tab.editor.set_text(code)
-        self._update_tab_title(tab)
-
-    # ──────────────────────────────────────────────────────────────────────
     # Hilfsfunktionen
     # ──────────────────────────────────────────────────────────────────────
     def _get_python_executable(self) -> str:
@@ -4437,7 +4393,11 @@ class MainWindow(QMainWindow):
             '<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.de">'
             'CC BY-NC-SA 4.0</a>. '
             '<a href="https://py.nitbw.de/lizenz">Lizenzhinweis &amp; Namensnennung</a>'
-            "</p>")
+            "</p>"
+            '<p>Datenschutz: Koalino sendet keine Nutzungsdaten. Welche Verbindungen '
+            'eingebettete Web-Seiten aufbauen und was lokal gespeichert wird, steht in '
+            '<a href="https://github.com/juchemGDG/Koalino/blob/main/docs/datenschutz.md">'
+            'docs/datenschutz.md</a>.</p>')
         box.exec()
 
     def _open_settings(self):
@@ -4474,7 +4434,6 @@ class MainWindow(QMainWindow):
             self._settings_debug_level = dlg.debug_level
             self._settings_debug_stepped = dlg.debug_stepped
             self._settings_debug_change_hint = dlg.debug_change_hint
-            self._coder_panel.set_level(self._settings_debug_level)
             if getattr(self, "_debug_map_dlg", None) is not None:
                 self._debug_map_dlg.set_level(self._debug_level)
             ui_font_changed = dlg.ui_font_pt != self._settings_ui_font_pt
@@ -4593,9 +4552,11 @@ class MainWindow(QMainWindow):
             self._settings_store.setValue("blocks/default_on_migrated", True)
         self._settings_tutor_mode = str(self._settings_store.value("tutor/mode", self._settings_tutor_mode) or "none")
         if self._settings_tutor_mode not in ("none", "aischat", "fobizz"):
-            self._settings_tutor_mode = "none"   # Ollama-Modi (Infi, Code-Generator) gibt es nicht mehr
-        self._settings_tutor_url = str(self._settings_store.value("tutor/url", self._settings_tutor_url) or "")
-        self._settings_tutor_model = str(self._settings_store.value("tutor/model", self._settings_tutor_model) or "")
+            self._settings_tutor_mode = "none"   # Ollama-Modi (bis 1.14) gibt es nicht mehr
+        # Schlüssel des entfernten Ollama-Tutors aus alten Installationen aufräumen.
+        for key in ("tutor/url", "tutor/model"):
+            if self._settings_store.contains(key):
+                self._settings_store.remove(key)
         self._settings_sketchbook = self._normalize_sketchbook_dir(
             str(self._settings_store.value("files/sketchbook_dir", self._settings_sketchbook) or "")
         )
@@ -4650,8 +4611,6 @@ class MainWindow(QMainWindow):
         self._settings_store.setValue("python/executable", self._settings_python_exec)
         self._settings_store.setValue("console/scrollback", self._settings_scrollback)
         self._settings_store.setValue("tutor/mode", self._settings_tutor_mode)
-        self._settings_store.setValue("tutor/url", self._settings_tutor_url)
-        self._settings_store.setValue("tutor/model", self._settings_tutor_model)
         self._settings_store.setValue("files/sketchbook_dir", self._settings_sketchbook)
         self._settings_store.setValue("git/executable", self._settings_git_executable)
         self._settings_store.setValue("git/repo_dir", self._settings_git_repo)
@@ -4792,8 +4751,6 @@ class MainWindow(QMainWindow):
         self._file_panel.refresh_theme()
         self._device_panel.refresh_theme()
         self._console.refresh_theme()
-        self._tutor_panel.refresh_theme()
-        self._coder_panel.refresh_theme()
         self._aischat_panel.refresh_theme()
         self._fobizz_panel.refresh_theme()
         self._claude_terminal_panel.refresh_theme()
@@ -4824,15 +4781,15 @@ class MainWindow(QMainWindow):
         # Chatbot (3 Modi: none / aischat / fobizz). Ein offenes Fehlerprotokoll bleibt offen.
         keep_log = self._debug_log_visible()
         keep_site = self._py_site_visible()
-        self._show_tutor_panel()
+        self._show_chatbot_panel()
         if keep_log:
             self._open_debug_log()
         elif keep_site:
             self._open_py_site()
         self._sync_activity_bar()
 
-    def _show_tutor_panel(self):
-        """Rechten Bereich gemäß Einstellung „KI-Tutor“ zeigen (bzw. bei „none“ ausblenden)."""
+    def _show_chatbot_panel(self):
+        """Rechten Bereich gemäß Einstellung „Chatbot“ zeigen (bzw. bei „none“ ausblenden)."""
         from .ais_chat_panel import (
             PANEL_DEFAULT_WIDTH,
             PANEL_MAX_WIDTH,

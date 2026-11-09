@@ -122,7 +122,14 @@ class SnapshotStore:
                 last.zeit = time.time()
             self._save(filepath, staende)
             return last
-        stand = Stand(id=time.strftime("%Y%m%d-%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}",
+        # Zwei Stände in derselben Millisekunde (z. B. Lauf direkt nach „merken“)
+        # bekämen sonst dieselbe ID und würden sich gegenseitig überschreiben.
+        base_id = time.strftime("%Y%m%d-%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}"
+        stand_id, n = base_id, 1
+        while any(s.id == stand_id for s in staende):
+            n += 1
+            stand_id = f"{base_id}-{n}"
+        stand = Stand(id=stand_id,
                       zeit=time.time(), gemerkt=gemerkt, notiz=notiz, hash=h,
                       ergebnis="ok" if gemerkt else "run")
         d = self._dir(filepath)
@@ -152,6 +159,38 @@ class SnapshotStore:
         """Stand des letzten Laufs (neuester Eintrag)."""
         staende = self._load(filepath)
         return staende[-1] if staende else None
+
+
+def prune_orphans(max_age_days: int | None = None, root: Path | None = None) -> int:
+    """Entfernt Stände-Ordner, deren jüngster Eintrag älter als ``max_age_days`` ist.
+
+    Stände gehören zu einer Datei; wird die Datei nicht mehr bearbeitet (oder ist
+    sie gelöscht), bleiben ihre Stände sonst für immer im Benutzerprofil liegen.
+    Gemerkte Stände (📌) schützen den Ordner nicht – wer etwas dauerhaft behalten
+    will, speichert es als Datei. Gibt die Zahl der entfernten Ordner zurück.
+    """
+    import shutil
+    if max_age_days is None:
+        from .config import SNAPSHOT_MAX_AGE_DAYS
+        max_age_days = SNAPSHOT_MAX_AGE_DAYS
+    root = Path(root) if root else _default_root()
+    limit = time.time() - max_age_days * 86400
+    removed = 0
+    try:
+        dirs = list(root.iterdir())
+    except OSError:
+        return 0
+    for d in dirs:
+        try:
+            if not d.is_dir():
+                continue
+            newest = max((p.stat().st_mtime for p in d.iterdir()), default=d.stat().st_mtime)
+            if newest < limit:
+                shutil.rmtree(d, ignore_errors=True)
+                removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 def text_hash(text: str) -> str:

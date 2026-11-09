@@ -42,7 +42,7 @@ print("Richtig!")
 | Liste | `werte = [3, 5, 7]` · `werte.append(9)` · `len(werte)` |
 | Zufall / Pause | `random.randint(1, 6)` · `time.sleep(0.5)` |
 
-> **Tipp:** Zeigt die Ausgabe einen Fehler, kann der KI-Tutor **Infi** ihn erklären (optional, lokal über Ollama).
+> **Tipp:** Zeigt die Ausgabe einen Fehler, erscheint darunter eine Fehlerhilfe in Schritten (Cheatsheet „Fehler finden“). Mit **Ausführen → Fehler finden** kommst du zu Ständen, Kontrollpunkten und Fehlerprotokoll.
 
 ---
 

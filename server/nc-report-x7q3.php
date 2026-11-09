@@ -115,8 +115,9 @@ $body  = "Beschreibung:\n$desc\n\n";
 $body .= "Version:   $ver\n";
 $body .= "Plattform: $plat\n";
 $body .= "Zeit:      $ts\n";
-$body .= "Melder:    " . ($email !== '' ? $email : '(keine Angabe)') . "\n";
-$body .= "IP:        $ip\n\n";
+$body .= "Melder:    " . ($email !== '' ? $email : '(keine Angabe)') . "\n\n";
+// Die IP-Adresse wird bewusst NICHT in die Mail geschrieben (personenbezogen,
+// fuer die Fehlersuche unnoetig). Sie dient oben nur dem Rate-Limit.
 $body .= "----- Code -----\n$code\n\n";
 $body .= "----- Konsole -----\n$console\n";
 

@@ -462,7 +462,6 @@ class ConsolePanel(QWidget):
     """Konsolenpanel mit Tabs: Ausgabe (+ Serial Plotter bei Bedarf)."""
 
     error_link_clicked = pyqtSignal(str, int)
-    explain_requested  = pyqtSignal()   # „Infi erklärt diesen Fehler"-Knopf gedrückt
     action_requested   = pyqtSignal(str)   # Aktions-Link in der Ausgabe geklickt
 
     def __init__(self, parent=None):
@@ -554,20 +553,6 @@ class ConsolePanel(QWidget):
         inp_row.addWidget(self._input_field)
         oc_layout.addWidget(self._input_bar)
 
-        # Leiste „Infi erklärt diesen Fehler" – erscheint nur nach einem Absturz,
-        # wenn der KI-Tutor (Ollama) aktiv ist.
-        self._explain_bar = QWidget()
-        self._explain_bar.setVisible(False)
-        ex_row = QHBoxLayout(self._explain_bar)
-        ex_row.setContentsMargins(4, 2, 4, 4)
-        ex_row.setSpacing(4)
-        self._explain_btn = QPushButton("🤖  Infi erklärt diesen Fehler")
-        self._explain_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._explain_btn.clicked.connect(self.explain_requested)
-        ex_row.addWidget(self._explain_btn)
-        ex_row.addStretch()
-        oc_layout.addWidget(self._explain_bar)
-
         self.tabs.addTab(output_container, "Ausgabe")
 
         layout.addWidget(self.tabs)
@@ -581,11 +566,6 @@ class ConsolePanel(QWidget):
             f"background:{THEME['bg_dark']}; color:{THEME['text']};"
             f" border:1px solid {THEME['accent']}; border-radius:4px; padding:3px 6px;"
             f" font-family:'JetBrains Mono', Consolas, monospace; font-size:11px;"
-        )
-        self._explain_btn.setStyleSheet(
-            f"QPushButton {{ background:{THEME['accent']}; color:#fff; border:none;"
-            f" border-radius:4px; padding:5px 12px; font-size:12px; }}"
-            f"QPushButton:hover {{ background:{THEME['accent_hover']}; }}"
         )
         self.output_console.refresh_theme()
         if self._plot is not None:
@@ -683,10 +663,6 @@ class ConsolePanel(QWidget):
         """Abgesetzter Warnkasten (Schritt 0) in Fehlerfarbe."""
         self.output_console._append_colored(text, THEME["error"])
         self._focus_output_tab()
-
-    def set_explain_visible(self, visible: bool):
-        """Zeigt/versteckt den „Infi erklärt diesen Fehler"-Knopf."""
-        self._explain_bar.setVisible(visible)
 
     def set_plot_defaults(self, config: dict):
         """Achsen-Standardwerte des Plotters setzen (aus den Einstellungen)."""

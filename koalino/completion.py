@@ -131,6 +131,8 @@ class JediCompleter(QObject):
                 else:
                     result = self._help_text(script, line, col)
             except Exception:
+                if kind == "warm":
+                    continue   # Aufwärmen fehlgeschlagen – ohne seq/extra unten nicht weitergehen
                 result = [] if kind == "complete" else ""
 
             # Während der Berechnung kam evtl. eine neuere Anfrage → verwerfen

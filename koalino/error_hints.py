@@ -2,8 +2,7 @@
 
 Rein lokal und deterministisch (keine KI): Aus einem Traceback wird der
 Exception-Typ herausgelesen und – falls bekannt – eine kurze, schülergerechte
-Erklärung samt Prüf-Tipps zurückgegeben. Ergänzt wird das durch einen optionalen
-KI-Prompt für den Tutor "Infi" (siehe :func:`build_infi_error_prompt`).
+Erklärung samt Prüf-Tipps zurückgegeben.
 
 Fehler finden (Cheatsheet V2): :func:`analyze` ordnet einen Fehler einem Fall aus
 Schritt 3 zu (Meldung zum Code, Meldung zur Hardware, …) und liefert eine
@@ -375,65 +374,3 @@ def danger_text(kind: str, level: str = LEVEL_KL10) -> str:
         "usb":      "Die USB-Verbindung zum Controller ist abgebrochen.",
     }.get(kind, "")
     return guide.step0_text(grund, level)
-
-
-def build_infi_error_prompt(code: str, traceback_text: str,
-                            hint: ErrorHint | None = None, level: str = LEVEL_KL10) -> str:
-    """Baut einen schülergerechten Prompt, mit dem Infi den Fehler erklären soll."""
-    tb_tail = "\n".join(traceback_text.strip().splitlines()[-15:])
-    code = (code or "").strip()
-    if len(code) > 4000:
-        code = code[:4000] + "\n# … (gekürzt)"
-    n = lambda key: guide.nr(key, level)        # noqa: E731 – Schrittnummern je Modus
-    if guide.is_local():
-        debugger = ("Der Debugger von Koalino (Haltepunkt, F10, Variablen) ist der erste Test. ")
-        if level == LEVEL_KL89:
-            zyklus = (
-                "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
-                f"Schritt {n('eingrenzen')} (Eingrenzen): Nenne den Fall (Meldung, Ergebnis "
-                "falsch oder nichts passiert), wo ich im Code suchen soll und höchstens drei "
-                f"Verdächtige. {debugger}Was ich ändere („Ich ändere …, weil …“, Schritt "
-                f"{n('aendern')}) formuliere ich selbst. Gib keine fertige Lösung und keinen "
-                "korrigierten Code.\n\n"
-            )
-        else:
-            zyklus = (
-                "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
-                f"Schritt {n('eingrenzen')} (Eingrenzen): Nenne den Fall (Meldung zum Code, "
-                "Wert falsch oder nichts passiert), wo ich suchen soll, höchstens drei "
-                f"Verdächtige und EINEN Test, der sie unterscheidet. {debugger}Die Vermutung "
-                f"(Schritt {n('vermuten')}: „Ich vermute …, weil …“) formuliere ich selbst. Gib "
-                "keine fertige Lösung und keinen korrigierten Code.\n\n"
-            )
-    elif level == LEVEL_KL89:
-        zyklus = (
-            "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
-            "Schritt 2 (Eingrenzen): Nenne den Fall (Meldung, Ergebnis falsch oder nichts "
-            "reagiert), wo ich im Code suchen soll und höchstens drei Verdächtige. Was ich "
-            "ändere („Ich ändere …, weil …“, Schritt 3) formuliere ich selbst. Gib keine "
-            "fertige Lösung und keinen korrigierten Code.\n\n"
-        )
-    else:
-        zyklus = (
-            "Wir arbeiten nach dem Cheatsheet „Fehler finden: Schritt für Schritt“. Hilf bei "
-            "Schritt 3 (Eingrenzen): Nenne den Fall (Meldung zum Code oder zur Hardware), wo "
-            "ich suchen soll (PAP, Kontrollpunkte, bei Hardware die IBD von P1 an), höchstens "
-            "drei Verdächtige und EINEN Test, der sie unterscheidet. Die Vermutung (Schritt 4: "
-            "„Ich vermute …, weil …“) formuliere ich selbst. Gib keine fertige Lösung und "
-            "keinen korrigierten Code.\n\n"
-        )
-    kontext = ""
-    if hint is not None:
-        kontext = f"--- Einordnung von Koalino ---\nFall: {hint.fall_name}\n"
-        if hint.verdaechtige:
-            kontext += "Verdächtige: " + "; ".join(hint.verdaechtige) + "\n"
-        kontext += "\n"
-    return (
-        "Ich lerne gerade Python und mein Programm stürzt ab. Bitte erkläre mir "
-        "kurz und einfach auf Deutsch, was dieser Fehler bedeutet und wie ich ihn "
-        "finden kann. Gib mir Hinweise, aber NICHT die komplette "
-        "Lösung – ich möchte selbst draufkommen.\n"
-        + zyklus + kontext +
-        f"--- Mein Code ---\n{code}\n\n"
-        f"--- Fehlermeldung ---\n{tb_tail}\n"
-    )

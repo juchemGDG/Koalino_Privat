@@ -1,7 +1,7 @@
 /* Blöcke für die nitbw-Bibliotheken (ESP32/MicroPython).
  *
  * Die erzeugten Code-Schablonen folgen exakt der API aus
- * coder_panel.py (CODER_SYSTEM_PROMPT). Instanzen werden über definitions_
+ * coder_prompt.py (CODER_SYSTEM_PROMPT). Instanzen werden über definitions_
  * (Schlüssel "inst_*") angelegt und landen so – dank des finish()-Overrides in
  * nit_blocks.js – im Abschnitt "Instanzen", nicht im Hauptprogramm.
  *

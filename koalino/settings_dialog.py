@@ -669,7 +669,7 @@ class SettingsDialog(QDialog):
         root.addLayout(form_fs)
         root.addSpacing(6)
 
-        # ── Abschnitt: KI-Tutor ─────────────────────────────────────────
+        # ── Abschnitt: Chatbot ──────────────────────────────────────────
         title5, sep5 = self._section("CHATBOT")
         root.addWidget(title5)
         root.addWidget(sep5)
@@ -678,7 +678,8 @@ class SettingsDialog(QDialog):
         form_ai.setSpacing(8)
         form_ai.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # Radiobuttons: genau ein Chatbot (oder keiner). Alte Ollama-Modi → „kein Chatbot“.
+        # Radiobuttons: genau ein Chatbot (oder keiner). Ein gespeicherter Wert aus
+        # der Zeit des Ollama-Tutors (bis 1.14) fällt auf „kein Chatbot“ zurück.
         self._tutor_group = QButtonGroup(self)
         self._tutor_radios: dict[str, QRadioButton] = {}
         for key, label in (("none", "Kein Chatbot"),

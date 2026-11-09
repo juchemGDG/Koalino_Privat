@@ -286,11 +286,17 @@ LIB_REPO_RAW = "https://raw.githubusercontent.com/juchemGDG/NIT_Bibliotheken/mai
 MICROPYTHON_DOWNLOAD_BASE = "https://micropython.org/download/"
 
 # Fehlerbericht ("Hilfe → Fehler melden"). Der Dialog schickt einen HTTPS-POST
-# (JSON) an BUG_REPORT_URL; ein kleines Server-Skript (siehe server/bugreport.php)
+# (JSON) an BUG_REPORT_URL; ein kleines Server-Skript (server/nc-report-x7q3.php)
 # leitet ihn als E-Mail an BUG_REPORT_EMAIL weiter. So liegen KEINE Mail-
 # Zugangsdaten im Programm. URL an den eigenen Endpoint anpassen.
 BUG_REPORT_URL = "https://mint-checker.de/nitcode/nc-report-x7q3.php"
 BUG_REPORT_EMAIL = "nitcode@mint-checker.de"
+
+# Lokale Daten im Benutzerprofil (siehe docs/datenschutz.md): Wie lange nicht
+# mehr benutzte Zwischenkopien (offline_cache) und gesicherte Stände gelöschter
+# Dateien (snapshots) aufbewahrt werden. Aufgeräumt wird kurz nach dem Start.
+OFFLINE_CACHE_MAX_AGE_DAYS = 60
+SNAPSHOT_MAX_AGE_DAYS = 90
 
 SUPPORTED_BOARDS = {
     # ESP-Familie: alle über esptool geflasht (flash_cmd "esp32"). Chip-Typ und
@@ -356,34 +362,6 @@ SUPPORTED_BOARDS = {
     },
 }
 
-# KI-Tutor (Ollama)
-TUTOR_DEFAULT_URL    = "http://localhost:11434"
-TUTOR_DEFAULT_MODEL  = "llama3.2"
-
-
-def ollama_web_password() -> str:
-    """Optionales Passwort für einen geschützten Ollama-Web-Proxy.
-
-    Wird NICHT im Quellcode gespeichert (kein Klartext im Repository). Reihenfolge:
-      1. Umgebungsvariable ``NIT_OLLAMA_PASSWORD``
-      2. lokale, nicht versionierte Datei ``<config-dir>/koalino/ollama_password``
-      3. leer → es wird ohne Authentifizierung versucht (lokales Ollama braucht keine)
-
-    Lokales Ollama (localhost) benötigt ohnehin kein Passwort; relevant ist dies
-    nur für einen schulischen Reverse-Proxy mit Basic-/Bearer-Auth.
-    """
-    env = os.environ.get("NIT_OLLAMA_PASSWORD")
-    if env:
-        return env.strip()
-    try:
-        pw_file = _user_config_dir() / "ollama_password"
-        if pw_file.exists():
-            return pw_file.read_text(encoding="utf-8").strip()
-    except OSError:
-        pass
-    return ""
-
-
 def _user_config_dir() -> Path:
     """Plattformabhängiges, nutzerspezifisches Konfigverzeichnis für Koalino."""
     if sys.platform == "win32":
@@ -421,7 +399,9 @@ def migrate_legacy_data() -> None:
     except Exception:
         pass
 
-# AIS-Chat (schulischer Web-Chatbot)
+# Chatbots (eingebettete Web-Seiten; Auswahl in Einstellungen → Chatbot).
+# Ein lokaler Ollama-Tutor war bis 1.14 enthalten, hat sich im Schulbetrieb aber
+# nicht bewährt und wurde entfernt (siehe docs/code_review_2026-11.md, 1.1).
 AIS_CHAT_URL = "https://app.ais-chat.schule"
 FOBIZZ_URL = "https://tools.fobizz.com"
 
@@ -448,11 +428,6 @@ SCHALTLAB_URL = SCHALTLAB_ORIGIN + "/?embed=1"
 # siehe statplot_window.py.
 STATPLOT_ORIGIN = "https://statplot.mint-checker.de"
 STATPLOT_URL = STATPLOT_ORIGIN + "/?embed=1"
-
-
-def is_ollama_available() -> bool:
-    """True wenn das ollama-Kommando im PATH gefunden wird."""
-    return shutil.which("ollama") is not None
 
 
 # ── Themes ───────────────────────────────────────────────────────────────────

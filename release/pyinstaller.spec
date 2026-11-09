@@ -42,7 +42,7 @@ datas = []
 if os.path.exists(logo_path):
     datas.append((logo_path, 'koalino'))
 
-# Offline-Assets (z. B. mermaid.min.js für die Ablauf-Vorschau) mitnehmen.
+# Offline-Assets (Blockly, StatPlot-Kopie, nitbw-Bibliotheken, Hilfe …) mitnehmen.
 assets_dir = os.path.join(project_root, 'koalino', 'assets')
 if os.path.isdir(assets_dir):
     datas.append((assets_dir, os.path.join('koalino', 'assets')))

@@ -4,18 +4,17 @@ Zeigt die Vorlage, mit der Lehrkräfte den Code-Generator als eigenen
 Dialogpartner auf ais.chat anlegen können. Die Felder entsprechen der
 Eingabemaske von ais.chat (Name, Kurzbeschreibung, Sprachmodell,
 Instruktionen, Einstiegsfrage, Hintergrundwissen); jedes Feld lässt sich
-einzeln in die Zwischenablage kopieren. Die Instruktionen sind identisch
-mit dem System-Prompt des eingebauten Code-Generators (coder_panel.py),
-damit sich beide Varianten gleich verhalten.
+einzeln in die Zwischenablage kopieren. Die Instruktionen kommen aus
+``coder_prompt.py``.
 """
 from PyQt6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QWidget,
 )
 
 from .qt_utils import ThemedComboBox
 from .config import AIS_CHAT_URL, THEME
-from .coder_panel import LEVEL_KL10, LEVEL_KL89, coder_system_prompt
+from .coder_prompt import LEVEL_KL10, LEVEL_KL89, coder_system_prompt
 
 _NAME = "NiT_Coder"
 
@@ -51,8 +50,8 @@ _IBD_HINWEIS = (
     "So lieferst du ihn mit:\n"
     "• ais.chat: IBD im IBD-Editor zeichnen, „Bild speichern“, die Bilddatei an "
     "die Nachricht anhängen und unter VARIABLEN schreiben: „siehe IBD im Bild“.\n"
-    "• Ollama (lokal, liest meist keine Bilder): IBD als Text unter VARIABLEN "
-    "schreiben, z. B.\n"
+    "• Ohne Bild (z. B. wenn das Modell keine Bilder liest): IBD als Text unter "
+    "VARIABLEN schreiben, z. B.\n"
     "  def main(): Variablen reaktionszeiten [ ] (Sammler), zeit (Aktueller Wert)\n"
     "  def reaktionszeit_messen(): liest taster, schaltet led, Rückgabe zeit in ms → main()\n"
     "  def median(werte): Übergabe reaktionszeiten [ ], Rückgabe Median in ms → print()\n"

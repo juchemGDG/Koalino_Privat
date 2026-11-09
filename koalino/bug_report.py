@@ -1,17 +1,21 @@
 """Dialog „Fehler melden" (Hilfe-Menü).
 
-Sammelt eine Fehlerbeschreibung, hängt automatisch den aktuellen Code und die
+Sammelt eine Fehlerbeschreibung, hängt auf Wunsch den aktuellen Code und die
 Konsolenausgabe an, prüft eine einfache Rechen-Abfrage (Bot-/Versehen-Bremse)
 und schickt alles per HTTPS-POST an ``BUG_REPORT_URL``. Ein kleines Server-Skript
-(siehe ``server/bugreport.php``) leitet den Bericht als E-Mail weiter – es liegen
+(``server/nc-report-x7q3.php``) leitet den Bericht als E-Mail weiter – es liegen
 also keine Mail-Zugangsdaten im Programm.
+
+Datenschutz: Die Vorschau zeigt immer genau das, was gesendet wird; ein Hinweis
+im Dialog bittet darum, keine Namen oder persönlichen Daten mitzuschicken. Der
+Server schreibt die IP-Adresse nicht in die Mail (siehe docs/datenschutz.md).
 """
 import platform
 import random
 from datetime import datetime
 
 import requests
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QLineEdit,
     QPushButton, QCheckBox, QMessageBox,
@@ -68,6 +72,15 @@ class BugReportDialog(QDialog):
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
+        privacy = QLabel(
+            f"Der Bericht wird per E-Mail an {BUG_REPORT_EMAIL} geschickt und nur zur "
+            "Fehlersuche gelesen. Bitte lass keine Namen oder persönlichen Daten in "
+            "Beschreibung, Code oder Konsole stehen – unten siehst du genau, was mitgeht."
+        )
+        privacy.setWordWrap(True)
+        privacy.setStyleSheet(f"color:{THEME['text_dim']}; font-size:11px;")
+        layout.addWidget(privacy)
+
         layout.addWidget(QLabel("Fehlerbeschreibung:"))
         self._desc = QTextEdit()
         self._desc.setPlaceholderText("Was ist passiert? Was hattest du erwartet?")
@@ -86,6 +99,9 @@ class BugReportDialog(QDialog):
         self._attach.toggled.connect(self._update_preview)
         layout.addWidget(self._attach)
 
+        # Vorschau dessen, was gesendet wird – immer sichtbar, damit nichts
+        # unbemerkt mitgeht (Code und Konsole können persönliche Daten enthalten).
+        layout.addWidget(QLabel("Das wird gesendet:"))
         self._preview = QTextEdit()
         self._preview.setReadOnly(True)
         self._preview.setMaximumHeight(150)
@@ -119,14 +135,14 @@ class BugReportDialog(QDialog):
         layout.addLayout(btns)
 
     def _update_preview(self):
+        head = (f"App: {APP_NAME} {APP_VERSION}\nSystem: {platform.platform()}\n"
+                "E-Mail: (nur wenn oben angegeben)\n")
         if self._attach.isChecked():
-            self._preview.setVisible(True)
-            self._preview.setPlainText(
-                "--- Code ---\n" + (self._code or "(kein Code)") +
-                "\n\n--- Konsole ---\n" + (self._console or "(keine Ausgabe)")
-            )
+            body = ("\n--- Code ---\n" + (self._code or "(kein Code)") +
+                    "\n\n--- Konsole ---\n" + (self._console or "(keine Ausgabe)"))
         else:
-            self._preview.setVisible(False)
+            body = "\n(Code und Konsolenausgabe werden nicht mitgeschickt.)"
+        self._preview.setPlainText(head + body)
 
     def _send(self):
         desc = self._desc.toPlainText().strip()

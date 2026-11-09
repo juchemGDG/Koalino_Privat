@@ -10,11 +10,10 @@ import os
 import time
 from pathlib import Path
 
-_MAX_AGE_DAYS = 60
+from .config import OFFLINE_CACHE_MAX_AGE_DAYS, _user_config_dir
 
 
 def cache_root() -> Path:
-    from .config import _user_config_dir
     return _user_config_dir() / "offline_cache"
 
 
@@ -42,15 +41,29 @@ def load(filepath: str) -> str | None:
         return None
 
 
-def prune(max_age_days: int = _MAX_AGE_DAYS) -> None:
-    """Entfernt Zwischenkopien, die lange nicht mehr benutzt wurden."""
+def prune(max_age_days: int = OFFLINE_CACHE_MAX_AGE_DAYS, root: Path | None = None) -> int:
+    """Entfernt Zwischenkopien, die lange nicht mehr benutzt wurden.
+
+    Wird kurz nach dem Start aufgerufen (main_window). Gibt die Zahl der
+    gelöschten Dateien zurück; Fehler einzelner Einträge werden übersprungen.
+    """
+    root = root or cache_root()
+    limit = time.time() - max_age_days * 86400
+    removed = 0
     try:
-        limit = time.time() - max_age_days * 86400
-        for d in cache_root().iterdir():
+        dirs = list(root.iterdir())
+    except OSError:
+        return 0
+    for d in dirs:
+        try:
+            if not d.is_dir():
+                continue
             for f in d.iterdir():
                 if f.stat().st_mtime < limit:
                     f.unlink()
+                    removed += 1
             if not any(d.iterdir()):
                 d.rmdir()
-    except Exception:
-        pass
+        except OSError:
+            continue
+    return removed

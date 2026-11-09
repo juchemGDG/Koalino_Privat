@@ -1,7 +1,7 @@
 /* NIT-eigene Blöcke + Python/MicroPython-Generatoren.
  *
  * Die Code-Erzeugung folgt den Konventionen des Koalinogenerators
- * (siehe coder_panel.py CODER_SYSTEM_PROMPT) UND einem festen Aufbau:
+ * (siehe coder_prompt.py CODER_SYSTEM_PROMPT) UND einem festen Aufbau:
  *   1. Bibliotheken einbinden   (from ... import ...)
  *   2. Instanzen definieren      (Pin/ADC/DAC/PWM/NeoPixel – EINMALIG, nicht in der Schleife)
  *   3. Variablen definieren
