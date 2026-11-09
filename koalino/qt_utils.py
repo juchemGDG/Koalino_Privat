@@ -23,7 +23,7 @@ def retain_thread(registry: list, thread: QThread) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # Skalierung der Oberflächenschrift (nicht Editor/Shell/Terminal)
 # ──────────────────────────────────────────────────────────────────────────────
-UI_FONT_PT_DEFAULT = 10      # entspricht der bisherigen Größe (13 px) → Faktor 1.0
+from .app_settings import UI_FONT_PT_DEFAULT   # 10 pt = bisherige Größe (13 px) → Faktor 1.0
 UI_FONT_PT_RANGE = (9, 16)
 
 _ui_scale = 1.0

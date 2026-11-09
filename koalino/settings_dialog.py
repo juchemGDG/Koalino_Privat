@@ -1,6 +1,7 @@
 """Einstellungs-Dialog für Koalino."""
 import os
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
@@ -13,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from . import local_data
+from .app_settings import ACTIVITY_ITEMS, AppSettings
 from .qt_utils import UI_FONT_PT_DEFAULT, UI_FONT_PT_RANGE
 from .qt_utils import ThemedComboBox
 from .config import (
@@ -79,65 +81,20 @@ class _PythonScanner(QThread):
         self.found.emit(results)
 
 
-# Knöpfe der Seitenleiste, die sich ein-/ausblenden lassen (Schlüssel wie in
-# MainWindow._build_activity_bar). Hilfe und Einstellungen bleiben immer sichtbar.
-ACTIVITY_ITEMS = [
-    ("files",    "Dateien"),
-    ("ai",       "KI-Assistent"),
-    ("debuglog", "Fehlerprotokoll"),
-    ("pysite",   "Lehrgang py.nitbw.de"),
-    ("blocks",   "Block-Editor"),
-    ("plotter",  "Serial Plotter"),
-    ("pap",      "PAP-Editor"),
-    ("ibd",      "IBD-Editor"),
-    ("schaltlab", "SchaltLab (Schaltplan)"),
-    ("stats",    "Datenauswertung"),
-]
-ACTIVITY_TOGGLEABLE = frozenset(k for k, _ in ACTIVITY_ITEMS)
-
-
 # ── Einstellungs-Dialog ──────────────────────────────────────────────────────
 
 class SettingsDialog(QDialog):
     """Einstellungs-Popup mit Editor- und KI-Optionen."""
 
-    def __init__(
-        self,
-        parent=None,
-        font_size: int = 14,
-        line_numbers: bool = True,
-        word_wrap: bool = False,
-        highlight_line: bool = True,
-        autosave_secs: int = 0,
-        python_exec: str = "",
-        scrollback: int = 5000,
-        tutor_mode: str = "none",
-        sketchbook_dir: str = "",
-        git_exec: str = "",
-        theme: str = "modern_dark",
-        blocks_enabled: bool = True,
-        plot_y_mode: str = "auto",
-        plot_y_min: float = 0.0,
-        plot_y_max: float = 100.0,
-        plot_x_mode: str = "sliding",
-        plot_x_min: int = 0,
-        plot_x_max: int = 500,
-        plot_style: str = "line",
-        ui_font_pt: int = UI_FONT_PT_DEFAULT,
-        statplot_offline: bool = False,
-        debug_level: str = "kl10",
-        debug_stepped: bool = True,
-        debug_change_hint: bool = True,
-        hidden_activity=(),
-        editor_font: str = "default",
-        code_scheme: str = "auto",
-    ):
+    def __init__(self, parent=None, settings: AppSettings | None = None):
         super().__init__(parent)
-        self._editor_font_init = editor_font
-        self._code_scheme_init = code_scheme
-        self._hidden_activity_init = set(hidden_activity)
-        self._initial_ui_font_pt = ui_font_pt
-        self._debug_init = (debug_level, debug_stepped, debug_change_hint)
+        s = settings if settings is not None else AppSettings()
+        self._initial = s.copy()
+        self._editor_font_init = s.editor_font
+        self._code_scheme_init = s.code_scheme
+        self._hidden_activity_init = set(s.hidden_activity)
+        self._initial_ui_font_pt = s.ui_font_pt
+        self._debug_init = (s.debug_level, s.debug_stepped, s.debug_change_hint)
         self.setWindowTitle("Einstellungen")
         self.setModal(True)
         # Etwas breiter und mit Scrollbereich (siehe _build_ui), damit das Fenster
@@ -239,13 +196,13 @@ class SettingsDialog(QDialog):
             }}
             """
         )
-        self._build_ui(font_size, line_numbers, word_wrap, highlight_line,
-                       autosave_secs, python_exec, scrollback,
-                       tutor_mode, sketchbook_dir, git_exec, theme,
-                       blocks_enabled,
-                       plot_y_mode, plot_y_min, plot_y_max,
-                       plot_x_mode, plot_x_min, plot_x_max, plot_style, ui_font_pt,
-                       statplot_offline)
+        self._build_ui(s.font_size, s.line_numbers, s.word_wrap, s.highlight_line,
+                       s.autosave_secs, s.python_exec, s.scrollback,
+                       s.tutor_mode, s.sketchbook, s.git_executable, s.theme,
+                       s.blocks_enabled,
+                       s.plot_y_mode, s.plot_y_min, s.plot_y_max,
+                       s.plot_x_mode, s.plot_x_min, s.plot_x_max, s.plot_style, s.ui_font_pt,
+                       s.statplot_offline)
 
     # ── Hilfsmethode: Abschnittsüberschrift ─────────────────────────────
     @staticmethod
@@ -938,6 +895,42 @@ class SettingsDialog(QDialog):
         x_sweep = self._combo_plot_x.currentData() == "sweep"
         self._spin_plot_xmin.setEnabled(x_sweep)
         self._spin_plot_xmax.setEnabled(x_sweep)
+
+    def result_settings(self) -> AppSettings:
+        """Kopie der übergebenen Einstellungen mit den im Dialog gewählten Werten.
+
+        Nicht im Dialog bearbeitbare Felder (z. B. das Git-Repository) bleiben unverändert.
+        """
+        return replace(
+            self._initial,
+            font_size=self.font_size,
+            line_numbers=self.line_numbers,
+            word_wrap=self.word_wrap,
+            highlight_line=self.highlight_line,
+            autosave_secs=self.autosave_secs,
+            python_exec=self.python_exec,
+            scrollback=self.scrollback_lines,
+            editor_font=self.editor_font,
+            blocks_enabled=self.blocks_enabled,
+            statplot_offline=self.statplot_offline,
+            hidden_activity=set(self.hidden_activity),
+            tutor_mode=self.tutor_mode,
+            sketchbook=self.sketchbook_dir,
+            git_executable=self.git_exec,
+            theme=self.theme,
+            code_scheme=self.code_scheme,
+            ui_font_pt=self.ui_font_pt,
+            plot_y_mode=self.plot_y_mode,
+            plot_y_min=self.plot_y_min,
+            plot_y_max=self.plot_y_max,
+            plot_x_mode=self.plot_x_mode,
+            plot_x_min=self.plot_x_min,
+            plot_x_max=self.plot_x_max,
+            plot_style=self.plot_style,
+            debug_level=self.debug_level,
+            debug_stepped=self.debug_stepped,
+            debug_change_hint=self.debug_change_hint,
+        )
 
     # ── Properties ──────────────────────────────────────────────────────────
 

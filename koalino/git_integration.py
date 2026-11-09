@@ -1,8 +1,8 @@
 """Git-Integration von Koalino: Dialoge (Klonen, Konflikte) und Git-Aktionen des Hauptfensters.
 
 ``GitIntegrationMixin`` wird von ``MainWindow`` geerbt. Die Methoden greifen auf
-Attribute und Hilfen des Hauptfensters zu (``_console``, ``_settings_git_repo``,
-``_settings_sketchbook``, ``_ask_text_input`` …); das Mixin ist daher nur im
+Attribute und Hilfen des Hauptfensters zu (``_console``, ``_cfg.git_repo``,
+``_cfg.sketchbook``, ``_ask_text_input`` …); das Mixin ist daher nur im
 Zusammenspiel mit ``MainWindow`` lauffähig.
 """
 import os
@@ -472,7 +472,7 @@ class GitIntegrationMixin:
         Virenscanner) dauert der ``git --version``-Check sonst vor jeder
         Git-Aktion mehrere Sekunden.
         """
-        chosen = (self._settings_git_executable or "").strip()
+        chosen = (self._cfg.git_executable or "").strip()
         cached = getattr(self, "_git_exec_cache", None)
         if cached is not None and cached[0] == chosen and Path(cached[1]).is_file():
             return cached[1]
@@ -527,7 +527,7 @@ class GitIntegrationMixin:
             self._m_git.menuAction().setVisible(self._resolve_git_executable() is not None)
 
     def _get_git_base_dir(self) -> str:
-        candidate = self._settings_sketchbook
+        candidate = self._cfg.sketchbook
         if candidate and os.path.isdir(candidate):
             return candidate
         return str(Path.home())
@@ -601,9 +601,9 @@ class GitIntegrationMixin:
 
         labels.sort(key=lambda s: s.casefold())
         default_idx = 0
-        if self._settings_git_repo and self._settings_git_repo in repos:
+        if self._cfg.git_repo and self._cfg.git_repo in repos:
             for i, lbl in enumerate(labels):
-                if mapping[lbl] == self._settings_git_repo:
+                if mapping[lbl] == self._cfg.git_repo:
                     default_idx = i
                     break
 
@@ -619,19 +619,19 @@ class GitIntegrationMixin:
         return mapping[selected]
 
     def _resolve_git_repo(self, interactive: bool = True) -> str | None:
-        if self._settings_git_repo and os.path.isdir(self._settings_git_repo):
-            repo = self._detect_git_repo_root(self._settings_git_repo)
+        if self._cfg.git_repo and os.path.isdir(self._cfg.git_repo):
+            repo = self._detect_git_repo_root(self._cfg.git_repo)
             if repo:
                 normalized = str(Path(repo).resolve())
-                if normalized == str(Path(self._settings_git_repo).resolve()):
-                    self._settings_git_repo = normalized
+                if normalized == str(Path(self._cfg.git_repo).resolve()):
+                    self._cfg.git_repo = normalized
                     return normalized
 
         repos = self._list_git_repos_in_sketchbook()
         if not repos:
             return None
         if len(repos) == 1:
-            self._settings_git_repo = repos[0]
+            self._cfg.git_repo = repos[0]
             self._update_git_status_label()
             return repos[0]
         if not interactive:
@@ -640,7 +640,7 @@ class GitIntegrationMixin:
         selected_repo = self._select_git_repo_from_list(repos, "Git: Repository auswählen")
         if not selected_repo:
             return None
-        self._settings_git_repo = selected_repo
+        self._cfg.git_repo = selected_repo
         self._save_persistent_settings()
         self._update_git_status_label()
         return selected_repo
@@ -669,7 +669,7 @@ class GitIntegrationMixin:
         selected_repo = self._select_git_repo_from_list(repos, "Git: Repository auswählen")
         if not selected_repo:
             return
-        self._settings_git_repo = selected_repo
+        self._cfg.git_repo = selected_repo
         self._save_persistent_settings()
         self._update_git_status_label()
         self._console.append_info(f"[Git] Aktives Repository: {selected_repo}\n")
@@ -878,7 +878,7 @@ class GitIntegrationMixin:
 
     def _set_active_repo_after_clone(self, repo_path: str):
         normalized = str(Path(repo_path).resolve())
-        self._settings_git_repo = normalized
+        self._cfg.git_repo = normalized
         self._save_persistent_settings()
         self._update_git_status_label()
         self._console.append_success(f"[Git] Aktives Repository gesetzt: {normalized}\n")

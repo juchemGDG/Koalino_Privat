@@ -33,15 +33,11 @@ from .config import (
     dev_tools_enabled,
     THEME,
     SUPPORTED_BOARDS,
-    embedded_python_executable,
-    preferred_python_interpreter,
     python_executable,
     tool_command,
     set_mono_font,
     set_theme,
     set_code_scheme,
-    CODE_SCHEMES,
-    LEGACY_THEME_MIGRATION,
     _SKETCHBOOK_MAX_DEPTH,
     _skip_sketchbook_dir,
 )
@@ -49,7 +45,7 @@ from .editor_widget import CodeEditor
 from .file_panel import FilePanel, DeviceFilePanel, DeviceListWorker
 from .console_panel import ConsolePanel, ProcessRunner, MicroPythonRunner
 from .icons import make_icon
-from .qt_utils import retain_thread, find_logo, UI_FONT_PT_DEFAULT
+from .qt_utils import retain_thread, find_logo
 from . import offline_cache
 from .block_panel import BlockEditorWindow
 from .parsons_panel import ParsonsWindow
@@ -58,7 +54,8 @@ from .worksheet_panel import WorksheetPanel
 from .help_dialog import HelpDialog, guide_path
 from .pap_editor import IbdEditorWindow, PapEditorWindow, SchaltLabWindow
 from .statplot_window import StatPlotWindow
-from .settings_dialog import ACTIVITY_TOGGLEABLE, SettingsDialog
+from .settings_dialog import SettingsDialog
+from .app_settings import AppSettings, normalize_sketchbook_dir
 from .toolbar_widgets import ModeSwitch, PortPicker
 from .git_integration import GitIntegrationMixin
 from .styles import _light_dialog_controls_qss, build_global_style
@@ -142,39 +139,10 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         self._last_run_file: str | None = None  # zuletzt gestartete Datei (für <stdin>-Tracebacks)
         self._user_stopped = False             # True wenn Lauf per Stopp-Knopf beendet
         self._port_busy = False     # verhindert gleichzeitige mpremote-Prozesse
-        self._settings_font_size: int = 14
-        self._settings_line_numbers: bool = True
-        self._settings_word_wrap: bool = False
-        self._settings_highlight_line: bool = True
-        self._settings_autosave_secs: int = 0
-        self._settings_python_exec: str = ""
-        self._settings_scrollback: int = 5000
-        self._settings_blocks_enabled: bool = True    # Block-Editor, Standard: an
-        self._settings_statplot_offline: bool = False  # Datenauswertung nur aus der mitgelieferten Kopie
-        self._settings_hidden_activity: set[str] = set()   # ausgeblendete Knöpfe der Seitenleiste
-        self._settings_tutor_mode: str = "none"    # Chatbot: "none" | "aischat" | "fobizz"
-        self._settings_sketchbook: str = str(Path.home())
-        self._settings_git_executable: str = ""
-        self._settings_git_repo: str = ""
-        self._settings_theme: str = "modern_light"
-        self._settings_code_scheme: str = "auto"
-        self._settings_editor_font: str = "default"
-        self._settings_ui_font_pt: int = UI_FONT_PT_DEFAULT
-        # Serial-Plotter-Achsen (Standardwerte; im Plotter live übersteuerbar)
-        self._settings_plot_y_mode: str = "auto"      # "auto" | "fixed"
-        self._settings_plot_y_min: float = 0.0
-        self._settings_plot_y_max: float = 100.0
-        self._settings_plot_x_mode: str = "sliding"   # "sliding" | "sweep" | "xy"
-        self._settings_plot_x_min: int = 0
-        self._settings_plot_x_max: int = 500
-        self._settings_plot_style: str = "line"       # "line" | "scatter"
-        # Fehler finden (Cheatsheet)
-        self._settings_debug_level: str = "kl10"        # "kl89" | "kl10" – nur noch für die NiT_Coder-Vorlage
+        self._cfg = AppSettings()   # alle Einstellungen (Standardwerte; _load_persistent_settings liest QSettings)
         # Fehlersuche (Konsole, Fehlerprotokoll, Hilfe) immer nach dem Cheatsheet Klasse 8/9 –
         # für die SuS einfacher; die Daten für 10/KS bleiben in debug_guide erhalten.
         self._debug_level: str = "kl89"
-        self._settings_debug_stepped: bool = True       # Fehlerhilfe in Stufen
-        self._settings_debug_change_hint: bool = True   # „Seit dem letzten Lauf: n Stellen geändert"
         self._snapshots = None                          # SnapshotStore (lazy)
         self._run_snapshot: tuple[str, str] | None = None   # (Datei, Stand-ID) des laufenden Programms
         self._run_change_text = ""                      # Änderung seit dem letzten Lauf (für Protokoll)
@@ -546,7 +514,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         Einstellungen bleiben immer sichtbar; der Block-Editor-Knopf folgt
         zusätzlich der Block-Editor-Einstellung."""
         for key, btn in getattr(self, "_activity_buttons", {}).items():
-            visible = key not in self._settings_hidden_activity
+            visible = key not in self._cfg.hidden_activity
             if key == "blocks" and hasattr(self, "_m_blocks"):
                 visible = visible and self._m_blocks.menuAction().isVisible()
             btn.setVisible(visible)
@@ -585,7 +553,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         Fehlerprotokoll oder py.nitbw.de), wird auf den KI-Assistenten umgeschaltet."""
         if self._ai_page_visible():
             self._ai_stack.setVisible(False)
-        elif self._settings_tutor_mode == "none":
+        elif self._cfg.tutor_mode == "none":
             QMessageBox.information(
                 self, "KI-Assistent",
                 "Es ist kein KI-Assistent aktiv.\n"
@@ -647,7 +615,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         self._file_panel.file_open_requested.connect(self._open_file_path)
         self._file_panel.save_to_device_requested.connect(self._upload_local_file_to_device)
         self._file_panel.worksheet_preview_requested.connect(self._open_worksheet_preview)
-        self._file_panel.set_root(self._settings_sketchbook)
+        self._file_panel.set_root(self._cfg.sketchbook)
         self._left_splitter.addWidget(self._file_panel)
 
         self._device_panel = DeviceFilePanel()
@@ -907,7 +875,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
     # Dateioperationen
     # ──────────────────────────────────────────────────────────────────────
     def _open_file(self):
-        start_dir = self._settings_sketchbook if os.path.isdir(self._settings_sketchbook) else str(Path.home())
+        start_dir = self._cfg.sketchbook if os.path.isdir(self._cfg.sketchbook) else str(Path.home())
         path, _ = QFileDialog.getOpenFileName(
             self, "Datei öffnen", start_dir,
             "Python-Dateien (*.py);;Alle Dateien (*)"
@@ -1013,7 +981,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         tab = self._current_tab()
         if not tab:
             return
-        start_dir = self._settings_sketchbook if os.path.isdir(self._settings_sketchbook) else str(Path.home())
+        start_dir = self._cfg.sketchbook if os.path.isdir(self._cfg.sketchbook) else str(Path.home())
         dlg = QFileDialog(
             self,
             "Speichern als",
@@ -1245,7 +1213,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         if win is None:
             # Als Callable, damit ein spaeter geaenderter Sketchbook-Ordner
             # beim Speichern automatisch greift.
-            win = PapEditorWindow(self, sketchbook_dir=lambda: self._settings_sketchbook)
+            win = PapEditorWindow(self, sketchbook_dir=lambda: self._cfg.sketchbook)
             self._pap_window = win
         win.show()
         win.raise_()
@@ -1256,7 +1224,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         """Öffnet den IBD-Editor (Informationsfluss) im Extrafenster – wie der PAP-Editor."""
         win = getattr(self, "_ibd_window", None)
         if win is None:
-            win = IbdEditorWindow(self, sketchbook_dir=lambda: self._settings_sketchbook)
+            win = IbdEditorWindow(self, sketchbook_dir=lambda: self._cfg.sketchbook)
             self._ibd_window = win
         win.show()
         win.raise_()
@@ -1278,7 +1246,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         tab = self._current_tab()
         if tab is not None and tab.filepath and not tab.device_path:
             return os.path.dirname(os.path.abspath(tab.filepath))
-        return self._settings_sketchbook
+        return self._cfg.sketchbook
 
     # ── Lernen: Parsons-Puzzle ────────────────────────────────────────────
     def _open_parsons(self):
@@ -1296,8 +1264,8 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         """Öffnet die Datenauswertung (StatPlot); die Datei lädt man im Fenster selbst."""
         win = getattr(self, "_csv_window", None)
         if win is None:
-            win = StatPlotWindow(self, sketchbook_dir=lambda: self._settings_sketchbook,
-                                 offline_first=self._settings_statplot_offline)
+            win = StatPlotWindow(self, sketchbook_dir=lambda: self._cfg.sketchbook,
+                                 offline_first=self._cfg.statplot_offline)
             win.set_code_sink(self._open_code_in_new_tab)
             self._csv_window = win
         win.show()
@@ -1325,7 +1293,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
 
     def _apply_blocks_enabled(self):
         """Blendet das Block-Editor-Feature je nach Einstellung ein/aus."""
-        enabled = self._settings_blocks_enabled
+        enabled = self._cfg.blocks_enabled
         if hasattr(self, "_m_blocks"):
             self._m_blocks.menuAction().setVisible(enabled)
         # Falls deaktiviert und ein Block-Fenster offen ist: schließen.
@@ -1610,7 +1578,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         if sizes[2] == 0:
             total = sum(sizes)
             self._main_splitter.setSizes([sizes[0], total - sizes[0] - 520, 520])
-        self._claude_terminal_panel.start_claude(self._settings_sketchbook)
+        self._claude_terminal_panel.start_claude(self._cfg.sketchbook)
         self._claude_terminal_panel.focus_terminal()
 
     def _open_worksheet_preview(self, path: str):
@@ -1720,7 +1688,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         self._last_hint = hint
         self._hint_stage = 0
         if hint:
-            stepped = self._settings_debug_stepped
+            stepped = self._cfg.debug_stepped
             final = hint.final_stage
             self._show_hint_stage(1, with_links=stepped or final == 1)
             if not stepped:
@@ -1797,7 +1765,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
             self._run_change_text = f"{n} Stellen, Zeilen {zeilen}"
             msg = (f"   Seit dem letzten Lauf: {n} Stellen geändert (Zeilen {zeilen}) – "
                    "im Zyklus testest du eine Änderung nach der anderen.\n")
-        if self._settings_debug_change_hint:
+        if self._cfg.debug_change_hint:
             self._console.append_info(msg)
 
     def _debug_track_output(self, text: str, kind: str):
@@ -1915,7 +1883,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
             return
         links: list[tuple[str, str]] = []
         final = hint.final_stage
-        if self._settings_debug_stepped and stage < final:
+        if self._cfg.debug_stepped and stage < final:
             if hint.level == "kl89":
                 links.append(("▸ Was prüfe ich?", f"hint{stage + 1}"))
             else:
@@ -2612,7 +2580,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
     def _get_python_executable(self) -> str:
         # In den Einstellungen gewählter Interpreter hat Vorrang – sofern er
         # existiert und nicht die App selbst ist (Fork-Bomb-Schutz im Frozen-Modus).
-        chosen = (self._settings_python_exec or "").strip()
+        chosen = (self._cfg.python_exec or "").strip()
         if chosen:
             # Wurde nur ein Name statt eines Pfads gewählt (z. B. "python3.14"),
             # über PATH auflösen – sonst würde fälschlich der System-Python
@@ -2751,7 +2719,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
     def _show_ais_prompt(self):
         """Zeigt die Vorlage, um den NiT_Coder als Dialogpartner auf ais.chat anzulegen."""
         from .ais_prompt_dialog import AisChatPromptDialog
-        AisChatPromptDialog(parent=self, level=self._settings_debug_level).exec()
+        AisChatPromptDialog(parent=self, level=self._cfg.debug_level).exec()
 
     def _show_quickstart(self):
         """Kurzanleitung (mitgelieferte .md) in einem eigenen Fenster anzeigen."""
@@ -2799,257 +2767,64 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
         box.exec()
 
     def _open_settings(self):
-        dlg = SettingsDialog(
-            self,
-            font_size=self._settings_font_size,
-            editor_font=self._settings_editor_font,
-            line_numbers=self._settings_line_numbers,
-            word_wrap=self._settings_word_wrap,
-            highlight_line=self._settings_highlight_line,
-            autosave_secs=self._settings_autosave_secs,
-            python_exec=self._settings_python_exec,
-            scrollback=self._settings_scrollback,
-            tutor_mode=self._settings_tutor_mode,
-            sketchbook_dir=self._settings_sketchbook,
-            git_exec=self._settings_git_executable,
-            theme=self._settings_theme,
-            code_scheme=self._settings_code_scheme,
-            blocks_enabled=self._settings_blocks_enabled,
-            statplot_offline=self._settings_statplot_offline,
-            plot_y_mode=self._settings_plot_y_mode,
-            plot_y_min=self._settings_plot_y_min,
-            plot_y_max=self._settings_plot_y_max,
-            plot_x_mode=self._settings_plot_x_mode,
-            plot_x_min=self._settings_plot_x_min,
-            plot_x_max=self._settings_plot_x_max,
-            plot_style=self._settings_plot_style,
-            ui_font_pt=self._settings_ui_font_pt,
-            debug_level=self._settings_debug_level,
-            debug_stepped=self._settings_debug_stepped,
-            debug_change_hint=self._settings_debug_change_hint,
-            hidden_activity=self._settings_hidden_activity,
-        )
-        if dlg.exec() == SettingsDialog.DialogCode.Accepted:
-            self._settings_debug_level = dlg.debug_level
-            self._settings_debug_stepped = dlg.debug_stepped
-            self._settings_debug_change_hint = dlg.debug_change_hint
-            if getattr(self, "_debug_map_dlg", None) is not None:
-                self._debug_map_dlg.set_level(self._debug_level)
-            ui_font_changed = dlg.ui_font_pt != self._settings_ui_font_pt
-            self._settings_ui_font_pt = dlg.ui_font_pt
-            self._settings_font_size = dlg.font_size
-            self._settings_editor_font = dlg.editor_font
-            set_mono_font(self._settings_editor_font)
-            self._settings_line_numbers = dlg.line_numbers
-            self._settings_word_wrap = dlg.word_wrap
-            self._settings_highlight_line = dlg.highlight_line
-            self._settings_autosave_secs = dlg.autosave_secs
-            self._settings_python_exec = dlg.python_exec
-            self._settings_scrollback = dlg.scrollback_lines
-            self._settings_tutor_mode = dlg.tutor_mode
-            self._settings_sketchbook = self._normalize_sketchbook_dir(dlg.sketchbook_dir)
-            self._settings_git_executable = dlg.git_exec
-            self._settings_theme = dlg.theme
-            self._settings_code_scheme = dlg.code_scheme
-            self._settings_blocks_enabled = dlg.blocks_enabled
-            if dlg.statplot_offline != self._settings_statplot_offline:
-                # Das Fenster lädt die Seite beim Erzeugen – mit neuer Einstellung
-                # beim nächsten Öffnen neu aufbauen.
-                self._settings_statplot_offline = dlg.statplot_offline
-                win = getattr(self, "_csv_window", None)
-                if win is not None:
-                    win.close()
-                    win.deleteLater()
-                    self._csv_window = None
-            self._settings_hidden_activity = dlg.hidden_activity
-            self._settings_plot_y_mode = dlg.plot_y_mode
-            self._settings_plot_y_min = dlg.plot_y_min
-            self._settings_plot_y_max = dlg.plot_y_max
-            self._settings_plot_x_mode = dlg.plot_x_mode
-            self._settings_plot_x_min = dlg.plot_x_min
-            self._settings_plot_x_max = dlg.plot_x_max
-            self._settings_plot_style = dlg.plot_style
-            try:
-                self._apply_settings()
-                self._apply_sketchbook_root()
-                self._update_git_menu_visibility()
-                self._save_persistent_settings()
-            except Exception as exc:
-                traceback.print_exc()
-                QMessageBox.critical(
-                    self,
-                    "Einstellungen",
-                    f"Einstellungen konnten nicht angewendet werden:\n{exc}",
-                )
-            if ui_font_changed:
-                QMessageBox.information(
-                    self,
-                    "Einstellungen",
-                    "Die neue Schriftgröße der Oberfläche wird nach einem Neustart "
-                    "von Koalino wirksam.",
-                )
-
-    def _settings_bool(self, key: str, default: bool) -> bool:
-        raw = self._settings_store.value(key, default)
-        if isinstance(raw, bool):
-            return raw
-        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
-
-    def _settings_int(self, key: str, default: int) -> int:
-        raw = self._settings_store.value(key, default)
+        dlg = SettingsDialog(self, self._cfg)
+        if dlg.exec() != SettingsDialog.DialogCode.Accepted:
+            return
+        old = self._cfg
+        new = dlg.result_settings()
+        new.sketchbook = normalize_sketchbook_dir(new.sketchbook)
+        self._cfg = new
+        if getattr(self, "_debug_map_dlg", None) is not None:
+            self._debug_map_dlg.set_level(self._debug_level)
+        ui_font_changed = new.ui_font_pt != old.ui_font_pt
+        set_mono_font(new.editor_font)
+        if new.statplot_offline != old.statplot_offline:
+            # Das Fenster lädt die Seite beim Erzeugen – mit neuer Einstellung
+            # beim nächsten Öffnen neu aufbauen.
+            win = getattr(self, "_csv_window", None)
+            if win is not None:
+                win.close()
+                win.deleteLater()
+                self._csv_window = None
         try:
-            return int(raw)
-        except (TypeError, ValueError):
-            return default
-
-    def _settings_float(self, key: str, default: float) -> float:
-        raw = self._settings_store.value(key, default)
-        try:
-            return float(raw)
-        except (TypeError, ValueError):
-            return default
-
-    def _normalize_sketchbook_dir(self, path: str) -> str:
-        candidate = Path(path).expanduser() if path else Path.home()
-        if not candidate.exists() or not candidate.is_dir():
-            return str(Path.home())
-        return str(candidate.resolve())
+            self._apply_settings()
+            self._apply_sketchbook_root()
+            self._update_git_menu_visibility()
+            self._save_persistent_settings()
+        except Exception as exc:
+            traceback.print_exc()
+            QMessageBox.critical(
+                self,
+                "Einstellungen",
+                f"Einstellungen konnten nicht angewendet werden:\n{exc}",
+            )
+        if ui_font_changed:
+            QMessageBox.information(
+                self,
+                "Einstellungen",
+                "Die neue Schriftgröße der Oberfläche wird nach einem Neustart "
+                "von Koalino wirksam.",
+            )
 
     def _load_persistent_settings(self):
-        self._settings_font_size = self._settings_int("editor/font_size", self._settings_font_size)
-        self._settings_editor_font = str(self._settings_store.value("editor/font_family", "default") or "default")
-        set_mono_font(self._settings_editor_font)
-        self._settings_line_numbers = self._settings_bool("editor/line_numbers", self._settings_line_numbers)
-        self._settings_word_wrap = self._settings_bool("editor/word_wrap", self._settings_word_wrap)
-        self._settings_highlight_line = self._settings_bool("editor/highlight_line", self._settings_highlight_line)
-        self._settings_autosave_secs = self._settings_int("editor/autosave_secs", self._settings_autosave_secs)
-        self._settings_python_exec = str(self._settings_store.value("python/executable", self._settings_python_exec) or "")
-        embedded_py = embedded_python_executable()
-
-        # Einmalige Migration: wenn eine mitgelieferte Runtime vorhanden ist,
-        # soll sie standardmäßig gewählt werden (auch bei Alt-Settings).
-        migrated_embedded = self._settings_bool("python/prefer_embedded_migrated", False)
-        if embedded_py and not migrated_embedded:
-            self._settings_python_exec = embedded_py
-            self._settings_store.setValue("python/executable", self._settings_python_exec)
-            self._settings_store.setValue("python/prefer_embedded_migrated", True)
-        else:
-            chosen = (self._settings_python_exec or "").strip()
-            usable = False
-            if chosen:
-                if os.path.isfile(chosen):
-                    usable = True
-                elif shutil.which(chosen):
-                    usable = True
-
-            if not usable:
-                fallback = embedded_py or preferred_python_interpreter() or ""
-                self._settings_python_exec = fallback
-                if fallback:
-                    self._settings_store.setValue("python/executable", fallback)
-        self._settings_scrollback = self._settings_int("console/scrollback", self._settings_scrollback)
-        # Block-Editor ist seit dem Ende der BETA standardmäßig an. Bestehende
-        # Installationen haben durch den früheren Standard („aus") ein
-        # blocks/enabled=False persistiert (closeEvent speichert alle Settings).
-        # Darum einmalig auf an setzen; eine spätere bewusste Abwahl bleibt erhalten.
-        if self._settings_bool("blocks/default_on_migrated", False):
-            self._settings_blocks_enabled = self._settings_bool("blocks/enabled", self._settings_blocks_enabled)
-        else:
-            self._settings_blocks_enabled = True
-            self._settings_store.setValue("blocks/enabled", True)
-            self._settings_store.setValue("blocks/default_on_migrated", True)
-        self._settings_statplot_offline = self._settings_bool("statplot/offline_first", self._settings_statplot_offline)
-        self._settings_tutor_mode = str(self._settings_store.value("tutor/mode", self._settings_tutor_mode) or "none")
-        if self._settings_tutor_mode not in ("none", "aischat", "fobizz"):
-            self._settings_tutor_mode = "none"   # Ollama-Modi (bis 1.14) gibt es nicht mehr
-        # Schlüssel des entfernten Ollama-Tutors aus alten Installationen aufräumen.
-        for key in ("tutor/url", "tutor/model"):
-            if self._settings_store.contains(key):
-                self._settings_store.remove(key)
-        self._settings_sketchbook = self._normalize_sketchbook_dir(
-            str(self._settings_store.value("files/sketchbook_dir", self._settings_sketchbook) or "")
-        )
-        self._settings_git_executable = str(
-            self._settings_store.value("git/executable", self._settings_git_executable) or ""
-        )
-        self._settings_git_repo = str(self._settings_store.value("git/repo_dir", self._settings_git_repo) or "")
-        self._settings_theme = str(self._settings_store.value("ui/theme", self._settings_theme) or "modern_light")
-        # Einmalige Migration: das bisherige Standard-Design (Eclipse) wird beim
-        # ersten Start mit dem neuen Layout auf das moderne Hell-Design gesetzt.
-        if not self._settings_store.value("ui/layout_v2", False, type=bool):
-            if self._settings_theme == "classic_light":
-                self._settings_theme = "modern_light"
-            self._settings_store.setValue("ui/layout_v2", True)
-        # Solarized/Dracula gibt es nur noch als Code-Farbschema.
-        self._settings_code_scheme = str(
-            self._settings_store.value("ui/code_scheme", "") or "")
-        if self._settings_theme in LEGACY_THEME_MIGRATION:
-            self._settings_theme, legacy_scheme = LEGACY_THEME_MIGRATION[self._settings_theme]
-            if not self._settings_code_scheme:
-                self._settings_code_scheme = legacy_scheme
-        if self._settings_code_scheme not in CODE_SCHEMES:
-            self._settings_code_scheme = "auto"
-        self._settings_ui_font_pt = self._settings_int("ui/font_pt", self._settings_ui_font_pt)
-        # Serial-Plotter-Achsen
-        self._settings_plot_y_mode = str(self._settings_store.value("plot/y_mode", self._settings_plot_y_mode) or "auto")
-        self._settings_plot_y_min = self._settings_float("plot/y_min", self._settings_plot_y_min)
-        self._settings_plot_y_max = self._settings_float("plot/y_max", self._settings_plot_y_max)
-        self._settings_plot_x_mode = str(self._settings_store.value("plot/x_mode", self._settings_plot_x_mode) or "sliding")
-        self._settings_plot_x_min = self._settings_int("plot/x_min", self._settings_plot_x_min)
-        self._settings_plot_x_max = self._settings_int("plot/x_max", self._settings_plot_x_max)
-        self._settings_plot_style = str(self._settings_store.value("plot/style", self._settings_plot_style) or "line")
-        level = str(self._settings_store.value("debug/level", self._settings_debug_level) or "kl10")
-        self._settings_debug_level = level if level in ("kl89", "kl10") else "kl10"
-        raw_hidden = str(self._settings_store.value("ui/hidden_activity", "") or "")
-        self._settings_hidden_activity = {
-            k for k in raw_hidden.split(",") if k in ACTIVITY_TOGGLEABLE}
-        self._settings_debug_stepped = self._settings_bool("debug/stepped", self._settings_debug_stepped)
-        self._settings_debug_change_hint = self._settings_bool("debug/change_hint", self._settings_debug_change_hint)
+        self._cfg = AppSettings.load(self._settings_store, base=self._cfg)
+        set_mono_font(self._cfg.editor_font)
         # Theme sofort anwenden, damit alle nachfolgenden UI-Elemente korrekte Farben erhalten
-        set_theme(self._settings_theme)
-        set_code_scheme(self._settings_code_scheme)
+        set_theme(self._cfg.theme)
+        set_code_scheme(self._cfg.code_scheme)
 
     def _save_persistent_settings(self):
-        self._settings_store.setValue("editor/font_size", self._settings_font_size)
-        self._settings_store.setValue("editor/font_family", self._settings_editor_font)
-        self._settings_store.setValue("editor/line_numbers", self._settings_line_numbers)
-        self._settings_store.setValue("editor/word_wrap", self._settings_word_wrap)
-        self._settings_store.setValue("editor/highlight_line", self._settings_highlight_line)
-        self._settings_store.setValue("editor/autosave_secs", self._settings_autosave_secs)
-        self._settings_store.setValue("blocks/enabled", self._settings_blocks_enabled)
-        self._settings_store.setValue("statplot/offline_first", self._settings_statplot_offline)
-        self._settings_store.setValue("python/executable", self._settings_python_exec)
-        self._settings_store.setValue("console/scrollback", self._settings_scrollback)
-        self._settings_store.setValue("tutor/mode", self._settings_tutor_mode)
-        self._settings_store.setValue("files/sketchbook_dir", self._settings_sketchbook)
-        self._settings_store.setValue("git/executable", self._settings_git_executable)
-        self._settings_store.setValue("git/repo_dir", self._settings_git_repo)
-        self._settings_store.setValue("ui/theme", self._settings_theme)
-        self._settings_store.setValue("ui/code_scheme", self._settings_code_scheme)
-        self._settings_store.setValue("ui/font_pt", self._settings_ui_font_pt)
-        self._settings_store.setValue("plot/y_mode", self._settings_plot_y_mode)
-        self._settings_store.setValue("plot/y_min", self._settings_plot_y_min)
-        self._settings_store.setValue("plot/y_max", self._settings_plot_y_max)
-        self._settings_store.setValue("plot/x_mode", self._settings_plot_x_mode)
-        self._settings_store.setValue("plot/x_min", self._settings_plot_x_min)
-        self._settings_store.setValue("plot/x_max", self._settings_plot_x_max)
-        self._settings_store.setValue("plot/style", self._settings_plot_style)
-        self._settings_store.setValue(
-            "ui/hidden_activity", ",".join(sorted(self._settings_hidden_activity)))
-        self._settings_store.setValue("debug/level", self._settings_debug_level)
-        self._settings_store.setValue("debug/stepped", self._settings_debug_stepped)
-        self._settings_store.setValue("debug/change_hint", self._settings_debug_change_hint)
-        self._settings_store.sync()
+        self._cfg.save(self._settings_store)
 
     def _choose_sketchbook_dir(self):
         folder = QFileDialog.getExistingDirectory(
             self,
             "Sketchbook-Ordner wählen",
-            self._settings_sketchbook,
+            self._cfg.sketchbook,
         )
         if folder:
-            self._settings_sketchbook = self._normalize_sketchbook_dir(folder)
-            self._settings_git_repo = ""
+            self._cfg.sketchbook = normalize_sketchbook_dir(folder)
+            self._cfg.git_repo = ""
             self._apply_sketchbook_root()
             self._save_persistent_settings()
             self._update_git_status_label()
@@ -3057,13 +2832,13 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
     def _update_git_status_label(self):
         if not hasattr(self, "_status_git"):
             return
-        repo = self._settings_git_repo
+        repo = self._cfg.git_repo
         if not repo or not os.path.isdir(repo):
             self._status_git.setText("Git: —")
             return
 
         try:
-            rel = Path(repo).resolve().relative_to(Path(self._settings_sketchbook).resolve())
+            rel = Path(repo).resolve().relative_to(Path(self._cfg.sketchbook).resolve())
             label = "." if str(rel) == "." else str(rel)
         except Exception:
             label = Path(repo).name or repo
@@ -3072,14 +2847,14 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
 
     def _apply_sketchbook_root(self):
         if hasattr(self, "_file_panel"):
-            self._file_panel.set_root(self._settings_sketchbook)
+            self._file_panel.set_root(self._cfg.sketchbook)
 
     def _rebuild_sketchbook_menu(self):
         self._m_sketchbook.clear()
         self._add_action(self._m_sketchbook, "Sketchbook-Ordner wählen …", self._choose_sketchbook_dir)
         self._m_sketchbook.addSeparator()
 
-        root = Path(self._settings_sketchbook)
+        root = Path(self._cfg.sketchbook)
         if not root.exists() or not root.is_dir():
             info = self._m_sketchbook.addAction("(Sketchbook-Ordner nicht gefunden)")
             info.setEnabled(False)
@@ -3145,18 +2920,18 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
     def _apply_settings(self):
         """Einstellungen auf alle offenen Tabs + Konsole anwenden."""
         # Theme zuerst anwenden, damit alle Farben stimmen
-        set_theme(self._settings_theme)
-        set_code_scheme(self._settings_code_scheme)
+        set_theme(self._cfg.theme)
+        set_code_scheme(self._cfg.code_scheme)
         self.setStyleSheet(build_global_style())
         self._update_widget_styles()
         self._apply_toolbar_icons()
         self._refresh_activity_icons()
 
         for tab in self._tabs:
-            tab.editor.set_font_size(self._settings_font_size)
-            tab.editor.set_line_numbers_visible(self._settings_line_numbers)
-            tab.editor.set_word_wrap(self._settings_word_wrap)
-            tab.editor.set_highlight_current_line(self._settings_highlight_line)
+            tab.editor.set_font_size(self._cfg.font_size)
+            tab.editor.set_line_numbers_visible(self._cfg.line_numbers)
+            tab.editor.set_word_wrap(self._cfg.word_wrap)
+            tab.editor.set_highlight_current_line(self._cfg.highlight_line)
             tab.editor.refresh_theme()
         self._file_panel.refresh_theme()
         self._device_panel.refresh_theme()
@@ -3172,23 +2947,23 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
             win = getattr(self, attr, None)
             if win is not None:
                 win.apply_theme()
-        self._console.set_font_size(self._settings_font_size)
-        self._console.set_scrollback_limit(self._settings_scrollback)
+        self._console.set_font_size(self._cfg.font_size)
+        self._console.set_scrollback_limit(self._cfg.scrollback)
         self._console.set_plot_defaults({
-            "y_mode": self._settings_plot_y_mode,
-            "y_min":  self._settings_plot_y_min,
-            "y_max":  self._settings_plot_y_max,
-            "x_mode": self._settings_plot_x_mode,
-            "x_min":  self._settings_plot_x_min,
-            "x_max":  self._settings_plot_x_max,
-            "style":  self._settings_plot_style,
+            "y_mode": self._cfg.plot_y_mode,
+            "y_min":  self._cfg.plot_y_min,
+            "y_max":  self._cfg.plot_y_max,
+            "x_mode": self._cfg.plot_x_mode,
+            "x_min":  self._cfg.plot_x_min,
+            "x_max":  self._cfg.plot_x_max,
+            "style":  self._cfg.plot_style,
         })
         # Block-Editor ein-/ausblenden
         self._apply_blocks_enabled()
         # Auto-Save-Timer
         self._autosave_timer.stop()
-        if self._settings_autosave_secs > 0:
-            self._autosave_timer.start(self._settings_autosave_secs * 1000)
+        if self._cfg.autosave_secs > 0:
+            self._autosave_timer.start(self._cfg.autosave_secs * 1000)
         # Chatbot (3 Modi: none / aischat / fobizz). Ein offenes Fehlerprotokoll bleibt offen.
         keep_log = self._debug_log_visible()
         keep_site = self._py_site_visible()
@@ -3206,7 +2981,7 @@ class MainWindow(GitIntegrationMixin, QMainWindow):
             PANEL_MAX_WIDTH,
             PANEL_MIN_WIDTH,
         )
-        mode = self._settings_tutor_mode
+        mode = self._cfg.tutor_mode
         if mode == "none":
             self._main_splitter.setCollapsible(2, True)
             self._ai_stack.setMinimumWidth(0)
