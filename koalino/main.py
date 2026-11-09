@@ -1,6 +1,7 @@
 """Einstiegspunkt für Koalino."""
 import os
 import sys
+import time
 import traceback
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt, QObject, QTimer, pyqtSignal
@@ -263,7 +264,9 @@ def main():
         _font_family = "Ubuntu"
     app.setFont(QFont(_font_family, 13))
 
+    t_start = time.perf_counter()
     window = MainWindow(initial_file=initial_file)
+    crash_log.note(f"Start: MainWindow aufgebaut in {(time.perf_counter() - t_start) * 1000:.0f} ms")
     window.showMaximized()
     if previous_crashed:
         # nach dem Aufbau des Fensters, damit der Hinweis nicht den Start blockiert
