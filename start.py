@@ -50,6 +50,10 @@ def _venv_python(venv_dir: Path) -> Path:
 
 
 def _bundled_python_candidates() -> list[Path]:
+    # Bewusst eine eigene Kopie von koalino.config._embedded_runtime_candidates:
+    # start.py ist der Bootstrap und läuft, bevor die Venv samt Abhängigkeiten
+    # existiert – es darf das Paket koalino daher nicht importieren. Beide Listen
+    # bei Änderungen gemeinsam anpassen.
     if sys.platform == "win32":
         return [
             RUNTIME_DIR / "python.exe",

@@ -257,6 +257,19 @@ Fuer Release-Builds kann die Runtime direkt in die Pakete aufgenommen werden:
 - macOS: `INCLUDE_RUNTIME=1 bash release/scripts/build_macos.sh`
 - Windows: `pwsh -File release/scripts/build_windows.ps1 -IncludeRuntime`
 
+### Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+Die Tests brauchen kein Qt und laufen bei jedem Push in GitHub Actions
+(`.github/workflows/tests.yml`). Release-Builds installieren aus
+`requirements.lock` (siehe [release/README.md](release/README.md)). Das
+Claude-Terminal (`Ctrl+Alt+Shift+C`) ist ein reines Entwickler-Werkzeug und nur mit
+`KOALINO_DEV_TOOLS=1` vorhanden.
+
 ### Linux / macOS
 ```bash
 chmod +x run.sh
@@ -362,7 +375,11 @@ steht in [docs/datenschutz.md](docs/datenschutz.md).
 Koalino/
 ├── koalino/
 │   ├── main.py                 # Einstiegspunkt
-│   ├── main_window.py          # Hauptfenster (inkl. Git-Integration)
+│   ├── main_window.py          # Hauptfenster
+│   ├── git_integration.py      # Git-Dialoge und -Aktionen (Mixin des Hauptfensters)
+│   ├── app_settings.py         # Einstellungen als Datenobjekt (QSettings laden/speichern, Migrationen)
+│   ├── styles.py               # Globales Stylesheet
+│   ├── webview.py              # Gemeinsamer Aufbau der eingebetteten Web-Ansichten (QtWebEngine)
 │   ├── editor_widget.py        # Code-Editor (QScintilla)
 │   ├── completion.py           # Auto-Vervollständigung (Jedi)
 │   ├── file_panel.py           # Dateibaum
@@ -384,5 +401,7 @@ Koalino/
 ├── start.py                    # Bootstrap-Skript
 ├── run.sh                      # Linux/macOS Starter
 ├── run.bat                     # Windows Starter
-└── requirements.txt
+├── requirements.txt            # Abhängigkeiten für die Entwicklung (>=)
+├── requirements.lock           # Festgelegte Versionen für Release-Builds
+└── requirements-dev.txt        # pytest, pyflakes, pyte (nur Entwicklung)
 ```

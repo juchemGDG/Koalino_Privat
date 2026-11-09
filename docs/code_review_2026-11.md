@@ -22,6 +22,13 @@ Millisekunde entstanden, bekamen dieselbe ID (behoben in `snapshots.add`). Zweit
 Nebenbefund: Schlug das Aufwärmen von Jedi fehl, stürzte der Vervollständigungs-Thread
 mit `UnboundLocalError` ab (behoben in `completion.py`).
 
+**Erledigt am 2026-11-09 (zweiter Durchgang):** 1.2 (`styles.py`, `git_integration.py`,
+`app_settings.py`; `main_window.py` von 4 893 auf 3 048 Zeilen), 1.3 (`webview.py`),
+1.4 (bis auf `refresh_theme`), 1.5 (gemessen, Umbau bewusst **nicht** übernommen), 2.6,
+3.1 (87 → 121 Tests, CI-Job), 3.2 (`requirements.lock`), 3.3, 3.4 (WLAN-Passwort im
+Deploy-Dialog), 3.5 (`KOALINO_DEV_TOOLS`) und 3.6. Offen bleiben nur die `refresh_theme`-
+Zusammenlegung (1.4) und der Wechsel von SHA-1 auf BLAKE2 (3.6, siehe dort).
+
 ---
 
 ## Zusammenfassung
@@ -89,7 +96,7 @@ set_explain_visible. Ergänze README-Abschnitt „KI-Tutor Infi" um den Hinweis,
 Option nur mit installiertem Ollama erscheint.
 ```
 
-### 1.2 🟠 `main_window.py` aufteilen (4 904 Zeilen, 246 Methoden)
+### 1.2 ✅ `main_window.py` aufteilen (4 904 Zeilen, 246 Methoden; erledigt 2026-11-09)
 
 **Befund.** Drei klar abgegrenzte Blöcke lassen sich ohne Verhaltensänderung herauslösen:
 
@@ -101,6 +108,17 @@ Option nur mit installiertem Ollama erscheint.
 
 Danach bleibt `MainWindow` bei etwa 3 300 Zeilen. Die 19 `_open_*`- und 15 `_show_*`-Methoden
 sind Menü-Handler und können bleiben.
+
+**Ergebnis.** In drei Commits umgesetzt: `styles.py` (Stylesheet, Ausgabe bis auf die
+Zufallsnamen der Icon-Ordner identisch), `git_integration.py` (`GitIntegrationMixin`
+plus beide Dialoge; die Sketchbook-Helfer, die auch das Menü braucht, liegen jetzt in
+`config.py`) und `app_settings.py` (`AppSettings`, Qt-frei, mit `load/save`;
+`SettingsDialog(parent, settings)` liefert über `result_settings()` ein geändertes
+Objekt). `MainWindow` hat jetzt 3 048 Zeilen. Die QSettings-Schlüssel und Migrationen
+sind unverändert: Ein A/B-Vergleich des alten Codes aus `git` mit dem neuen in 4 000
+zufälligen Fällen ergab keine Abweichung beim Laden, bei den geschriebenen
+Migrations-Markern und beim Speichern. `tests/test_app_settings.py` hält die
+Migrationen fest.
 
 **Prompt:**
 ```
@@ -117,7 +135,7 @@ LEGACY_THEME_MIGRATION, default_on_migrated). Führe nach jedem Schritt
 python -m pyflakes koalino aus und starte die App headless.
 ```
 
-### 1.3 🟠 Fünffach wiederholter WebEngine-Aufbau
+### 1.3 ✅ Fünffach wiederholter WebEngine-Aufbau (erledigt 2026-11-09)
 
 **Befund.** `ais_chat_panel.py:90`, `block_panel.py:79`, `pap_editor.py:270`,
 `py_site_panel.py:50`, `worksheet_panel.py:371` bauen jeweils identisch
@@ -125,6 +143,13 @@ Off-the-record-Profil → View → Page → `setPage`, teils mit `renderProcessT
 und demselben Fallback-Label „PyQt6-WebEngine ist nicht installiert“. Auch die
 `try: from PyQt6.QtWebEngineCore import … except ImportError: HAS_WEBENGINE = False`-Präambel
 steht in sechs Dateien.
+
+**Ergebnis.** `koalino/webview.py` enthält `HAS_WEBENGINE`, `make_offtherecord_view`,
+`webengine_missing_label` und `RenderCrashHandler` (einmal neu laden, beim zweiten
+Absturz Hinweis). Die fünf Panels nutzen sie. Kleine Verhaltensänderung zum Besseren:
+Schlägt die WebEngine-Initialisierung im AIS-Chat oder in der Arbeitsblatt-Vorschau
+fehl, erscheint jetzt der Hinweis statt eines Absturzes. `debug_map_dialog.py` baut
+noch eine eigene View (Standardprofil, nur lokale Inhalte) und war nicht Teil von 1.3.
 
 **Prompt:**
 ```
@@ -139,7 +164,7 @@ webview.py liegen. Keine Verhaltensänderung; prüfe mit dem Headless-Start, das
 Block-Editor und Arbeitsblatt-Vorschau noch laden.
 ```
 
-### 1.4 🟢 Kleinere Dubletten und Aufräumarbeiten
+### 1.4 ✅ Kleinere Dubletten und Aufräumarbeiten (erledigt 2026-11-09, bis auf `refresh_theme`)
 
 - **HTML-Escaping** (`.replace("&", "&amp;")…`) steht sechsmal; `html.escape` tut dasselbe.
 - **`refresh_theme`** ist in zwölf Widgets fast gleich aufgebaut (Header-Hintergrund,
@@ -158,6 +183,12 @@ Block-Editor und Arbeitsblatt-Vorschau noch laden.
 - `start.py` und `config.py` enthalten je eine eigene Liste der Runtime-Kandidatenpfade
   (`_bundled_python_candidates` vs. `_embedded_runtime_candidates`); eine Quelle reicht.
 
+**Ergebnis.** pyflakes meldet für `koalino/` und `start.py` nur noch Fundstellen in
+`assets/nit_lib/` (fremder, synchronisierter Code). Es gab keine manuellen
+HTML-Escape-Ketten mehr. Die `refresh_theme`-Basisklasse bleibt ein eigener Schritt.
+Die doppelte Liste der Runtime-Pfade in `start.py` bleibt bewusst stehen (der Bootstrap
+läuft vor der Venv und darf `koalino` nicht importieren; Kommentar ergänzt).
+
 **Prompt:**
 ```
 Lies docs/code_review_2026-11.md Abschnitt 1.4. Führe python -m pyflakes koalino start.py
@@ -169,13 +200,21 @@ die refresh_theme-Zusammenlegung aus, das ist ein eigener Schritt. Starte danach
 headless.
 ```
 
-### 1.5 🟢 Startzeit
+### 1.5 ✅ Startzeit (gemessen am 2026-11-09, Umbau nicht übernommen)
 
 `_setup_central` legt alle rechten Panels (Tutor, AIS, Coder, fobizz, Claude-Terminal,
 Arbeitsblatt, Fehlerprotokoll, py.nitbw.de) beim Start an; Web-Panels erzeugen dabei
 bereits ein QtWebEngine-Profil, auch wenn sie nie gezeigt werden. Die `lazy`-Idee des
 fobizz-Panels (URL erst beim ersten `showEvent` laden) ließe sich auf die Erzeugung der
 Views selbst ausweiten. Wird 1.1 umgesetzt, entfallen schon zwei Panels.
+
+**Ergebnis.** `main.py` schreibt die Dauer von `MainWindow(...)` als „Start: MainWindow
+aufgebaut in … ms“ ins Absturzprotokoll. Gemessen (Codespace, offscreen, je 15 frische
+Prozesse): Median 398 ms mit sofort gebauten Views, 302 ms mit Views erst beim ersten
+`showEvent` (Minimum 359 → 287 ms), also rund 96 ms. Das liegt unter der Schwelle von
+150 ms, der Umbau wurde deshalb zurückgenommen. Auf einem Schulrechner mit echter
+GPU/Festplatte kann der Unterschied größer sein; der Wert steht ab jetzt im
+Absturzprotokoll und lässt sich dort nachmessen.
 
 **Prompt:**
 ```
@@ -302,11 +341,13 @@ clear_snapshots, clear_crash_log, size_of). Die crash.log darf nur bis zur aktue
 Sitzungskopfzeile gekürzt werden, nicht geschlossen (faulthandler hält sie offen).
 ```
 
-### 2.6 🟢 Kleinere Punkte
+### 2.6 ✅ Kleinere Punkte (erledigt 2026-11-09)
 
 - **`crash_log`** schreibt `platform.platform()` und Python-Version, keine Nutzerkennung.
   Gut. Der Hinweis „Wenn du einen Absturz melden willst, kopiere den Text“ sollte
   erwähnen, dass Pfade im Stacktrace den Benutzernamen enthalten können.
+- Der Dialog „Absturzprotokoll“ weist jetzt darauf hin, dass Pfade den Benutzernamen
+  enthalten können. Der Fehlerprotokoll-Satz steht in `docs/datenschutz.md`.
 - **`micropython_dialogs.py:41, 331`** nutzt `getpass.getuser()` nur für Mount-Pfade unter
   Linux. Unkritisch.
 - **Fehlerprotokoll** (`debug_log_panel.py`) wird **neben dem Programm** als Markdown
@@ -320,13 +361,20 @@ Sitzungskopfzeile gekürzt werden, nicht geschlossen (faulthandler hält sie off
 
 ## 3 · Sonstige Beobachtungen
 
-### 3.1 🔴 Keine Tests
+### 3.1 ✅ Keine Tests (erledigt 2026-11-09)
 
 Im Repo gibt es kein `tests/`-Verzeichnis. Dabei sind mehrere Module rein funktional und
 ohne Qt testbar: `checkpoints.py`, `snapshots.py`, `offline_cache.py`, `net_hints.py`,
 `error_hints.py`, `py2blockly.py` (1 714 Zeilen, deterministische AST-Übersetzung),
 `csv_stats.py`, `worksheet_renderer.py`, `pap_import.py`. Gerade `py2blockly` und
 `error_hints` ändern sich oft und brechen leicht.
+
+**Ergebnis.** `tests/` enthält 121 Tests (checkpoints, net_hints, snapshots,
+offline_cache, py2blockly, app_settings, ap_password, local_data, prune). Für
+`py2blockly` reicht „wirft nicht“ nicht, weil die Funktion Fehler intern abfängt und auf
+einen Roh-Block ausweicht; die Tests prüfen deshalb die erzeugten Blocktypen und dass
+Roh-Code gültiges Python bleibt. `.github/workflows/tests.yml` führt `pytest` bei jedem
+Push aus (ohne Qt; geprüft in einer frischen venv).
 
 **Prompt:**
 ```
@@ -344,11 +392,19 @@ oder einem Roh-Python-Block zugeordnet wird. Ergänze einen GitHub-Actions-Job
 ausführt (QT_QPA_PLATFORM=offscreen als Sicherheitsnetz).
 ```
 
-### 3.2 🟠 Abhängigkeiten nur nach unten gepinnt
+### 3.2 ✅ Abhängigkeiten nur nach unten gepinnt (erledigt 2026-11-09)
 
 `requirements.txt` nutzt ausschließlich `>=`. Ein Release-Build kann dadurch von heute auf
 morgen andere PyQt6-/WebEngine-Versionen ziehen als der letzte getestete Build.
 `terminal_panel.py` dokumentiert bereits, dass `pyte 0.8.2` Eigenheiten hat.
+
+**Ergebnis.** `requirements.lock` enthält `requirements.txt` und die Build-Werkzeuge samt
+Unterpaketen, mit den Versionen der getesteten `.venv`. Statt `pip freeze` (nur für
+eine Plattform) wurde `uv pip compile --universal --python-version 3.11` genutzt, daher
+tragen `pefile`, `macholib` & Co. Plattform-Marker. Für Windows, macOS und Linux
+(x86_64 und ARM) wurde per `pip --dry-run` geprüft, dass Wheels existieren. Die drei
+Build-Skripte und `release-build.yml` installieren daraus; Pflege steht in
+`release/README.md`. Ein Testbuild auf allen Plattformen steht noch aus.
 
 **Prompt:**
 ```
@@ -361,7 +417,7 @@ und ergänze einen Hinweis, dass nach dem Aktualisieren ein Testbuild auf allen 
 Plattformen nötig ist.
 ```
 
-### 3.3 🟠 README beschreibt entfernte Funktionen
+### 3.3 ✅ README beschreibt entfernte Funktionen (erledigt 2026-11-09)
 
 Die README nennt Infi, Code-Generator und Ollama als Features, beschreibt den Knopf
 „Infi erklärt diesen Fehler“ und listet `tutor_panel.py`/`coder_panel.py` in der
@@ -381,7 +437,7 @@ Aktualisiere die Projektstruktur anhand von ls koalino. Korrigiere die Verweise 
 server/bugreport.php in bug_report.py und config.py.
 ```
 
-### 3.4 🟠 ESP32-Firmware: Code-Ausführung ohne Anmeldung
+### 3.4 ✅ ESP32-Firmware: Code-Ausführung ohne Anmeldung (erledigt 2026-11-09)
 
 `firmware/main.py` nimmt per `POST /api/run` beliebigen Python-Code entgegen und führt
 ihn aus. Das WLAN-Passwort `mint2026` steht in `boot.py` und damit öffentlich im Repo und
@@ -389,6 +445,12 @@ ist für alle Boards gleich. Jede Person in Funkreichweite, die das Passwort ken
 also fremde Boards steuern. Für ein Klassenzimmer ist das ein bewusster Kompromiss
 (Einfachheit), aber er sollte dokumentiert sein und die Lehrkraft sollte ihn beim Deploy
 ändern können.
+
+**Ergebnis.** Der Deploy-Dialog fragt Board-Name und WLAN-Passwort ab (Vorgabe aus
+`DEFAULT_AP_PASSWORD` in `boot.py`, 8 bis 63 Zeichen). Ein eigenes Passwort landet als
+`ap_password.txt` auf dem Board, bei Standardwert wird die Datei entfernt. `boot.py`
+liest sie mit Rückfall auf die Konstante (an Stubs geprüft). `firmware/README.md` hat
+den Abschnitt „Sicherheit“; `main.py` blieb unverändert.
 
 **Prompt:**
 ```
@@ -402,7 +464,7 @@ geändert werden sollte. Keine weiteren Schutzmechanismen in main.py; der ESP32 
 einfach bleiben.
 ```
 
-### 3.5 🟢 Verstecktes Claude-Terminal
+### 3.5 ✅ Verstecktes Claude-Terminal (erledigt 2026-11-09)
 
 `terminal_panel.py` (586 Zeilen) und ein Tastenkürzel Ctrl+Alt+Shift+C öffnen ein
 eingebettetes Terminal mit der `claude`-CLI im Sketchbook-Ordner. Es ist bewusst versteckt
@@ -414,6 +476,12 @@ dennoch erklärungsbedürftig, vor allem gegenüber Administratoren. Außerdem z
 **Empfehlung:** Entweder hinter eine Umgebungsvariable (`KOALINO_DEV_TOOLS=1`) legen und
 im Release-Build nicht einpacken, oder in `docs/datenschutz.md` benennen.
 
+**Ergebnis.** Panel, Kürzel und der Import von `terminal_panel` (und damit `pyte`) gibt es
+nur noch mit `KOALINO_DEV_TOOLS=1`. `pyte` steht in `requirements-dev.txt`, nicht mehr
+in `requirements.txt`/`requirements.lock`; `release/pyinstaller.spec` schließt `pyte` und
+`koalino.terminal_panel` aus. Fehlt `pyte` trotz gesetzter Variable, bleibt das Werkzeug
+aus. Dokumentiert in `release/README.md`, `README.md` und `docs/datenschutz.md`.
+
 **Prompt:**
 ```
 Lies docs/code_review_2026-11.md Abschnitt 3.5. Aktiviere das Claude-Terminal
@@ -424,7 +492,7 @@ wird. Prüfe, ob pyte aus requirements.txt in eine requirements-dev.txt wandern 
 ohne dass release/pyinstaller.spec bricht. Dokumentiere die Variable in release/README.md.
 ```
 
-### 3.6 🟢 Weitere Kleinigkeiten
+### 3.6 ✅ Weitere Kleinigkeiten (erledigt 2026-11-09, bis auf SHA-1)
 
 - `offline_cache.cache_path` und `snapshots._dir` hashen den Pfad mit SHA-1 auf 10 bzw.
   12 Zeichen. Kollisionen sind praktisch ausgeschlossen, aber `hashlib.blake2b(digest_size=6)`
@@ -437,6 +505,13 @@ ohne dass release/pyinstaller.spec bricht. Dokumentiere die Variable in release/
 - `firmware/main.py` prüft `".." in path`, aber nicht URL-kodierte Varianten (`%2e%2e`).
   Da `send_file` den Pfad direkt an `os.stat` gibt und MicroPython nicht dekodiert, ist
   das unkritisch, ein Kommentar würde es aber festhalten.
+
+**Ergebnis.** `set_theme`, der doppelte `sys`-Import, die Ordnernamen in `start.py` und der
+Firmware-Kommentar sind erledigt (Commit „Kleinigkeiten aus dem Code-Check“). Der
+Ordnername blieb unterschiedlich und ist kommentiert. Der Wechsel von SHA-1 auf BLAKE2
+wurde **nicht** gemacht: Er ändert die Ordnernamen von Offline-Kopien und Ständen, die
+vorhandenen Stände (auch gemerkte 📌) wären nach dem Update unauffindbar. Bei Bedarf nur
+zusammen mit einer Migration umsetzen.
 
 **Prompt:**
 ```
@@ -451,12 +526,9 @@ und dokumentiere die Abweichung in einem Kommentar.
 
 ## Vorgeschlagene Reihenfolge
 
-Abschnitt 1.1, 2.1 bis 2.5 und 3.3 sind erledigt (2026-11-09). Für den Rest:
+Stand 2026-11-09 sind alle Abschnitte bearbeitet. Offen:
 
-1. **3.1** Tests ausbauen (Grundgerüst in `tests/` steht), danach erst **1.2** und
-   **1.3** (Umbauten mit Netz).
-2. **3.2** Lock-Datei für reproduzierbare Builds.
-3. **3.4** Firmware-Passwort im Deploy-Dialog, **3.5** Claude-Terminal hinter
-   Umgebungsvariable.
-4. **1.4**, **1.5**, **3.6** nach Gelegenheit.
-
+1. **Testbuild** auf allen Plattformen mit `requirements.lock` (Actions → *Build Release
+   Packages* → *Run workflow*), bevor ein Release-Tag gesetzt wird.
+2. **1.4:** `refresh_theme`-Basisklasse (`PanelHeader`) als eigener Schritt.
+3. **3.6:** SHA-1 → BLAKE2 nur zusammen mit einer Migration vorhandener Stände.

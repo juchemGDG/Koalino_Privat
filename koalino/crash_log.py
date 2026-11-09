@@ -149,6 +149,8 @@ def show_dialog(parent=None) -> None:
     info = QLabel(
         "Hier hält Koalino fest, wenn es unerwartet beendet wurde oder ein Fehler aufgetreten "
         "ist.\nWenn du einen Absturz melden willst, kopiere den Text und schicke ihn mit.\n"
+        "Achtung: Dateipfade im Text können deinen Benutzernamen enthalten – "
+        "bei Bedarf vor dem Weitergeben kürzen.\n"
         f"Datei: {path}")
     info.setWordWrap(True)
     info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
