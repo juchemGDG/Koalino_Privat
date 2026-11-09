@@ -1,16 +1,17 @@
 """MicroPython-Dialoge: Flash-Dialog & Bibliotheks-Manager."""
 import os
+import sys
 from pathlib import Path
 
 import requests
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QProgressBar, QFileDialog, QTextEdit,
     QGroupBox, QRadioButton, QLineEdit, QListWidget,
-    QListWidgetItem, QSplitter, QMessageBox, QCheckBox, QWidget,
+    QListWidgetItem, QSplitter, QMessageBox, QWidget,
 )
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtGui import QColor
 
 from .qt_utils import ThemedComboBox
 from .config import THEME, SUPPORTED_BOARDS, LIB_REPO_ZIP, python_executable, tool_command
@@ -200,7 +201,7 @@ class FlashWorker(QThread):
         self.firmware_path = firmware_path
 
     def run(self):
-        import subprocess, sys
+        import subprocess
         self.log.emit(f"Flashe {self.board} auf {self.port} ...\n")
         self.progress.emit(10)
         board_info = SUPPORTED_BOARDS.get(self.board, {})
@@ -395,7 +396,7 @@ class FlashWorker(QThread):
         return None
 
     def _flash_pico(self):
-        import shutil, time
+        import time
         self.log.emit("Suche Raspberry Pi Pico im BOOTSEL-Modus ...\n")
         self.progress.emit(10)
 
@@ -405,7 +406,6 @@ class FlashWorker(QThread):
             drive = self._find_pico_drive()
             if drive:
                 break
-            import os, sys
             # Aktuell gemountete Laufwerke anzeigen zur Diagnose
             if sys.platform == "darwin":
                 volumes = os.listdir("/Volumes")
@@ -988,7 +988,6 @@ class FlashDialog(QDialog):
 
     def _start_flash(self):
         board_info = SUPPORTED_BOARDS.get(self._board, {})
-        flash_cmd = board_info.get("flash_cmd", "esp32")
         port = self._port_combo.currentText() if not self._is_uf2 else "n/a"
         if not self._is_uf2 and "Kein" in port:
             QMessageBox.warning(self, "Kein Port", "Bitte einen seriellen Port auswählen.")

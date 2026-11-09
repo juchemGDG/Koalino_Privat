@@ -396,8 +396,9 @@ def migrate_legacy_data() -> None:
             for key in alt.allKeys():
                 neu.setValue(key, alt.value(key))
             neu.sync()
-    except Exception:
-        pass
+    except Exception as exc:
+        from . import crash_log
+        crash_log.note(f"Übernahme alter NIT_Code-Einstellungen fehlgeschlagen: {exc}")
 
 # Chatbots (eingebettete Web-Seiten; Auswahl in Einstellungen → Chatbot).
 # Ein lokaler Ollama-Tutor war bis 1.14 enthalten, hat sich im Schulbetrieb aber
@@ -663,5 +664,6 @@ def mono_family() -> str:
 
 
 def set_theme(name: str) -> None:
-    """Aktives Theme in-place aktualisieren (alle Referenzen auf THEME sehen die Änderung)."""
-    THEME.update(THEMES.get(name, _DARK_THEME))
+    """Aktives Theme in-place aktualisieren (alle Referenzen auf THEME sehen die Änderung).
+    Unbekannter Name → Standard-Design (modern hell), wie beim ersten Start."""
+    THEME.update(THEMES.get(name, _LIGHT_MODERN_THEME))

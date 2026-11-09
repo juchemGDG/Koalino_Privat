@@ -263,6 +263,8 @@ async def handle_client(reader, writer):
             # sonst beliebige Dateien vom Flash lesbar machen (Path Traversal,
             # z. B. GET /../user_code.py). Query-String ignorieren.
             path = path.split("?", 1)[0]
+            # Prozent-kodierte Varianten (%2e%2e) sind hier egal: der Pfad wird nicht
+            # dekodiert, sondern unveraendert an os.stat gegeben – dort gibt es die Datei nicht.
             if ".." in path or "\\" in path:
                 await send_text(writer, "Not found", status="404 Not Found")
                 return

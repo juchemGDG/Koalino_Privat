@@ -9,7 +9,6 @@ Hybrid-Start:
 import sys
 import os
 import subprocess
-import venv
 import platform
 import hashlib
 from pathlib import Path
@@ -28,6 +27,9 @@ def _current_python_arch() -> str:
 
 
 def _user_data_root() -> Path:
+    # Bewusst „Koalino“ (groß): hier liegt nur die Dev-venv bei schreibgeschütztem
+    # Projektordner. Die Programmdaten liegen unter „koalino“ (klein), siehe
+    # config._user_config_dir() – zwei Ordner, aber keine Vermischung von Venv und Daten.
     if sys.platform == "win32":
         base = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData/Local")))
         return base / "Koalino"

@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLineEdit, QPushButton, QLabel, QTabWidget,
+    QLineEdit, QLabel, QTabWidget,
 )
 
 from .config import THEME, mono_family

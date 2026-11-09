@@ -14,10 +14,10 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QStackedWidget, QTabWidget, QLabel, QStatusBar, QToolBar, QToolButton,
-    QComboBox, QFileDialog, QMessageBox, QInputDialog, QMenu,
+    QSplitter, QStackedWidget, QTabWidget, QLabel, QToolButton,
+    QFileDialog, QMessageBox, QInputDialog, QMenu,
     QDialog, QPushButton, QTextEdit, QLineEdit, QFormLayout, QGroupBox,
-    QListWidget, QListWidgetItem, QCheckBox, QPlainTextEdit, QSizePolicy,
+    QListWidget, QListWidgetItem, QCheckBox, QPlainTextEdit,
 )
 
 try:   # Webansichten (KI-Fenster, Arbeitsblatt) – optional installiert
@@ -34,7 +34,6 @@ from .config import (
     FOBIZZ_URL,
     APP_VERSION,
     THEME,
-    THEMES,
     SUPPORTED_BOARDS,
     embedded_python_executable,
     preferred_python_interpreter,
@@ -4841,8 +4840,8 @@ class MainWindow(QMainWindow):
             if tab.filepath and tab.editor.is_modified():
                 try:
                     self._do_save(tab, tab.filepath, silent=True)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    _note(f"Auto-Speichern fehlgeschlagen ({tab.filepath}): {exc}")
 
     def closeEvent(self, event):
         for tab in self._tabs:

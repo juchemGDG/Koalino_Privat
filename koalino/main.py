@@ -254,10 +254,9 @@ def main():
             break
 
     # Standard-Schrift (plattformspezifisch, um Font-Scan-Warnung zu vermeiden)
-    import sys as _sys
-    if _sys.platform == "darwin":
+    if sys.platform == "darwin":
         _font_family = ".AppleSystemUIFont"
-    elif _sys.platform == "win32":
+    elif sys.platform == "win32":
         _font_family = "Segoe UI"
     else:
         _font_family = "Ubuntu"

@@ -18,7 +18,6 @@ Nur Unix (macOS/Linux) – Windows hat kein natives PTY, das bräuchte
 """
 from __future__ import annotations
 
-import math
 import os
 import shutil
 import struct

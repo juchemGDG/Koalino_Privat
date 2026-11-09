@@ -15,7 +15,7 @@ except ImportError:
     HAS_QSCI = False
 
 from .config import THEME, editor_colors, mono_family
-from .completion import JediCompleter, HAS_JEDI
+from .completion import JediCompleter
 
 
 def _hex(color: str) -> QColor:
@@ -132,7 +132,6 @@ class CodeEditor(QWidget):
 
     def _configure_scintilla(self):
         sci = self.sci
-        t = THEME
 
         # Allgemein
         sci.setUtf8(True)

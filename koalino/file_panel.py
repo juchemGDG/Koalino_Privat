@@ -1,17 +1,16 @@
 """Dateibaum-Panel (linke Sidebar)."""
 import os
-import sys
 import shutil
 import tempfile
 import subprocess
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDir, QThread, QSortFilterProxyModel, QModelIndex, QTimer
-from PyQt6.QtGui import QFileSystemModel, QIcon, QFont, QColor
+from PyQt6.QtGui import QFileSystemModel
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView,
     QPushButton, QLabel, QFileDialog, QMenu, QInputDialog,
-    QMessageBox, QListWidget, QListWidgetItem, QSplitter,
+    QMessageBox, QListWidget, QListWidgetItem,
 )
 
 from .config import THEME, tool_command
