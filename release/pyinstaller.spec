@@ -109,7 +109,11 @@ a = Analysis(
     # das Koalino nicht verwendet. Ihr Rust-Binärteil (_rust.abi3.so) wird von
     # mehreren Virenscannern fälschlich als 'OSX/CrossC2' gemeldet (Fehlalarm).
     # Ausschluss entfernt die Datei und damit den Fehlalarm – ohne Funktionsverlust.
-    excludes=['cryptography', 'espsecure', 'espefuse'],
+    #
+    # 'pyte' und 'koalino.terminal_panel' gehören nur zum Claude-Terminal, das
+    # es nur mit KOALINO_DEV_TOOLS=1 gibt (Entwickler-Werkzeug, siehe
+    # release/README.md); im Release-Build wird es nicht mitgeliefert.
+    excludes=['cryptography', 'espsecure', 'espefuse', 'pyte', 'koalino.terminal_panel'],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

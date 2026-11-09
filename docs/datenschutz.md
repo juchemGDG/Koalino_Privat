@@ -119,17 +119,21 @@ entfernen.
 
 ## 5. ESP32-Standalone-Firmware (iPad-Programmierung)
 
-Das Board öffnet ein eigenes WLAN (`NIT-ESP32-…` bzw. `NIT-PICO-…`) mit festem
-Passwort und führt Code aus, der per Web-Oberfläche geschickt wird. Es gibt keine
-Verbindung zum Schulnetz oder ins Internet. Jede Person im WLAN des Boards kann
-Code darauf ausführen; das Passwort steht öffentlich im Repository. Für den
-Klassenraum ist das ein bewusster Kompromiss zugunsten der Einfachheit (siehe
-Code-Check 3.4).
+Das Board öffnet ein eigenes WLAN (`NIT-ESP32-…` bzw. `NIT-PICO-…`) und führt Code
+aus, der per Web-Oberfläche geschickt wird. Es gibt keine Verbindung zum Schulnetz
+oder ins Internet. Jede Person im WLAN des Boards kann Code darauf ausführen. Das
+Standardpasswort steht öffentlich im Repository; beim Aufspielen lässt sich im
+Deploy-Dialog ein eigenes setzen (je Klasse empfohlen). Für den Klassenraum ist
+das ein bewusster Kompromiss zugunsten der Einfachheit; Einzelheiten stehen in
+`firmware/README.md`, Abschnitt „Sicherheit“.
 
 ## 6. Nicht enthalten
 
 - Kein lokaler KI-Dienst mehr: Der Ollama-basierte Tutor „Infi“ und der lokale
   Code-Generator (bis Version 1.14) wurden entfernt.
+- Kein eingebauter KI-Agent: Das Claude-Terminal (Ctrl+Alt+Shift+C) ist ein
+  Entwickler-Werkzeug und nur mit der Umgebungsvariable `KOALINO_DEV_TOOLS=1`
+  vorhanden. Im Release-Build ist es nicht enthalten.
 - Kein Zugriff auf Kamera, Mikrofon, Standort oder Kontakte.
 - Keine Werbung, keine Dritt-Tracker in den mitgelieferten Seiten (Blockly, StatPlot-Kopie,
   Hilfe); diese laden keine externen Ressourcen.

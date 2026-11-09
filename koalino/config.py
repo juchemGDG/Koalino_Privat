@@ -276,6 +276,11 @@ def tool_command(module: str) -> list[str]:
 APP_NAME = "Koalino"
 APP_VERSION = "1.14.1"
 
+
+def dev_tools_enabled() -> bool:
+    """Entwickler-Werkzeuge (z. B. das Claude-Terminal) nur mit KOALINO_DEV_TOOLS=1."""
+    return os.environ.get("KOALINO_DEV_TOOLS") == "1"
+
 # GitHub-Repository für Bibliotheken
 LIB_REPO_API = "https://api.github.com/repos/juchemGDG/NIT_Bibliotheken/contents"
 # ZIP des ganzen Repos: eine einzige Anfrage, ohne API und ohne deren Stundenlimit

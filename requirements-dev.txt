@@ -1,2 +1,4 @@
 pytest>=8
 pyflakes>=3
+# Nur für das Claude-Terminal (KOALINO_DEV_TOOLS=1), nicht Teil des Release-Builds
+pyte>=0.8.2

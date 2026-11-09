@@ -33,6 +33,7 @@ from .config import (
     APP_NAME,
     FOBIZZ_URL,
     APP_VERSION,
+    dev_tools_enabled,
     THEME,
     SUPPORTED_BOARDS,
     embedded_python_executable,
@@ -59,7 +60,6 @@ from .help_dialog import HelpDialog, guide_path
 from .pap_editor import IbdEditorWindow, PapEditorWindow, SchaltLabWindow
 from .statplot_window import StatPlotWindow
 from .settings_dialog import ACTIVITY_TOGGLEABLE, SettingsDialog
-from .terminal_panel import ClaudeTerminalPanel, find_claude_binary, pty_available
 from .toolbar_widgets import ModeSwitch, PortPicker
 from .net_hints import git_network_hint
 
@@ -1431,10 +1431,11 @@ class MainWindow(QMainWindow):
         self._ai_stack = QStackedWidget()
         self._aischat_panel  = AisChatPanel()
         self._fobizz_panel   = AisChatPanel(url=FOBIZZ_URL, title="🎓  fobizz", portal_fix=False, lazy=True)
-        self._claude_terminal_panel = ClaudeTerminalPanel()
+        self._claude_terminal_panel = self._create_claude_terminal_panel()
         self._worksheet_panel = WorksheetPanel()
         self._ai_stack.addWidget(self._aischat_panel)
-        self._ai_stack.addWidget(self._claude_terminal_panel)  # Claude-Terminal (Easter Egg)
+        if self._claude_terminal_panel is not None:
+            self._ai_stack.addWidget(self._claude_terminal_panel)  # Claude-Terminal (Entwickler-Werkzeug)
         self._ai_stack.addWidget(self._worksheet_panel)
         from .debug_log_panel import DebugLogPanel
         self._debug_log_panel = DebugLogPanel()
@@ -1454,15 +1455,15 @@ class MainWindow(QMainWindow):
         self._ai_stack.setVisible(False)
         self._main_splitter.addWidget(self._ai_stack)
 
-        # Verstecktes Easter Egg: Terminal mit `claude` im Sketchbook-Ordner.
-        # Bewusst OHNE Menüpunkt/Einstellung – nur per Tastenkürzel erreichbar
-        # und nur wirksam, wenn die `claude`-CLI auf diesem Rechner tatsächlich
-        # installiert ist. SuS-Rechner haben sie nicht, daher taucht hier für
-        # sie nichts auf – nicht im Menü, nicht in den Einstellungen.
-        self._claude_terminal_shortcut = QShortcut(
-            QKeySequence("Ctrl+Alt+Shift+C"), self,
-        )
-        self._claude_terminal_shortcut.activated.connect(self._toggle_claude_terminal)
+        # Entwickler-Werkzeug: Terminal mit `claude` im Sketchbook-Ordner. Nur mit
+        # KOALINO_DEV_TOOLS=1 vorhanden (sonst gibt es Panel und Kürzel nicht) und
+        # zusätzlich nur wirksam, wenn die `claude`-CLI installiert ist. Kein
+        # Menüpunkt, keine Einstellung. Siehe release/README.md.
+        if self._claude_terminal_panel is not None:
+            self._claude_terminal_shortcut = QShortcut(
+                QKeySequence("Ctrl+Alt+Shift+C"), self,
+            )
+            self._claude_terminal_shortcut.activated.connect(self._toggle_claude_terminal)
 
         self._main_splitter.setSizes([230, 980, 0])
         # Nur der Editor-Bereich wächst beim Vergrößern des Fensters
@@ -2299,14 +2300,29 @@ class MainWindow(QMainWindow):
         """Blendet den Serial Plotter (Live-Graph der Zahlenausgabe) ein/aus."""
         self._console.set_plotter_visible(checked)
 
-    def _toggle_claude_terminal(self):
-        """Verstecktes Easter Egg (Ctrl+Alt+Shift+C): Terminal mit `claude` im
-        Sketchbook-Ordner ein-/ausblenden.
+    def _create_claude_terminal_panel(self):
+        """Claude-Terminal nur mit KOALINO_DEV_TOOLS=1; sonst wird terminal_panel
+        (und damit pyte) gar nicht erst importiert. Fehlt pyte (Release-Build),
+        bleibt das Werkzeug einfach aus."""
+        if not dev_tools_enabled():
+            return None
+        try:
+            from .terminal_panel import ClaudeTerminalPanel
+        except ImportError as exc:
+            _note(f"Claude-Terminal nicht verfügbar: {exc}")
+            return None
+        return ClaudeTerminalPanel()
 
-        Bewusst kein Fehlerdialog, wenn `claude` fehlt – ein Rechner ohne die
-        CLI (jeder SuS-Rechner) soll beim Drücken des Kürzels einfach gar
-        nichts tun, als gäbe es das Feature nicht.
+    def _toggle_claude_terminal(self):
+        """Entwickler-Werkzeug (Ctrl+Alt+Shift+C, nur mit KOALINO_DEV_TOOLS=1):
+        Terminal mit `claude` im Sketchbook-Ordner ein-/ausblenden.
+
+        Bewusst kein Fehlerdialog, wenn `claude` fehlt – ohne die CLI soll das
+        Kürzel einfach gar nichts tun.
         """
+        if self._claude_terminal_panel is None:
+            return
+        from .terminal_panel import find_claude_binary, pty_available
         if not pty_available() or not find_claude_binary():
             return
         currently_shown = (
@@ -4767,7 +4783,8 @@ class MainWindow(QMainWindow):
         self._console.refresh_theme()
         self._aischat_panel.refresh_theme()
         self._fobizz_panel.refresh_theme()
-        self._claude_terminal_panel.refresh_theme()
+        if self._claude_terminal_panel is not None:
+            self._claude_terminal_panel.refresh_theme()
         self._worksheet_panel.refresh_theme()
         self._debug_log_panel.refresh_theme()
         for attr in ("_parsons_window", "_csv_window", "_pap_window", "_ibd_window",
@@ -4869,7 +4886,8 @@ class MainWindow(QMainWindow):
         scan = getattr(self, "_port_scan_worker", None)
         if scan is not None and scan.isRunning():
             scan.wait(1000)
-        self._claude_terminal_panel.stop()   # sonst bleibt `claude` als Waisenprozess hängen
+        if self._claude_terminal_panel is not None:
+            self._claude_terminal_panel.stop()   # sonst bleibt `claude` als Waisenprozess hängen
         self._debug_log_panel.save()
         self._save_persistent_settings()
         event.accept()

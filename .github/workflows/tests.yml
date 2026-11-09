@@ -26,7 +26,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
-      # Die getesteten Module brauchen kein Qt; nur pytest und pyflakes.
+      # Die getesteten Module brauchen kein Qt; requirements-dev.txt enthält nur Werkzeuge.
       - name: Install test tools
         run: pip install -r requirements-dev.txt
 

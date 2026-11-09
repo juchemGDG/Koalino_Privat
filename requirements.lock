@@ -47,7 +47,6 @@ pyqt6-sip==13.11.1
 pyqt6-webengine==6.11.0
 pyqt6-webengine-qt6==6.11.1
 pyserial==3.5
-pyte==0.8.2
 pywin32-ctypes==0.2.3 ; sys_platform == 'win32'
 pyyaml==6.0.3
 reedsolo==1.7.0
@@ -58,4 +57,3 @@ setuptools==84.2.1
 tibs==0.5.7
 truststore==0.10.4
 urllib3==2.7.0
-wcwidth==0.8.3

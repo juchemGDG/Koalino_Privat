@@ -108,6 +108,21 @@ Hinweise:
   Pip-Manager der IDE nachinstallieren.
 - `python_runtime/` ist in `.gitignore` eingetragen und wird nicht ins Repo committed.
 
+## Entwickler-Werkzeug: Claude-Terminal (`KOALINO_DEV_TOOLS`)
+
+`Ctrl+Alt+Shift+C` oeffnet ein eingebettetes Terminal mit der `claude`-CLI im
+Sketchbook-Ordner. Das gibt es **nur**, wenn die Umgebungsvariable
+`KOALINO_DEV_TOOLS=1` gesetzt ist (und `claude` installiert ist, nicht unter Windows).
+Ohne die Variable werden Panel, Kuerzel und der Import von `terminal_panel`/`pyte`
+ganz ausgelassen.
+
+- Aus dem Quellcode: `pip install -r requirements-dev.txt` (dort steht `pyte`), dann
+  `KOALINO_DEV_TOOLS=1 python start.py`.
+- Der Release-Build liefert es nicht mit: `pyte` steht nicht in `requirements.txt`
+  bzw. `requirements.lock`, und `release/pyinstaller.spec` schliesst `pyte` und
+  `koalino.terminal_panel` aus. Ist die Variable dort gesetzt, bleibt das Werkzeug
+  einfach aus (Hinweis im Absturzprotokoll).
+
 ## Lock-Datei (`requirements.lock`)
 
 Die Release-Skripte (`build_linux.sh`, `build_macos.sh`, `build_windows.ps1`) und damit
