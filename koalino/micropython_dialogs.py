@@ -9,10 +9,11 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QProgressBar, QFileDialog, QTextEdit,
     QGroupBox, QRadioButton, QLineEdit, QListWidget,
-    QListWidgetItem, QSplitter, QMessageBox, QWidget,
+    QListWidgetItem, QSplitter, QMessageBox, QWidget, QFormLayout, QDialogButtonBox,
 )
 from PyQt6.QtGui import QColor
 
+from . import ap_password
 from .qt_utils import ThemedComboBox
 from .config import THEME, SUPPORTED_BOARDS, LIB_REPO_ZIP, python_executable, tool_command
 from .net_hints import with_network_hint
@@ -1079,6 +1080,70 @@ class FlashDialog(QDialog):
 # ──────────────────────────────────────────────────────────────────────────────
 # Deploy-Worker: iPad-Programmierung (Standalone-Firmware, MicroPython-Editor) auf den Controller spielen
 # ──────────────────────────────────────────────────────────────────────────────
+class IpadDeployOptionsDialog(QDialog):
+    """Board-Name und WLAN-Passwort für das Aufspielen der iPad-Firmware abfragen."""
+
+    def __init__(self, default_password: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Board-Name und WLAN-Passwort")
+        self.setMinimumWidth(480)
+        self.setStyleSheet(_dialog_style())
+        self._default_password = default_password
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        intro = QLabel(
+            "Nummer/Name für dieses Board (wird zur WLAN-SSID „NIT-ESP32-<Name>“ bzw. "
+            "„NIT-PICO-<Name>“). Leer lassen = automatisch eindeutige SSID aus der "
+            "Chip-Kennung."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        form = QFormLayout()
+        self._name = QLineEdit()
+        self._name.setPlaceholderText("z. B. 01")
+        form.addRow("Board-Name:", self._name)
+        self._password = QLineEdit(default_password)
+        form.addRow("WLAN-Passwort (mind. 8 Zeichen):", self._password)
+        layout.addLayout(form)
+
+        hint = QLabel(
+            "Das Standardpasswort steht öffentlich im Quelltext. Wer es kennt und in "
+            "Funkreichweite ist, kann Programme auf dem Board ausführen – am besten "
+            "pro Klasse ein eigenes Passwort vergeben."
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color:{THEME['text_dim']};")
+        layout.addWidget(hint)
+
+        self._error = QLabel("")
+        self._error.setStyleSheet(f"color:{THEME['error']};")
+        self._error.setWordWrap(True)
+        layout.addWidget(self._error)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
+                                   | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self._accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _accept(self):
+        msg = ap_password.validate(self._password.text().strip())
+        if msg:
+            self._error.setText(msg)
+            return
+        self.accept()
+
+    def board_name(self) -> str:
+        return self._name.text().strip()
+
+    def password(self) -> str:
+        """Gewähltes Passwort; leer, wenn es dem Standard der Firmware entspricht."""
+        pw = self._password.text().strip()
+        return "" if pw == self._default_password else pw
+
+
 class IpadDeployWorker(QThread):
     """Kopiert boot.py, main.py und den Ordner www/ per mpremote auf ein Board,
     auf dem bereits MicroPython laeuft, und startet es anschliessend neu.
@@ -1089,7 +1154,7 @@ class IpadDeployWorker(QThread):
     done = pyqtSignal(bool, str)
 
     def __init__(self, port: str, firmware_dir, install_libs: bool = False,
-                 board_name: str = "", lib_dir=None):
+                 board_name: str = "", lib_dir=None, wifi_password: str = ""):
         super().__init__()
         self.port = port
         # Mitgelieferte nitbw_-Module (koalino/assets/nit_lib); None -> GitHub
@@ -1099,6 +1164,8 @@ class IpadDeployWorker(QThread):
         self.install_libs = install_libs
         # Board-Name für die SSID (NIT-ESP32-<Name>). Leer -> automatisch (Chip-ID).
         self.board_name = self._sanitize_name(board_name)
+        # Eigenes WLAN-Passwort (ap_password.txt). Leer -> Standard aus boot.py.
+        self.wifi_password = wifi_password.strip()
 
     @staticmethod
     def _sanitize_name(name: str) -> str:
@@ -1158,6 +1225,9 @@ class IpadDeployWorker(QThread):
         ok, err = self._apply_board_name(mp)
         if not ok:
             self.done.emit(False, err); return
+        ok, err = self._apply_wifi_password(mp)
+        if not ok:
+            self.done.emit(False, err); return
         ssid = self._resolve_ssid(mp)
 
         if self.install_libs:
@@ -1171,11 +1241,12 @@ class IpadDeployWorker(QThread):
             self.done.emit(False, err); return
 
         wlan = ssid or "NIT-ESP32-…"
+        pw = self.wifi_password or ap_password.read_default(self.firmware_dir)
         self.done.emit(
             True,
-            "iPad-Programmierung (MicroPython) wurde aufgespielt. WLAN dieses Boards: '{}'. "
-            "Board am besten damit beschriften. Verbinde Laptop/iPad mit diesem "
-            "WLAN und oeffne http://192.168.4.1/".format(wlan),
+            "iPad-Programmierung (MicroPython) wurde aufgespielt. WLAN dieses Boards: '{}' "
+            "(Passwort: {}). Board am besten damit beschriften. Verbinde Laptop/iPad mit "
+            "diesem WLAN und oeffne http://192.168.4.1/".format(wlan, pw),
         )
 
     def _apply_board_name(self, mp):
@@ -1200,6 +1271,32 @@ class IpadDeployWorker(QThread):
         subprocess.run([*mp, "connect", self.port, "fs", "rm", ":ap_name.txt"],
                        capture_output=True, text=True, timeout=30)
         return True, ""
+
+    def _apply_wifi_password(self, mp):
+        """Schreibt ap_password.txt (eigenes Passwort) oder entfernt sie (Standard aus boot.py)."""
+        import subprocess, tempfile
+        if not self.wifi_password:
+            self.log.emit("Standard-WLAN-Passwort aus boot.py wird verwendet.\n")
+            subprocess.run([*mp, "connect", self.port, "fs", "rm", ":ap_password.txt"],
+                           capture_output=True, text=True, timeout=30)
+            return True, ""
+        msg = ap_password.validate(self.wifi_password)
+        if msg:
+            return False, msg
+        self.log.emit("Setze eigenes WLAN-Passwort ...\n")
+        try:
+            with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tmp:
+                tmp.write(self.wifi_password)
+                tmp_path = tmp.name
+        except Exception as e:
+            return False, str(e)
+        try:
+            return self._run("", [*mp, "connect", self.port, "cp", tmp_path, ":ap_password.txt"])
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
     def _resolve_ssid(self, mp):
         """Ermittelt die SSID, die boot.py verwenden wird (Name bzw. Chip-ID)."""

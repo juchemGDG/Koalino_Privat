@@ -3105,15 +3105,14 @@ class MainWindow(QMainWindow):
                 "gefunden werden."
             )
             return
-        # Board-Name/Nummer für die WLAN-SSID (eindeutig im Klassensatz).
-        board_name, ok = QInputDialog.getText(
-            self, "Board-Name",
-            "Nummer/Name für dieses Board (wird zur WLAN-SSID „NIT-ESP32-<Name>“ bzw. „NIT-PICO-<Name>“).\n"
-            "Leer lassen = automatisch eindeutige SSID aus der Chip-Kennung:"
-        )
-        if not ok:
+        # Board-Name/Nummer für die WLAN-SSID (eindeutig im Klassensatz) und WLAN-Passwort.
+        from . import ap_password
+        from .micropython_dialogs import IpadDeployOptionsDialog
+        opts = IpadDeployOptionsDialog(ap_password.read_default(fw_dir), self)
+        if opts.exec() != QDialog.DialogCode.Accepted:
             return
-        board_name = board_name.strip()
+        board_name = opts.board_name()
+        wifi_password = opts.password()
 
         box = QMessageBox(self)
         box.setWindowTitle("iPad-Programmierung aufspielen")
@@ -3123,10 +3122,11 @@ class MainWindow(QMainWindow):
             "Auf dem angeschlossenen Controller werden boot.py, main.py und der "
             "Ordner www/ mit dem MicroPython-Editor angelegt bzw. überschrieben."
         )
+        pw_hint = "eigenes Passwort" if wifi_password else "Standardpasswort (siehe firmware/README.md)"
         box.setInformativeText(
-            "WLAN-SSID dieses Boards: %s\n\n"
+            "WLAN-SSID dieses Boards: %s\nWLAN-Passwort: %s\n\n"
             "Voraussetzung: Auf dem Board läuft bereits MicroPython – sonst zuerst "
-            "„Firmware flashen …“ ausführen.\n\nFortfahren?" % ssid_hint
+            "„Firmware flashen …“ ausführen.\n\nFortfahren?" % (ssid_hint, pw_hint)
         )
         cb = QCheckBox("Auch die Sensor-Bibliotheken (nitbw_) installieren – "
                        "zum Importieren in eigenen Programmen")
@@ -3145,6 +3145,7 @@ class MainWindow(QMainWindow):
         self._console.append_info("📲  Spiele die iPad-Oberfläche (MicroPython) auf den Controller …\n")
         worker = IpadDeployWorker(port, fw_dir, install_libs=install_libs,
                                   board_name=board_name,
+                                  wifi_password=wifi_password,
                                   lib_dir=Path(__file__).resolve().parent / "assets" / "nit_lib")
         worker.log.connect(self._console.append_info)
         worker.done.connect(self._on_ipad_deploy_done)

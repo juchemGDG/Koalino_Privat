@@ -77,7 +77,8 @@ esptool --chip esp32c3 --port /dev/ttyACM0 --baud 460800 \
 Menü **MicroPython → 📲 iPad-Programmierung aufs Board spielen**. Kopiert `boot.py`,
 `main.py` und `www/` automatisch auf den angeschlossenen Controller und startet
 ihn neu – kein Terminal nötig. Der Dialog fragt nach einer **Nummer/Name für das
-Board** (→ WLAN-SSID, siehe unten) und kann per Häkchen zusätzlich die
+Board** (→ WLAN-SSID, siehe unten), einem **WLAN-Passwort** (Vorgabe: Standard aus
+`boot.py`, siehe [Sicherheit](#sicherheit)) und kann per Häkchen zusätzlich die
 **Sensor-Bibliotheken (`nitbw_`)** nach `/lib` installieren (damit eigene
 Programme sie per `import` nutzen können; Quelle: aktueller Stand von GitHub per ZIP-Download,
 ohne Internet die mit Koalino gelieferten Module; dauert einige Minuten, braucht Internet).
@@ -92,7 +93,8 @@ mpremote connect /dev/ttyACM0 cp -r www :
 mpremote connect /dev/ttyACM0 reset
 ```
 
-Danach mit Laptop/iPad ins jeweilige Board-WLAN (Passwort: `mint2026`) und
+Danach mit Laptop/iPad ins jeweilige Board-WLAN (Standardpasswort: `mint2026`, ein
+eigenes setzt man wie unter [Sicherheit](#sicherheit) beschrieben) und
 `http://192.168.4.1/` öffnen. Die SSID steht oben in der Oberfläche.
 
 ## Eindeutige SSIDs im Klassensatz
@@ -113,6 +115,43 @@ Board in `ap_name.txt` – bei Weg B (manuell) kann man ihn selbst setzen:
 ```bash
 echo -n "01" | mpremote connect /dev/ttyACM0 fs cp - :ap_name.txt   # oder Datei anlegen
 ```
+
+## Sicherheit
+
+Das Board führt **jeden Python-Code aus, der per `POST /api/run` ankommt**, ohne
+Anmeldung. Der einzige Schutz ist das WLAN-Passwort. Das ist ein bewusster
+Kompromiss: Im Unterricht soll das iPad ohne Konto und ohne Einrichtung direkt
+programmieren können, und die Firmware bleibt klein und einfach.
+
+Folgen, die man kennen sollte:
+
+- Wer das WLAN-Passwort kennt und in Funkreichweite ist, kann auf dem Board
+  beliebigen Code ausführen und damit angeschlossene Hardware (Pins, Motoren,
+  Relais) steuern oder Dateien auf dem Board überschreiben.
+- Das Standardpasswort `mint2026` steht in `boot.py` und damit **öffentlich im
+  Repository**; es ist auf allen Boards gleich. Wer Koalino kennt, kennt es also.
+- Das Board hängt in einem eigenen Accesspoint ohne Internet. Fremde Netze oder
+  Rechner sind nicht gefährdet, nur das Board selbst und seine Hardware.
+
+**Empfehlung:** Pro Klasse (oder pro Kurs) beim Aufspielen ein eigenes Passwort
+vergeben und nur den Lernenden dieser Gruppe nennen. Dann sind Boards aus
+anderen Räumen und Dritte in der Nähe ausgesperrt. Das Passwort sollte nicht für
+etwas anderes verwendet werden, da es auf dem Board im Klartext liegt.
+
+- **Weg A:** Im Deploy-Dialog das Feld „WLAN-Passwort (mind. 8 Zeichen)“ ändern
+  (8 bis 63 Zeichen). Koalino schreibt es als `ap_password.txt` auf das Board;
+  bleibt der Standard stehen, wird eine vorhandene `ap_password.txt` entfernt.
+- **Weg B:** Die Datei selbst anlegen und neu starten:
+
+  ```bash
+  echo -n "MeinKlassenPasswort" | mpremote connect /dev/ttyACM0 fs cp - :ap_password.txt
+  mpremote connect /dev/ttyACM0 reset
+  ```
+
+`boot.py` liest `ap_password.txt` beim Start; fehlt die Datei oder ist das
+Passwort ungültig (nicht 8 bis 63 Zeichen), gilt `DEFAULT_AP_PASSWORD`. Das
+Passwort steht beim Boot in der seriellen Ausgabe und im Abschluss-Dialog von
+Koalino – am besten zusammen mit der SSID auf dem Board vermerken.
 
 ## Bekannte Einschränkungen von V1
 

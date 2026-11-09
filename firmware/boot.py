@@ -8,7 +8,25 @@ import time
 import ubinascii
 import sys
 
-AP_PASSWORD = "mint2026"   # min. 8 Zeichen fuer WPA2, fuer alle Boards gleich
+DEFAULT_AP_PASSWORD = "mint2026"   # min. 8 Zeichen fuer WPA2; oeffentlich im Repo, daher je Klasse aendern
+PASSWORD_FILE = "ap_password.txt"   # optional, beim Deploy gesetztes WLAN-Passwort
+
+
+def _read_password():
+    """Passwort aus ap_password.txt; fehlt die Datei oder ist es ungueltig, der Standard.
+
+    WPA2 verlangt 8 bis 63 Zeichen - ein zu kurzes Passwort wuerde den AP sonst
+    gar nicht starten lassen.
+    """
+    try:
+        with open(PASSWORD_FILE) as f:
+            pw = f.read().strip()
+    except OSError:
+        return DEFAULT_AP_PASSWORD
+    return pw if 8 <= len(pw) <= 63 else DEFAULT_AP_PASSWORD
+
+
+AP_PASSWORD = _read_password()
 # Nur die drei ueberlappungsfreien 2,4-GHz-Kanaele. Jedes Board waehlt anhand
 # seiner Chip-ID fest einen davon: Im Klassensatz verteilen sich die APs so
 # auf drei Kanaele, statt sich alle auf einem Kanal gegenseitig zu stoeren
