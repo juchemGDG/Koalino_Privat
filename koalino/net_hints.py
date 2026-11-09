@@ -72,8 +72,8 @@ def git_network_hint(output: str) -> str:
 
     Git bringt seine eigene Netzwerkschicht (libcurl) mit und nutzt – anders
     als der Browser – den Windows-System-Proxy nicht automatisch. Koalino
-    reicht den System-Proxy zwar an Git durch (siehe ``_git_network_env`` im
-    Hauptfenster), aber bei PAC-Skripten oder Sonderkonfigurationen bleibt
+    reicht den System-Proxy zwar an Git durch (siehe ``_git_network_env`` in
+    ``git_integration.py``), aber bei PAC-Skripten oder Sonderkonfigurationen bleibt
     nur die manuelle Einrichtung – die erklärt dieser Hinweis.
     """
     low = (output or "").lower()

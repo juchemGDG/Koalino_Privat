@@ -672,3 +672,21 @@ def set_theme(name: str) -> None:
     """Aktives Theme in-place aktualisieren (alle Referenzen auf THEME sehen die Änderung).
     Unbekannter Name → Standard-Design (modern hell), wie beim ersten Start."""
     THEME.update(THEMES.get(name, _LIGHT_MODERN_THEME))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Sketchbook-Durchsuchung (Menü + Git-Repo-Suche)
+# ──────────────────────────────────────────────────────────────────────────────
+# Das Standard-Sketchbook ist das Home-Verzeichnis. Ohne Tiefen-/Ordner-Grenzen
+# würden Menüaufbau und Repo-Suche dort den UI-Thread minutenlang blockieren
+# (node_modules, Foto-Sammlungen, Caches …).
+_SKETCHBOOK_MAX_DEPTH = 3
+_SKETCHBOOK_SKIP_DIRS = {
+    "node_modules", "__pycache__", ".venv", "venv", "env",
+    "AppData", "Library", "site-packages",
+}
+
+
+def _skip_sketchbook_dir(name: str) -> bool:
+    """True für Ordner, die beim Durchsuchen des Sketchbooks ignoriert werden."""
+    return name.startswith(".") or name in _SKETCHBOOK_SKIP_DIRS
