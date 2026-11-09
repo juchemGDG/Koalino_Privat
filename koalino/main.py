@@ -7,7 +7,8 @@ from PyQt6.QtCore import Qt, QObject, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from . import crash_log
-from .main_window import MainWindow, build_global_style
+from .main_window import MainWindow
+from .styles import build_global_style
 from .qt_utils import find_logo, install_ui_scale, UI_FONT_PT_DEFAULT
 
 
