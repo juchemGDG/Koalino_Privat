@@ -1,0 +1,61 @@
+# Festgelegte Paketversionen für Release-Builds (Windows, macOS, Linux x86_64/ARM).
+#
+# Enthält requirements.txt UND release/requirements-build.txt samt aller
+# Unterpakete. Die Release-Skripte (release/scripts/build_*) und der Workflow
+# release-build.yml installieren daraus, damit ein Build nicht von heute auf
+# morgen andere PyQt6-/WebEngine-Versionen zieht als der zuletzt getestete.
+# Für die Entwicklung bleibt requirements.txt (mit >=) maßgeblich.
+#
+# Plattformabhängige Pakete tragen einen Marker (; sys_platform == ...).
+# Nicht von Hand ändern – Aktualisieren: siehe release/README.md, Abschnitt
+# „Lock-Datei aktualisieren“. Danach ist ein Testbuild auf allen Plattformen nötig.
+altgraph==0.17.5
+bitarray==3.8.1
+bitstring==4.4.0
+certifi==2026.5.20
+cffi==2.0.0 ; platform_python_implementation != 'PyPy'
+charset-normalizer==3.4.7
+click==8.4.1
+colorama==0.4.6 ; sys_platform == 'win32'
+cryptography==48.0.0
+esptool==5.2.0
+idna==3.17
+intelhex==2.3.0
+jedi==0.20.0
+macholib==1.16.4 ; sys_platform == 'darwin'
+markdown==3.10.3
+markdown-it-py==4.2.0
+mdurl==0.1.2
+micropython-esp32-stubs==1.28.0.post4
+micropython-rp2-stubs==1.28.0.post4
+micropython-stdlib-stubs==1.28.0.post5
+mpremote==1.28.0
+obsidian-callouts==1.0.1
+packaging==26.3
+parso==0.8.7
+pefile==2024.8.26 ; sys_platform == 'win32'
+pillow==12.2.0
+platformdirs==4.10.0
+pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+pygments==2.20.0
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.9
+pyqt6==6.11.0
+pyqt6-qscintilla==2.14.1
+pyqt6-qt6==6.11.1
+pyqt6-sip==13.11.1
+pyqt6-webengine==6.11.0
+pyqt6-webengine-qt6==6.11.1
+pyserial==3.5
+pyte==0.8.2
+pywin32-ctypes==0.2.3 ; sys_platform == 'win32'
+pyyaml==6.0.3
+reedsolo==1.7.0
+requests==2.34.2
+rich==15.0.0
+rich-click==1.9.8
+setuptools==84.2.1
+tibs==0.5.7
+truststore==0.10.4
+urllib3==2.7.0
+wcwidth==0.8.3

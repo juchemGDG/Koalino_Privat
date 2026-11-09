@@ -108,6 +108,33 @@ Hinweise:
   Pip-Manager der IDE nachinstallieren.
 - `python_runtime/` ist in `.gitignore` eingetragen und wird nicht ins Repo committed.
 
+## Lock-Datei (`requirements.lock`)
+
+Die Release-Skripte (`build_linux.sh`, `build_macos.sh`, `build_windows.ps1`) und damit
+auch `release-build.yml` installieren aus `requirements.lock` statt aus
+`requirements.txt`. Die Datei enthaelt alle Pakete der IDE **und** der Build-Werkzeuge
+(`release/requirements-build.txt`) samt Unterpaketen mit exakter Version, fuer Python 3.11.
+Plattformabhaengige Pakete (z. B. `pefile` nur Windows, `macholib` nur macOS) tragen einen
+Marker, die Datei gilt also fuer alle Release-Plattformen. Fuer die Entwicklung bleibt
+`requirements.txt` (mit `>=`) massgeblich.
+
+**Lock-Datei aktualisieren** (nur mit [uv](https://docs.astral.sh/uv/), `pip install uv`):
+
+```bash
+uv pip compile requirements.txt release/requirements-build.txt \
+    --universal --python-version 3.11 --no-annotate --no-header -o /tmp/neu.lock
+```
+
+Die Ausgabe ersetzt die Paketzeilen in `requirements.lock` (der Kommentarkopf bleibt).
+Einzelne Pakete gezielt anheben: Zeile in `requirements.lock` aendern und mit
+`uv pip compile … -c requirements.lock` pruefen. Alternativ nach einem Test in einer
+frischen venv `pip freeze` – dann fehlen aber die Plattform-Marker (`pefile`,
+`macholib`, `pywin32-ctypes`, `colorama`), die von Hand ergaenzt werden muessen.
+
+> **Nach jedem Aktualisieren ist ein Testbuild auf allen drei Plattformen noetig**
+> (Linux x86_64 und ARM, macOS, Windows): Actions → *Build Release Packages* →
+> *Run workflow*. Erst wenn alle Builds gruen sind und die App startet, committen.
+
 ## GitHub Actions
 
 Die Workflow-Datei liegt in `.github/workflows/release-build.yml` und baut die Artefakte automatisch fuer alle drei Plattformen:

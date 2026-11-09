@@ -12,7 +12,8 @@ INCLUDE_RUNTIME="${INCLUDE_RUNTIME:-1}"
 mkdir -p "$OUT_DIR"
 
 python -m pip install --upgrade pip
-python -m pip install -r "$ROOT_DIR/requirements.txt" -r "$ROOT_DIR/release/requirements-build.txt"
+# Release-Builds installieren die festgelegten Versionen (siehe release/README.md).
+python -m pip install -r "$ROOT_DIR/requirements.lock"
 
 pyinstaller "$ROOT_DIR/release/pyinstaller.spec" --noconfirm --clean
 

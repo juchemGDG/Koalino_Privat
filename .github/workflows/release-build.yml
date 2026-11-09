@@ -11,6 +11,7 @@ on:
       - ".github/workflows/release-build.yml"
       - "release/**"
       - "requirements.txt"
+      - "requirements.lock"
       - "start.py"
 
 # Tag-Builds laden ihre Pakete direkt an das GitHub-Release (als Entwurf) und
@@ -56,6 +57,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: requirements.lock
 
       - name: Checkout StatPlot
         uses: actions/checkout@v7
@@ -122,6 +124,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: requirements.lock
 
       - name: Checkout StatPlot
         uses: actions/checkout@v7
@@ -187,6 +190,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: requirements.lock
 
       - name: Checkout StatPlot
         uses: actions/checkout@v7

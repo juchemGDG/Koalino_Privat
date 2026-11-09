@@ -14,7 +14,8 @@ $OutDir = Join-Path $RootDir "release/downloads/windows"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 python -m pip install --upgrade pip
-python -m pip install -r "$RootDir/requirements.txt" -r "$RootDir/release/requirements-build.txt"
+# Release-Builds installieren die festgelegten Versionen (siehe release/README.md).
+python -m pip install -r "$RootDir/requirements.lock"
 
 pyinstaller "$RootDir/release/pyinstaller.spec" --noconfirm --clean
 
