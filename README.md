@@ -326,7 +326,8 @@ oder direkt:
 ## Datenschutz und Lizenz
 
 - **Lokal:** Koalino läuft als Programm auf dem eigenen Rechner. Projekte, Dateien und Einstellungen bleiben dort. Im Quelltext sind keine Telemetrie- oder Statistikfunktionen enthalten, und es gibt keine Benutzerkonten.
-- **KI optional und lokal:** Der KI-Tutor „Infi“ und der Code-Generator laufen über [Ollama](https://ollama.com) auf dem eigenen Rechner. Es gehen keine Eingaben an einen KI-Dienst im Internet.
+- **Chatbot optional und nur als Web-Seite:** Koalino enthält keine eigene KI. Wer ais.chat oder fobizz in den Einstellungen einblendet, öffnet die jeweilige Web-Seite des Anbieters; Eingaben gehen dann an diesen Dienst und nicht an Koalino. Ohne diese Einstellung gibt es keine KI-Verbindung.
+- **Mehr Details:** Welche Verbindungen beim Öffnen eingebetteter Web-Seiten entstehen, was lokal gespeichert wird und wie lange, und was ein Fehlerbericht enthält, steht in [docs/datenschutz.md](docs/datenschutz.md).
 - **Verbindungen ins Internet nur auf Anforderung:** Bibliotheken aus [NIT_Bibliotheken](https://github.com/juchemGDG/NIT_Bibliotheken) (`api.github.com`, `raw.githubusercontent.com`), MicroPython-Firmware (`micropython.org`) und Python-Pakete (`pypi.org`, `files.pythonhosted.org`). Dabei sieht der jeweilige Anbieter die IP-Adresse. Ohne Internet geht es über den Ordner-Import der Bibliotheken (siehe „Schulnetze mit Proxy“). Das Git-Menü spricht mit dem Server, den man selbst als Remote einträgt.
 - **Schülerdaten:** Keine Namen, Noten oder Fotos von Schülerinnen und Schülern in Programme, Kommentare oder KI-Eingaben schreiben.
 - **Lizenz:** Code unter der [MIT-Lizenz](LICENSE). Unterrichtsmaterialien, soweit nicht anders gekennzeichnet, unter [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.de). Hinweise zur Namensnennung: [py.nitbw.de/lizenz](https://py.nitbw.de/lizenz).
@@ -357,15 +358,6 @@ Zwei Lösungswege:
 > Software-Rendering für den Block-Editor auf Terminal-/RDP-Servern lässt sich
 > bei Grafikproblemen mit der Umgebungsvariable `NIT_SOFTWARE_RENDER=1`
 > erzwingen (in RDP-Sitzungen erkennt Koalino das automatisch).
-
----
-
-## Datenschutz
-
-Koalino sendet keine Nutzungsdaten. Welche Verbindungen beim Öffnen eingebetteter
-Web-Seiten (ais.chat, fobizz, PAP-Editor, StatPlot …) entstehen, was lokal im
-Benutzerprofil gespeichert wird und wie lange, und was ein Fehlerbericht enthält,
-steht in [docs/datenschutz.md](docs/datenschutz.md).
 
 ---
 
