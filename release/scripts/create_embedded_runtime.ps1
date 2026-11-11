@@ -117,7 +117,8 @@ foreach ($p in @(
     (Join-Path $RuntimeDir "python/libs"),
     (Join-Path $StdlibDir "idlelib"),
     (Join-Path $StdlibDir "ensurepip"),
-    (Join-Path $StdlibDir "lib2to3")
+    (Join-Path $StdlibDir "lib2to3"),
+    (Join-Path $StdlibDir "turtledemo")
 )) {
     if (Test-Path $p) {
         Remove-Item $p -Recurse -Force
@@ -131,6 +132,15 @@ Write-Host "Kompiliere Bytecode (hash-basiert) ..."
 & $RuntimePy -m compileall -f -q --invalidation-mode unchecked-hash -x "(bad_coding|badsyntax|lib2to3)" (Join-Path $RuntimeDir "python/Lib")
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Bytecode-Kompilierung teilweise fehlgeschlagen (fahre fort)."
+}
+
+# Weniger Dateien = weniger Arbeit fuer Virenscanner im Schulnetz:
+# Standardbibliothek ins Zip, tests-Ordner/.pyi aus site-packages raus.
+# Bricht mit Fehler ab, wenn der anschliessende Selbsttest scheitert.
+Write-Host "Verkleinere Runtime (Standardbibliothek ins Zip) ..."
+& $RuntimePy -I (Join-Path $RootDir "release/scripts/slim_runtime.py") $RuntimeDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Verkleinern der Runtime fehlgeschlagen."
 }
 
 & $RuntimePy -c "import platform, sys, tkinter; print('Fertig. Runtime-Interpreter:', sys.executable); print('Python-Version:', sys.version.split()[0]); print('Architektur:', platform.machine()); print('tkinter: verfuegbar (Tk', tkinter.TkVersion, ')')"

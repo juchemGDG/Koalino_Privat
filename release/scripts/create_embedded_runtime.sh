@@ -172,7 +172,8 @@ rm -rf \
   "$RUNTIME_DIR/python/lib/pkgconfig" \
   "$STDLIB_DIR/idlelib" \
   "$STDLIB_DIR/ensurepip" \
-  "$STDLIB_DIR/lib2to3"
+  "$STDLIB_DIR/lib2to3" \
+  "$STDLIB_DIR/turtledemo"
 
 # .pyc-Dateien hash-basiert (PEP 552) neu erzeugen: Standard-.pyc sind
 # mtime-basiert und gelten nach dem Kopieren/Entpacken auf anderen Rechnern
@@ -184,6 +185,12 @@ if ! "$RUNTIME_PY" -m compileall -f -q --invalidation-mode unchecked-hash \
     -x '(bad_coding|badsyntax|lib2to3)' "$RUNTIME_DIR/python/lib"; then
   echo "Warnung: Bytecode-Kompilierung teilweise fehlgeschlagen (fahre fort)." >&2
 fi
+
+# Weniger Dateien = weniger Arbeit fuer Virenscanner im Schulnetz:
+# Standardbibliothek ins Zip, tests-Ordner/.pyi aus site-packages raus.
+# Bricht mit Fehler ab, wenn der anschliessende Selbsttest scheitert.
+echo "Verkleinere Runtime (Standardbibliothek ins Zip) ..."
+"$RUNTIME_PY" -I "$ROOT_DIR/release/scripts/slim_runtime.py" "$RUNTIME_DIR"
 
 echo
 "$RUNTIME_PY" - <<'PY'
