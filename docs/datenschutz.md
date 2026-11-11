@@ -1,6 +1,6 @@
 # Datenschutz in Koalino
 
-Stand: Koalino 1.15.0, Entwicklungsstand nach dem Code-Check vom November 2026. Dieses Dokument richtet sich an Lehrkräfte und
+Stand: Koalino 1.15.1, Entwicklungsstand nach dem Code-Check vom November 2026. Dieses Dokument richtet sich an Lehrkräfte und
 Administratorinnen und Administratoren, die Koalino an einer Schule einsetzen. Es
 beschreibt sachlich, welche Daten das Programm wohin schickt und was es lokal
 speichert. Es ist keine Rechtsberatung und ersetzt nicht die Prüfung durch die

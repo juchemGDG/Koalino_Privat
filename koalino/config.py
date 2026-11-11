@@ -274,7 +274,7 @@ def tool_command(module: str) -> list[str]:
 
 
 APP_NAME = "Koalino"
-APP_VERSION = "1.15.0"
+APP_VERSION = "1.15.1"
 
 
 def dev_tools_enabled() -> bool:
